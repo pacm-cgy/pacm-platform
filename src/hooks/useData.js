@@ -223,8 +223,8 @@ export function useProjects() {
       const { data, error } = await supabase
         .from('projects')
         .select('*')
-        .neq('status', 'archived')
-        .order('status', { ascending: false })
+        .in('status', ['open', 'coming_soon'])
+        .order('created_at', { ascending: false })
         .order('created_at', { ascending: false })
       if (error) throw error
       return data
