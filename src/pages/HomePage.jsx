@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { ArticleCard, ArticleHero, ArticleSideItem, ArticleMagItem, ArticleCardSkeleton } from '../components/article/ArticleCard'
 import ArticlePanel from '../components/article/ArticlePanel'
-import { useArticles, useProjects, useTrends, useSubscribeNewsletter } from '../hooks/useData'
+import { useArticles, useNewsArticles, useProjects, useTrends, useSubscribeNewsletter } from '../hooks/useData'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 
@@ -146,6 +146,7 @@ export default function HomePage() {
   const { data: allArticles = [], isLoading: loadingArticles } = useArticles({ limit: 20 })
   const { data: featuredArticles = [] } = useArticles({ featured: true, limit: 4 })
   const { data: projects = [], isLoading: loadingProjects } = useProjects()
+  const { data: newsArticles = [] } = useNewsArticles({ limit: 30 })
   const { data: trends = [] } = useTrends()
 
   const coverArticle = featuredArticles[0] || allArticles[0]
@@ -158,9 +159,10 @@ export default function HomePage() {
 
   const openPanel = (article) => navigate(`/article/${article.slug}`)
 
-  // ── TRENDING BAR
-  // 트렌딩 태그는 뉴스 데이터에서 동적으로 가져옴
-const TRENDING = []
+  // ── TRENDING BAR - 뉴스 기사 태그에서 동적 추출
+  const TRENDING = [...new Set(
+    (newsArticles || []).flatMap(a => a.tags || []).filter(t => t !== '뉴스')
+  )].slice(0, 6)
 
   return (
     <div style={{ paddingBottom: '64px' }}>
@@ -194,21 +196,24 @@ const TRENDING = []
             ))}
           </div>
 
-          {/* Trending bar */}
-          <div style={{ gridColumn: '1 / -1', background: 'var(--c-ink)', padding: '16px 44px', display: 'flex', alignItems: 'center', gap: '28px' }}>
-            <div className="t-eyebrow">TRENDING</div>
-            <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', flex: 1 }}>
-              {TRENDING.map((t, i) => (
-                <button key={t} style={{ background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: '#777', fontSize: '12px', fontFamily: 'var(--f-sans)', transition: 'color 0.15s' }}
-                  onMouseEnter={e => e.currentTarget.style.color = 'var(--c-paper)'}
-                  onMouseLeave={e => e.currentTarget.style.color = '#777'}
-                >
-                  <span style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gold)' }}>{String(i+1).padStart(2,'0')}</span>
-                  {t}
-                </button>
-              ))}
+          {/* Trending bar - 데이터 있을 때만 */}
+          {TRENDING.length > 0 && (
+            <div style={{ gridColumn: '1 / -1', background: 'var(--c-ink)', padding: '16px 44px', display: 'flex', alignItems: 'center', gap: '28px', overflow: 'hidden' }}>
+              <div className="t-eyebrow" style={{ whiteSpace: 'nowrap' }}>TRENDING</div>
+              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', flex: 1 }}>
+                {TRENDING.map((t, i) => (
+                  <button key={t} onClick={() => navigate('/news')}
+                    style={{ background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: 'var(--c-gray-6)', fontSize: '12px', fontFamily: 'var(--f-sans)', transition: 'color 0.15s' }}
+                    onMouseEnter={e => e.currentTarget.style.color = 'var(--c-paper)'}
+                    onMouseLeave={e => e.currentTarget.style.color = 'var(--c-gray-6)'}
+                  >
+                    <span style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gold)' }}>{String(i+1).padStart(2,'0')}</span>
+                    {t}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </section>
 
@@ -227,8 +232,10 @@ const TRENDING = []
             {todayInsight.map(a => <ArticleCard key={a.id} article={a} onClick={openPanel} />)}
           </div>
         ) : (
-          <div className="grid-3 grid-bordered">
-            {allArticles.slice(0, 3).map(a => <ArticleCard key={a.id} article={a} onClick={openPanel} />)}
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-muted)', border: '1px dashed var(--c-gray-4)' }}>
+            <div style={{ fontSize: '28px', marginBottom: '8px' }}>📝</div>
+            <div style={{ fontFamily: 'var(--f-serif)', fontSize: '15px', color: 'var(--c-paper)', marginBottom: '4px' }}>인사이트 아티클 준비 중</div>
+            <div style={{ fontSize: '12px' }}>곧 새로운 창업 인사이트가 공개됩니다</div>
           </div>
         )}
       </section>
@@ -258,15 +265,20 @@ const TRENDING = []
               </div>
             </div>
           ) : (
-            <div style={{ background: '#1a1a14', minHeight: '380px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '80px', color: '#333' }}>창업</div>
+            <div style={{ background: 'var(--c-gray-2)', minHeight: '380px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', color: 'var(--c-muted)' }}>
+              <span style={{ fontSize: '36px' }}>📖</span>
+              <span style={{ fontFamily: 'var(--f-serif)', fontSize: '15px', color: 'var(--c-paper)' }}>매거진 준비 중</span>
+            </div>
           )}
           {/* List */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {magazineList.length > 0 ? magazineList.map((a, i) => (
               <ArticleMagItem key={a.id} article={a} number={i+1} onClick={openPanel} />
-            )) : allArticles.slice(3, 7).map((a, i) => (
-              <ArticleMagItem key={a.id} article={a} number={i+1} onClick={openPanel} />
-            ))}
+            )) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--c-muted)', fontSize: '12px', fontFamily: 'var(--f-mono)' }}>
+                준비 중
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -279,13 +291,11 @@ const TRENDING = []
         </div>
         <div className="grid-4 grid-bordered">
           {trends.length > 0 ? trends.map(t => <TrendCard key={t.id} snapshot={t} />) : (
-            /* Fallback static display */
-            [
-              { category: 'ai_startup', metric_name: 'AI 스타트업', metric_value: 847, metric_unit: '개', change_pct: 38.2 },
-              { category: 'edutech', metric_name: '에듀테크 투자', metric_value: 2300, metric_unit: '억원', change_pct: 21.4 },
-              { category: 'social', metric_name: '소셜 임팩트', metric_value: 234, metric_unit: '개', change_pct: 55.1 },
-              { category: 'youth', metric_name: '청소년 창업자', metric_value: 1127, metric_unit: '명', change_pct: 67.3 },
-            ].map((t, i) => <TrendCard key={i} snapshot={t} />)
+            <div style={{ gridColumn: '1/-1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px', gap: '10px', border: '1px dashed var(--c-gray-4)', color: 'var(--c-muted)' }}>
+              <span style={{ fontSize: '28px' }}>📈</span>
+              <span style={{ fontFamily: 'var(--f-serif)', fontSize: '15px', color: 'var(--c-paper)' }}>트렌드 지표 준비 중</span>
+              <span style={{ fontSize: '12px', textAlign: 'center' }}>공신력 있는 기관 데이터를 연동 중입니다</span>
+            </div>
           )}
         </div>
       </section>
