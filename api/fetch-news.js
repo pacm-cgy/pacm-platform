@@ -127,7 +127,7 @@ export default async function handler(req) {
             slug: makeSlug(),
             excerpt: item.description || item.title,
             body: item.description ? `${item.description}\n\n원문: ${item.link}` : `원문: ${item.link}`,
-            category: 'insight',     // news enum 추가 전 임시 insight 사용
+            category: 'news',        // news 전용 카테고리
             status: 'published',
             author_id: authorId,
             read_time: 2,
