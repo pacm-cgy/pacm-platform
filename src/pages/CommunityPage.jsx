@@ -1,15 +1,18 @@
-import { validateInput, checkRateLimit, safeErrorMessage } from '../lib/security'
 import { useState } from 'react'
-import { MessageCircle, Heart, Eye, Pin } from 'lucide-react'
+import { MessageCircle, Heart, Eye, PenSquare, AlertCircle } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { usePosts, useCreatePost } from '../hooks/useData'
 import { useAuthStore } from '../store'
+import { validateInput, checkRateLimit } from '../lib/security'
 
 const POST_TYPES = [
-  { id:'all', label:'전체' }, { id:'question', label:'질문/답변' },
-  { id:'feedback', label:'사업 피드백' }, { id:'recruit', label:'팀원 모집' },
-  { id:'free', label:'자유게시판' }, { id:'notice', label:'공지' },
+  { id: 'all',      label: '전체' },
+  { id: 'question', label: '질문/답변' },
+  { id: 'feedback', label: '사업 피드백' },
+  { id: 'recruit',  label: '팀원 모집' },
+  { id: 'free',     label: '자유게시판' },
+  { id: 'notice',   label: '공지' },
 ]
 const TYPE_LABELS = { question:'질문', feedback:'피드백', recruit:'팀원 모집', free:'자유', notice:'공지' }
 const TYPE_COLORS = { question:'var(--c-blue)', feedback:'var(--c-gold)', recruit:'var(--c-green)', free:'var(--c-muted)', notice:'var(--c-red)' }
@@ -18,86 +21,86 @@ function PostCard({ post }) {
   const author = post.profiles
   const date = post.created_at ? format(new Date(post.created_at), 'M월 d일', { locale: ko }) : ''
   return (
-    <div className="card card-clickable" style={{ padding:'20px 24px', borderBottom:'1px solid var(--c-border)' }}>
-      <div style={{ display:'flex', alignItems:'flex-start', gap:'12px' }}>
-        <div className="avatar avatar-sm" style={{ marginTop:'2px' }}>
-          {author?.avatar_url ? <img src={author.avatar_url} alt=""/> : (author?.display_name?.[0]||'?')}
+    <div className="card card-clickable" style={{ padding: '20px 24px', borderBottom: '1px solid var(--c-border)' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {post.is_pinned && <span style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: 'var(--c-red)', border: '1px solid var(--c-red)', padding: '1px 6px' }}>PINNED</span>}
+          <span style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: TYPE_COLORS[post.post_type] || 'var(--c-muted)', border: `1px solid ${TYPE_COLORS[post.post_type] || 'var(--c-border)'}`, padding: '1px 6px' }}>
+            {TYPE_LABELS[post.post_type] || post.post_type}
+          </span>
         </div>
-        <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'6px' }}>
-            <div style={{ fontWeight:700, fontSize:'13px' }}>{author?.display_name}</div>
-            <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-muted)' }}>
-              {author?.startup_name||author?.school||''}
-            </div>
-            {post.is_pinned && <Pin size={11} color="var(--c-gold)"/>}
+        <span style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gray-5)', whiteSpace: 'nowrap' }}>{date}</span>
+      </div>
+      <div style={{ fontFamily: 'var(--f-serif)', fontSize: '15px', fontWeight: 600, marginBottom: '6px' }}>{post.title}</div>
+      {post.content && <div style={{ fontSize: '13px', color: 'var(--c-muted)', lineHeight: 1.6, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.content}</div>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--c-gray-6)' }}>
+          <div className="avatar" style={{ width: '18px', height: '18px', fontSize: '10px' }}>
+            {author?.avatar_url ? <img src={author.avatar_url} alt="" /> : (author?.display_name?.[0] || 'U')}
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'8px' }}>
-            <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:TYPE_COLORS[post.post_type]||'var(--c-muted)', background:`${TYPE_COLORS[post.post_type]||'var(--c-muted)'}18`, padding:'2px 8px', borderRadius:'2px' }}>
-              {TYPE_LABELS[post.post_type]||post.post_type}
-            </span>
-          </div>
-          <h3 style={{ fontFamily:'var(--f-serif)', fontSize:'16px', fontWeight:600, marginBottom:'6px', lineHeight:1.4 }}>{post.title}</h3>
-          <p style={{ fontSize:'13px', color:'var(--c-muted)', lineHeight:1.6, marginBottom:'12px',
-            display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden'
-          }}>{post.body}</p>
-          <div style={{ display:'flex', gap:'14px', alignItems:'center' }}>
-            <span style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'#bbb', display:'flex', alignItems:'center', gap:'3px' }}><MessageCircle size={11}/>{post.reply_count||0}</span>
-            <span style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'#bbb', display:'flex', alignItems:'center', gap:'3px' }}><Heart size={11}/>{post.like_count||0}</span>
-            <span style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'#bbb', display:'flex', alignItems:'center', gap:'3px' }}><Eye size={11}/>{post.view_count||0}</span>
-            <span style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'#ccc', marginLeft:'auto' }}>{date}</span>
-            {(post.tags||[]).slice(0,2).map(t=><span key={t} className="tag">{t}</span>)}
-          </div>
+          {author?.display_name || '익명'}
+        </div>
+        <div style={{ display: 'flex', gap: '12px', marginLeft: 'auto' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gray-5)' }}>
+            <Eye size={10} /> {post.view_count || 0}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gray-5)' }}>
+            <Heart size={10} /> {post.like_count || 0}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gray-5)' }}>
+            <MessageCircle size={10} /> {post.comment_count || 0}
+          </span>
         </div>
       </div>
     </div>
   )
 }
 
-function NewPostModal({ onClose }) {
-  const [form, setForm] = useState({ title:'', body:'', postType:'free', tags:'' })
-  const [error, setError] = useState('')
+function WriteModal({ onClose }) {
+  const [title, setTitle] = useState('')
+  const [content, setContent] = useState('')
+  const [postType, setPostType] = useState('free')
+  const [err, setErr] = useState('')
+  const { user } = useAuthStore()
   const createPost = useCreatePost()
-  const up = (k,v) => setForm(f=>({...f,[k]:v}))
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
-    if (form.title.trim().length < 2) return setError('제목을 2자 이상 입력해주세요')
-    if (form.body.trim().length < 10) return setError('내용을 10자 이상 입력해주세요')
+  const handleSubmit = async () => {
+    const limit = checkRateLimit('post_create', 5, 60000)
+    if (limit.limited) { setErr(`잠시 후 다시 시도해주세요 (${limit.retryAfter}초)`); return }
+    const titleCheck = validateInput(title.trim(), 200)
+    const contentCheck = validateInput(content.trim(), 5000)
+    if (!title.trim()) { setErr('제목을 입력해주세요'); return }
+    if (!titleCheck.ok) { setErr(titleCheck.error); return }
+    if (!contentCheck.ok) { setErr(contentCheck.error); return }
     try {
-      await createPost.mutateAsync({
-        title: form.title, body: form.body,
-        postType: form.postType,
-        tags: form.tags.split(',').map(t=>t.trim()).filter(Boolean),
-      })
+      await createPost.mutateAsync({ title: title.trim(), content: content.trim(), post_type: postType })
       onClose()
-    } catch(e) { setError(e.message) }
+    } catch (e) {
+      setErr('게시글 작성 중 오류가 발생했습니다')
+    }
   }
 
   return (
-    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal" style={{ maxWidth:'600px' }}>
-        <div className="modal-header">
-          <div className="modal-title">새 글 작성</div>
-          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:'20px', cursor:'pointer', color:'var(--c-muted)' }}>✕</button>
-        </div>
-        <div className="modal-body">
-          {error && <div style={{ background:'var(--c-red-dim)', color:'var(--c-red)', padding:'10px 14px', fontSize:'13px', marginBottom:'14px' }}>{error}</div>}
-          <form onSubmit={handleSubmit}>
-            <label className="label">카테고리</label>
-            <select className="input" value={form.postType} onChange={e=>up('postType',e.target.value)} style={{ marginBottom:'12px' }}>
-              {POST_TYPES.filter(t=>t.id!=='all'&&t.id!=='notice').map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
-            </select>
-            <label className="label">제목</label>
-            <input className="input" value={form.title} onChange={e=>up('title',e.target.value)} placeholder="제목을 입력하세요" maxLength={200} required style={{ marginBottom:'12px' }}/>
-            <label className="label">내용</label>
-            <textarea className="input" value={form.body} onChange={e=>up('body',e.target.value)} placeholder="내용을 입력하세요 (최대 10,000자)" rows={8} maxLength={10000} required style={{ marginBottom:'12px', resize:'vertical' }}/>
-            <label className="label">태그 (쉼표 구분, 선택사항)</label>
-            <input className="input" value={form.tags} onChange={e=>up('tags',e.target.value)} placeholder="AI창업, 팀빌딩, 투자" style={{ marginBottom:'20px' }}/>
-            <button type="submit" className="btn btn-gold btn-full" disabled={createPost.isPending}>
-              {createPost.isPending ? '게시 중...' : '게시하기'}
-            </button>
-          </form>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="card" style={{ width: '100%', maxWidth: '560px', padding: '32px' }}>
+        <div style={{ fontFamily: 'var(--f-serif)', fontSize: '18px', fontWeight: 700, marginBottom: '24px' }}>새 글 작성</div>
+        <select value={postType} onChange={e => setPostType(e.target.value)}
+          style={{ width: '100%', padding: '10px 12px', background: 'var(--c-gray-2)', border: '1px solid var(--c-border)', color: 'var(--c-paper)', fontFamily: 'var(--f-mono)', fontSize: '12px', marginBottom: '12px' }}>
+          {POST_TYPES.filter(t => t.id !== 'all' && t.id !== 'notice').map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+        </select>
+        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="제목을 입력하세요"
+          maxLength={200}
+          style={{ width: '100%', padding: '10px 12px', background: 'var(--c-gray-2)', border: '1px solid var(--c-border)', color: 'var(--c-paper)', fontFamily: 'var(--f-sans)', fontSize: '14px', marginBottom: '12px' }} />
+        <textarea value={content} onChange={e => setContent(e.target.value)} placeholder="내용을 입력하세요" rows={6}
+          maxLength={5000}
+          style={{ width: '100%', padding: '10px 12px', background: 'var(--c-gray-2)', border: '1px solid var(--c-border)', color: 'var(--c-paper)', fontFamily: 'var(--f-sans)', fontSize: '14px', resize: 'vertical', marginBottom: '12px' }} />
+        {err && <div style={{ display: 'flex', gap: '6px', alignItems: 'center', color: 'var(--c-red)', fontSize: '12px', marginBottom: '12px' }}><AlertCircle size={12}/>{err}</div>}
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+          <button onClick={onClose} className="btn btn-outline btn-sm">취소</button>
+          <button onClick={handleSubmit} disabled={createPost.isPending} className="btn btn-gold btn-sm">
+            {createPost.isPending ? '작성 중...' : '게시하기'}
+          </button>
         </div>
       </div>
     </div>
@@ -106,97 +109,68 @@ function NewPostModal({ onClose }) {
 
 export default function CommunityPage() {
   const [activeType, setActiveType] = useState('all')
-  const [showNew, setShowNew] = useState(false)
+  const [showWrite, setShowWrite] = useState(false)
   const { user } = useAuthStore()
-  const { data: posts = [], isLoading } = usePosts({ postType: activeType })
-
-  const HOT = ['AI창업', '청소년창업', 'MVP', '투자유치', '에듀테크', '린스타트업', '팀빌딩', '사업계획서', '정부지원', '피벗']
-  const POPULAR_TITLES = [
-    'MVP 없이 투자 받은 고2의 피치덱 공개',
-    '창업동아리 vs 창업 실전 — 어떤 선택이 맞을까',
-    'Notion으로 만든 무료 사업계획서 템플릿 배포',
-    '고등학생이 세금 신고하는 방법 총정리',
-    '첫 번째 고객을 만난 그 날 — 감동 에피소드 모음',
-  ]
+  const { data: posts = [], isLoading } = usePosts({ post_type: activeType === 'all' ? null : activeType })
 
   return (
-    <div style={{ paddingBottom:'64px' }}>
-      <div style={{ padding:'40px 0 24px', display:'flex', alignItems:'flex-end', justifyContent:'space-between', flexWrap:'wrap', gap:'16px' }}>
-        <div>
-          <div className="t-eyebrow" style={{ marginBottom:'8px' }}>COMMUNITY</div>
-          <h1 style={{ fontFamily:'var(--f-serif)', fontSize:'34px', fontWeight:700, marginBottom:'8px' }}>창업 커뮤니티</h1>
-          <p style={{ color:'var(--c-muted)', fontSize:'14px' }}>청소년 창업가들이 모여 이야기를 나누고 서로 돕는 공간입니다.</p>
-        </div>
-        {user && <button className="btn btn-gold" onClick={()=>setShowNew(true)}>+ 새 글 작성</button>}
-      </div>
+    <div style={{ paddingBottom: '80px' }}>
+      {showWrite && <WriteModal onClose={() => setShowWrite(false)} />}
 
-      <div style={{ display:'flex', gap:'24px', alignItems:'flex-start' }}>
-        {/* Feed */}
-        <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ display:'flex', gap:'0', borderBottom:'2px solid var(--c-border)', marginBottom:'0' }}>
-            {POST_TYPES.map(t=>(
-              <button key={t.id} onClick={()=>setActiveType(t.id)}
-                style={{ padding:'10px 16px', background:'none', border:'none', borderBottom:`2px solid ${activeType===t.id?'var(--c-gold)':'transparent'}`, marginBottom:'-2px', fontFamily:'var(--f-mono)', fontSize:'11px', letterSpacing:'1px', color:activeType===t.id?'var(--c-paper)':'var(--c-muted)', cursor:'pointer', fontWeight:activeType===t.id?700:400 }}
-              >{t.label}</button>
-            ))}
-          </div>
-          <div style={{ border:'1px solid var(--c-border)', borderTop:'none' }}>
-            {isLoading ? (
-              [...Array(5)].map((_,i)=>(
-                <div key={i} style={{ padding:'20px 24px', borderBottom:'1px solid var(--c-border)' }}>
-                  <div className="skeleton skeleton-text" style={{ width:'40%', height:'14px', marginBottom:'8px' }}/>
-                  <div className="skeleton skeleton-text"/>
-                  <div className="skeleton skeleton-text" style={{ width:'70%' }}/>
-                </div>
-              ))
-            ) : posts.length > 0 ? (
-              posts.map(p=><PostCard key={p.id} post={p}/>)
-            ) : (
-              <div style={{ padding:'60px 24px', textAlign:'center', color:'var(--c-muted)' }}>
-                <div style={{ fontSize:'32px', marginBottom:'12px' }}>💬</div>
-                <div style={{ fontFamily:'var(--f-serif)', fontSize:'16px', marginBottom:'8px' }}>아직 게시글이 없습니다</div>
-                {user ? <button className="btn btn-gold btn-sm" onClick={()=>setShowNew(true)}>첫 글 작성하기</button>
-                  : <div style={{ fontSize:'13px' }}>로그인 후 글을 작성해보세요</div>}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Sidebar */}
-        <div style={{ width:'300px', flexShrink:0 }}>
-          <div className="card" style={{ padding:'20px', marginBottom:'12px' }}>
-            <div className="t-eyebrow" style={{ marginBottom:'14px' }}>인기 게시물</div>
-            {POPULAR_TITLES.map((t,i)=>(
-              <div key={i} style={{ display:'flex', gap:'10px', marginBottom:'12px', cursor:'pointer' }}>
-                <div style={{ fontFamily:'var(--f-mono)', fontSize:'14px', color:'var(--c-border)', fontWeight:700, minWidth:'20px' }}>{i+1}</div>
-                <div style={{ fontSize:'13px', lineHeight:1.4 }}>{t}</div>
-              </div>
-            ))}
-          </div>
-          <div className="card" style={{ padding:'20px', marginBottom:'12px' }}>
-            <div className="t-eyebrow" style={{ marginBottom:'14px' }}>인기 태그</div>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:'6px' }}>
-              {HOT.map(t=><span key={t} className="tag" style={{ cursor:'pointer' }}>#{t}</span>)}
+      {/* 헤더 */}
+      <div style={{ padding: '40px 0 0', borderBottom: '1px solid var(--c-gray-3)' }}>
+        <div className="container">
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <div className="t-eyebrow" style={{ marginBottom: '8px' }}>COMMUNITY</div>
+              <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(24px,4vw,34px)', fontWeight: 700, marginBottom: '6px' }}>창업 커뮤니티</h1>
+              <p style={{ color: 'var(--c-muted)', fontSize: '13px' }}>청소년 창업가들이 모여 이야기를 나누고 서로 돕는 공간입니다.</p>
             </div>
+            <button onClick={() => user ? setShowWrite(true) : alert('로그인이 필요합니다')} className="btn btn-gold" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <PenSquare size={14} /> 글 쓰기
+            </button>
           </div>
-          <div className="card" style={{ padding:'20px' }}>
-            <div className="t-eyebrow" style={{ marginBottom:'14px' }}>이번 주 멘토링</div>
-            {[
-              { title:'투자 유치 기초반', date:'3/20 목 19:00', type:'온라인' },
-              { title:'사업계획서 피드백 세션', date:'3/22 토 14:00', type:'온라인' },
-            ].map(m=>(
-              <div key={m.title} style={{ background:'var(--c-cream)', padding:'12px', marginBottom:'8px' }}>
-                <div style={{ fontWeight:700, fontSize:'13px', marginBottom:'3px' }}>{m.title}</div>
-                <div style={{ fontSize:'11px', color:'var(--c-muted)', fontFamily:'var(--f-mono)', marginBottom:'8px' }}>{m.date} · {m.type}</div>
-                <button className="btn btn-gold btn-sm btn-full">신청하기</button>
-              </div>
+          {/* 탭 */}
+          <div style={{ display: 'flex', gap: '0', overflowX: 'auto' }}>
+            {POST_TYPES.map(t => (
+              <button key={t.id} onClick={() => setActiveType(t.id)}
+                style={{
+                  padding: '10px 16px', background: 'none', border: 'none', whiteSpace: 'nowrap',
+                  borderBottom: `2px solid ${activeType === t.id ? 'var(--c-gold)' : 'transparent'}`,
+                  marginBottom: '-1px', fontFamily: 'var(--f-mono)', fontSize: '11px', letterSpacing: '1px',
+                  color: activeType === t.id ? 'var(--c-paper)' : 'var(--c-muted)', cursor: 'pointer',
+                  fontWeight: activeType === t.id ? 700 : 400, transition: 'var(--t-fast)'
+                }}>{t.label}
+              </button>
             ))}
           </div>
         </div>
       </div>
 
-      {showNew && <NewPostModal onClose={()=>setShowNew(false)}/>}
-      <style>{`@media(max-width:768px){div[style*="width:300px"]{display:none}}`}</style>
+      {/* 게시글 목록 */}
+      <div className="container" style={{ marginTop: '24px' }}>
+        {isLoading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            {[0,1,2,3].map(i => <div key={i} className="card skeleton" style={{ height: '100px' }} />)}
+          </div>
+        ) : posts.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            {posts.map(p => <PostCard key={p.id} post={p} />)}
+          </div>
+        ) : (
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', padding: '80px 20px', gap: '16px',
+          }}>
+            <MessageCircle size={40} color="var(--c-gray-4)" />
+            <div style={{ fontFamily: 'var(--f-serif)', fontSize: '18px', color: 'var(--c-paper)' }}>아직 게시글이 없습니다</div>
+            <p style={{ color: 'var(--c-muted)', fontSize: '13px', textAlign: 'center' }}>첫 번째 글을 작성해보세요!</p>
+            <button onClick={() => user ? setShowWrite(true) : alert('로그인이 필요합니다')} className="btn btn-gold btn-sm">
+              <PenSquare size={12} /> 첫 글 작성하기
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

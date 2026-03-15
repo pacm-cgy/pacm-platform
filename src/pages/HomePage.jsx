@@ -159,7 +159,8 @@ export default function HomePage() {
   const openPanel = (article) => navigate(`/article/${article.slug}`)
 
   // ── TRENDING BAR
-  const TRENDING = ['AI 교육 플랫폼', '청소년 투자', '제로 캐피탈 창업', 'B2B SaaS', '소셜 임팩트']
+  // 트렌딩 태그는 뉴스 데이터에서 동적으로 가져옴
+const TRENDING = []
 
   return (
     <div style={{ paddingBottom: '64px' }}>
