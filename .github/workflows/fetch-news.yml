@@ -1,0 +1,28 @@
+name: 뉴스 자동 수집
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # 매시간 정각 (UTC)
+  workflow_dispatch:       # 수동 실행 가능
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch News
+        run: |
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -H "x-vercel-cron: 1" \
+            "https://www.insightship.pacm.kr/api/fetch-news")
+          
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS")
+          
+          echo "Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+          
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "❌ 뉴스 수집 실패"
+            exit 1
+          fi
+          echo "✅ 뉴스 수집 완료: $BODY"
