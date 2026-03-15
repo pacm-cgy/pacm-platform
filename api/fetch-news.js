@@ -45,7 +45,19 @@ async function parseRSS(url) {
       const rawTitle = get('title')
       const link = get('link') || get('guid')
       const sourceMeta = block.match(/<source[^>]*url="([^"]*)"[^>]*>([\s\S]*?)<\/source>/)
-      const description = get('description').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 400)
+      // HTML 태그, CDATA 잔재, 특수문자 완전 제거
+      const rawDesc = get('description')
+      const description = rawDesc
+        .replace(/<[^>]+>/g, '')           // HTML 태그 제거
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#[0-9]+;/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 400)
       if (!rawTitle || !link) continue
       items.push({
         title: rawTitle.replace(/ - [^-]+$/, '').trim().slice(0, 200),
@@ -114,7 +126,7 @@ export default async function handler(req) {
             title: item.title,
             slug: makeSlug(),
             excerpt: item.description || item.title,
-            body: `${item.description}\n\n[원문 전체 읽기](${item.link})`,
+            body: item.description ? `${item.description}\n\n원문: ${item.link}` : `원문: ${item.link}`,
             category: 'news',        // ← 반드시 news 카테고리
             status: 'published',
             author_id: authorId,
