@@ -48,12 +48,14 @@ function parseGoogleDesc(rawDesc) {
   if (!rawDesc) return { text: '', source: null }
   
   // 출처 추출 (<font color="#6f6f6f">출처명</font>)
-  const sourceMatch = rawDesc.match(/<font[^>]*color="#6f6f6f"[^>]*>([^<]+)<\/font>/i)
-  const source = sourceMatch ? sourceMatch[1].trim() : null
+  const sourceMatch = rawDesc.match(/<font[^>]*color="#6f6f6f"[^>]*>([\s\S]+?)<\/font>/i)
+  const source = sourceMatch ? sourceMatch[1].replace(/<[^>]+>/g, '').trim() : null
   
-  // 링크 텍스트 추출 (<a href="...">텍스트</a>)
-  const linkMatch = rawDesc.match(/<a[^>]+>([^<]+)<\/a>/)
-  const linkText = linkMatch ? linkMatch[1].trim() : stripHtml(rawDesc)
+  // 링크 텍스트 추출 (<a href="...">텍스트</a>) - 특수문자/줄바꿈 포함
+  const linkMatch = rawDesc.match(/<a[^>]+>([\s\S]+?)<\/a>/)
+  const linkText = linkMatch 
+    ? linkMatch[1].replace(/<[^>]+>/g, '').trim()  // 내부 HTML 태그도 제거
+    : stripHtml(rawDesc)
   
   return { text: linkText.slice(0, 300), source }
 }
