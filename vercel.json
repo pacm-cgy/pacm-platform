@@ -52,7 +52,7 @@
   "crons": [
     {
       "path": "/api/fetch-news",
-      "schedule": "0 0 * * *"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/send-newsletter",

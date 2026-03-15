@@ -16,6 +16,7 @@ const ConnectPage   = lazy(() => import('./pages/ConnectPage'))
 const ArticlePage   = lazy(() => import('./pages/ArticlePage'))
 const ProfilePage   = lazy(() => import('./pages/ProfilePage'))
 const NotFoundPage  = lazy(() => import('./pages/NotFoundPage'))
+const NewsPage      = lazy(() => import('./pages/NewsPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -72,6 +73,7 @@ export default function App() {
                       <Route path="/story"      element={<StoryPage />} />
                       <Route path="/trend"      element={<TrendPage />} />
                       <Route path="/community"  element={<CommunityPage />} />
+                      <Route path="/news"        element={<NewsPage />} />
                       <Route path="/connect"    element={<ConnectPage />} />
                       <Route path="/article/:slug" element={<ArticlePage />} />
                       <Route path="/profile"    element={<ProfilePage />} />

@@ -13,7 +13,7 @@ export function useArticles({ category, featured, limit = 10, page = 0 } = {}) {
         .select(`
           id, title, slug, excerpt, cover_image, category,
           tags, read_time, view_count, like_count, featured,
-          published_at, created_at,
+          published_at, created_at, source_name, source_url,
           profiles!author_id (id, display_name, avatar_url, startup_name)
         `)
         .eq('status', 'published')
