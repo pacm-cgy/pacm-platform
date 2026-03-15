@@ -1,5 +1,5 @@
 // Vercel Serverless Function - 뉴스 자동 수집
-// Cron: 매일 UTC 00:00 (KST 09:00)
+// Cron: 매일 UTC 00:00 (KST 09:00) - Hobby 플랜 제한
 
 export const config = { runtime: 'edge' }
 
@@ -16,21 +16,46 @@ const RSS_FEEDS = [
   { url: 'https://news.google.com/rss/search?q=%EC%8A%A4%ED%83%80%ED%8A%B8%EC%97%85+%EC%84%B1%EA%B3%B5&hl=ko&gl=KR&ceid=KR:ko', tag: '성공사례' },
 ]
 
-// HTML 완전 제거 함수
+// ── HTML 완전 제거 ──────────────────────────────────────────
 function stripHtml(str) {
   if (!str) return ''
   return str
-    .replace(/<[^>]+>/g, ' ')        // HTML 태그 제거
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&#[0-9]+;/g, '')
-    .replace(/&[a-z]+;/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
+    .replace(/&#[0-9]+;/g, '').replace(/&[a-z]+;/g, '')
+    .replace(/\s+/g, ' ').trim()
+}
+
+// ── XML 태그 값 추출 (CDATA + 일반 HTML 모두 처리) ────────
+function getXmlTag(block, tag) {
+  // CDATA 방식
+  const cdataReg = new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>`)
+  const cdataMatch = block.match(cdataReg)
+  if (cdataMatch) return cdataMatch[1].trim()
+  
+  // 일반 방식 (HTML 포함 가능)
+  const plainReg = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`)
+  const plainMatch = block.match(plainReg)
+  if (plainMatch) return plainMatch[1].trim()
+  
+  return ''
+}
+
+// ── 구글 뉴스 description에서 텍스트와 출처 추출 ──────────
+// 형식: <a href="...">제목</a>&nbsp;&nbsp;<font color="#6f6f6f">출처</font>
+function parseGoogleDesc(rawDesc) {
+  if (!rawDesc) return { text: '', source: null }
+  
+  // 출처 추출 (<font color="#6f6f6f">출처명</font>)
+  const sourceMatch = rawDesc.match(/<font[^>]*color="#6f6f6f"[^>]*>([^<]+)<\/font>/i)
+  const source = sourceMatch ? sourceMatch[1].trim() : null
+  
+  // 링크 텍스트 추출 (<a href="...">텍스트</a>)
+  const linkMatch = rawDesc.match(/<a[^>]+>([^<]+)<\/a>/)
+  const linkText = linkMatch ? linkMatch[1].trim() : stripHtml(rawDesc)
+  
+  return { text: linkText.slice(0, 300), source }
 }
 
 function makeSlug() {
@@ -45,7 +70,7 @@ function extractSourceFromTitle(rawTitle) {
 async function parseRSS(url) {
   try {
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'InsightshipBot/1.0' },
+      headers: { 'User-Agent': 'InsightshipBot/1.0 (+https://www.insightship.pacm.kr)' },
       signal: AbortSignal.timeout(10000),
     })
     if (!res.ok) return []
@@ -53,35 +78,38 @@ async function parseRSS(url) {
     const items = []
     const itemReg = /<item>([\s\S]*?)<\/item>/g
     let m
+    
     while ((m = itemReg.exec(xml)) !== null) {
       const block = m[1]
-      const get = (tag) => {
-        const r = block.match(new RegExp(`<${tag}[^>]*>(?:<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>|([^<]*))<\/${tag}>`))
-        return r ? (r[1] || r[2] || '').trim() : ''
-      }
-      const rawTitle = get('title')
-      const link = get('link') || get('guid')
+      const rawTitle = getXmlTag(block, 'title')
+      const link = getXmlTag(block, 'link') || getXmlTag(block, 'guid')
       if (!rawTitle || !link) continue
-
-      // 소스 정보 추출
-      const sourceMeta = block.match(/<source[^>]*url="([^"]*)"[^>]*>([\s\S]*?)<\/source>/)
-      const sourceName = sourceMeta 
-        ? stripHtml(sourceMeta[2]) 
-        : extractSourceFromTitle(rawTitle)
 
       // 제목에서 출처 제거
       const cleanTitle = rawTitle.replace(/ - [^-]+$/, '').trim()
       
-      // description에서 HTML 완전 제거
-      const rawDesc = get('description')
-      const cleanDesc = stripHtml(rawDesc).slice(0, 300)
-
+      // description 파싱 (구글 뉴스 HTML 형식 처리)
+      const rawDesc = getXmlTag(block, 'description')
+      const { text: descText, source: descSource } = parseGoogleDesc(rawDesc)
+      
+      // source 태그에서 출처
+      const sourceMeta = block.match(/<source[^>]*url="([^"]*)"[^>]*>([\s\S]*?)<\/source>/)
+      const sourceName = (sourceMeta ? stripHtml(sourceMeta[2]) : null)
+        || descSource
+        || extractSourceFromTitle(rawTitle)
+        || '뉴스'
+      
+      // 실제 기사 텍스트 (제목과 다르면 description 사용, 같으면 빈값)
+      const excerpt = (descText && descText !== cleanTitle) 
+        ? descText.slice(0, 300)
+        : cleanTitle.slice(0, 200)
+      
       items.push({
         title: cleanTitle.slice(0, 200),
         link,
-        description: cleanDesc,
-        pubDate: get('pubDate'),
-        sourceName: sourceName || '뉴스',
+        excerpt,
+        pubDate: getXmlTag(block, 'pubDate'),
+        sourceName,
         sourceUrl: link,
       })
     }
@@ -109,10 +137,9 @@ export default async function handler(req) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-    return new Response(JSON.stringify({ error: 'Missing env: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' }), { status: 500 })
+    return new Response(JSON.stringify({ error: 'Missing env vars' }), { status: 500 })
   }
 
-  // 관리자 계정 조회
   const profileRes = await fetch(
     `${SUPABASE_URL}/rest/v1/profiles?role=eq.admin&limit=1&select=id`,
     { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
@@ -129,7 +156,6 @@ export default async function handler(req) {
     const items = await parseRSS(feed.url)
     for (const item of items) {
       try {
-        // 중복 체크
         const exists = await articleExists(item.link)
         if (exists) { results.skipped++; continue }
 
@@ -144,10 +170,8 @@ export default async function handler(req) {
           body: JSON.stringify({
             title: item.title,
             slug: makeSlug(),
-            excerpt: item.description || item.title.slice(0, 200),
-            body: item.description 
-              ? `${item.description}\n\n원문 보기: ${item.link}` 
-              : `원문 보기: ${item.link}`,
+            excerpt: item.excerpt,
+            body: `${item.excerpt}\n\n원문 보기: ${item.link}`,
             category: 'news',
             status: 'published',
             author_id: authorId,
