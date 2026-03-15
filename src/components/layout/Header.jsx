@@ -354,7 +354,7 @@ function AuthModal({ mode, onClose, onSwitch }) {
         if (!/^[a-zA-Z0-9_]{3,30}$/.test(form.username)) throw new Error('아이디는 영문/숫자/밑줄 3-30자로 입력해주세요')
         const { error } = await supabase.auth.signUp({
           email: form.email, password: form.password,
-          options: { data: { username: form.username, display_name: form.displayName || form.username } },
+          options: { data: { username: form.username, display_name: form.displayName || form.username }, emailRedirectTo: `${window.location.origin}/` },
         })
         if (error) throw error
       }
