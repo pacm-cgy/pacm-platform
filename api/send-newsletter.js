@@ -97,7 +97,8 @@ function buildEmailHTML(articles) {
 
 export default async function handler(req) {
   const authHeader = req.headers.get('authorization')
-  if (authHeader !== `Bearer ${CRON_SECRET}`) {
+  const cronHeader = req.headers.get('x-vercel-cron')
+  if (!cronHeader && authHeader !== `Bearer ${CRON_SECRET}`) {
     return new Response('Unauthorized', { status: 401 })
   }
 
