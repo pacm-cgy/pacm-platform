@@ -17,7 +17,7 @@ export function useArticle(slug) {
         .single()
       if (error) throw error
       // 조회수 증가 (fire & forget)
-      supabase.rpc('increment_view', { article_id: data.id }).catch(() => {})
+      try { await supabase.rpc('increment_view', { article_id: data.id }) } catch {}
       return data
     },
     enabled: !!slug,

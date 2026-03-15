@@ -18,7 +18,7 @@ function useNewsArticle(slug) {
       if (error) throw error
       if (!data) throw new Error('기사를 찾을 수 없습니다')
       // 조회수 증가 (에러 무시)
-      supabase.rpc('increment_view', { article_id: data.id }).catch(() => {})
+      try { await supabase.rpc('increment_view', { article_id: data.id }) } catch {}
       return data
     },
     enabled: !!slug,
