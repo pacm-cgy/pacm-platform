@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useArticles } from '../hooks/useData'
+import { useArticles, useNewsArticles } from '../hooks/useData'
 import { ArticleCardSkeleton } from '../components/article/ArticleCard'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
@@ -82,8 +82,7 @@ export default function NewsPage() {
   const [page, setPage] = useState(0)
   const PAGE_SIZE = 20
 
-  const { data: articles = [], isLoading, refetch, isFetching } = useArticles({
-    category: 'news',
+  const { data: articles = [], isLoading, refetch, isFetching } = useNewsArticles({
     limit: PAGE_SIZE,
     page,
   })

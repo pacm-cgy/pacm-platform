@@ -127,14 +127,14 @@ export default async function handler(req) {
             slug: makeSlug(),
             excerpt: item.description || item.title,
             body: item.description ? `${item.description}\n\n원문: ${item.link}` : `원문: ${item.link}`,
-            category: 'news',        // ← 반드시 news 카테고리
+            category: 'insight',     // news enum 추가 전 임시 insight 사용
             status: 'published',
             author_id: authorId,
             read_time: 2,
             source_name: item.sourceName,
             source_url: item.link,
             published_at: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
-            tags: ['뉴스', feed.tag],
+            tags: ['뉴스', '자동수집', feed.tag],
             featured: false,
           }),
         })

@@ -22,12 +22,41 @@ export function useArticles({ category, featured, limit = 10, page = 0 } = {}) {
 
       if (category) q = q.eq('category', category)
       if (featured) q = q.eq('featured', true)
+      // 홈/카테고리 피드에서 자동수집 뉴스 제외 (뉴스 전용 페이지로 분리)
+      if (!category || category !== 'news') {
+        q = q.is('source_name', null)
+      }
 
       const { data, error } = await q
       if (error) throw error
       return data
     },
     staleTime: 5 * 60 * 1000, // 5분 캐시
+  })
+}
+
+
+// ── NEWS (자동수집 뉴스 - source_name 있는 것) ───────────────────
+export function useNewsArticles({ limit = 20, page = 0 } = {}) {
+  return useQuery({
+    queryKey: ['news', { limit, page }],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('articles')
+        .select(`
+          id, title, slug, excerpt, category,
+          tags, read_time, published_at, source_name, source_url,
+          profiles!author_id (id, display_name)
+        `)
+        .eq('status', 'published')
+        .not('source_name', 'is', null)
+        .order('published_at', { ascending: false })
+        .range(page * limit, (page + 1) * limit - 1)
+      if (error) throw error
+      return data
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 60 * 60 * 1000, // 1시간마다 자동 갱신
   })
 }
 
