@@ -142,7 +142,20 @@ export default async function handler(req) {
           status: 'published',
           author_id: authorId,
           read_time: 2,
-          source_name: (() => { try { return new URL(link).hostname.replace('www.',''); } catch { return item.link?.split('/')[2] || '뉴스'; } })(),
+          source_name: (() => {
+          // 네이버 뉴스 제목에서 언론사 추출 시도
+          const titleParts = item.title?.split(' - ');
+          const fromTitle = titleParts?.length > 1 ? titleParts[titleParts.length-1].trim() : null;
+          if (fromTitle && fromTitle.length < 30 && !fromTitle.includes('http')) return fromTitle;
+          // URL에서 호스트 추출
+          try {
+            const url = new URL(item.originallink || item.link);
+            const host = url.hostname.replace('www.','');
+            // JWT 포함된 경우 스킵
+            if (host.length > 30 || host.includes('=') || host.includes('%')) return '뉴스';
+            return host;
+          } catch { return '뉴스'; }
+        })(),
           source_url: link,
           published_at: pubIso,
           tags: ['뉴스', tag],
