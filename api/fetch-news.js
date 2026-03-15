@@ -116,7 +116,7 @@ export default async function handler(req) {
       const items = naverData.items || []
 
       for (const item of items.slice(0, 5)) {
-        const link = item.originallink || item.link
+        const link = (item.originallink && item.originallink.startsWith('http')) ? item.originallink : item.link
         if (!link) continue
         if (await articleExists(link)) { results.skipped++; continue }
 
@@ -142,7 +142,7 @@ export default async function handler(req) {
           status: 'published',
           author_id: authorId,
           read_time: 2,
-          source_name: new URL(link).hostname.replace('www.', ''),
+          source_name: (() => { try { return new URL(link).hostname.replace('www.',''); } catch { return item.link?.split('/')[2] || '뉴스'; } })(),
           source_url: link,
           published_at: pubIso,
           tags: ['뉴스', tag],
