@@ -4,7 +4,7 @@ import { Suspense, lazy, useEffect } from 'react'
 import { HelmetProvider } from 'react-helmet-async'
 import Header from './components/layout/Header'
 import Footer from './components/layout/Footer'
-import { useAuthStore } from './store'
+import { useAuthStore, useThemeStore } from './store'
 import './styles/global.css'
 
 const HomePage      = lazy(() => import('./pages/HomePage'))

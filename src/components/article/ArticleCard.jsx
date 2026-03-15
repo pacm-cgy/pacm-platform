@@ -16,7 +16,7 @@ const CATEGORY_LABELS = {
 function CoverImage({ url, category, alt }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
-  const BG = { insight:'#E8F4EC', story:'#FFF0E8', trend:'#EEF0F8', magazine:'#F8EEEE', community:'#F0F8E8', opinion:'#F0EEF8' }
+  const BG = { insight:'var(--c-gray-2)', story:'var(--c-gray-2)', trend:'var(--c-gray-2)', magazine:'var(--c-gray-2)', community:'var(--c-gray-2)', opinion:'var(--c-gray-2)' }
   const ICON = { insight:'💡', story:'🎙️', trend:'📊', magazine:'📖', community:'👥', opinion:'✍️' }
   return (
     <div style={{ width:'100%', aspectRatio:'16/9', background:BG[category]||'var(--c-cream)', overflow:'hidden', position:'relative', flexShrink:0 }}>
@@ -63,6 +63,20 @@ export function ArticleCard({ article, onClick }) {
             display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden'
           }}>{article.excerpt}</p>
         )}
+        {article.source_name && (
+          <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
+            <span className="source-badge">
+              출처 · {article.source_name}
+            </span>
+            {article.source_url && (
+              <a href={article.source_url} target="_blank" rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                style={{ fontSize:'10px', color:'var(--c-gold)', fontFamily:'var(--f-mono)' }}>
+                원문↗
+              </a>
+            )}
+          </div>
+        )}
         {article.tags?.length>0 && (
           <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
             {article.tags.slice(0,3).map(t=><span key={t} className="tag">{t}</span>)}
@@ -104,6 +118,9 @@ export function ArticleHero({ article, onClick }) {
           {article.read_time && <span style={{ background:'var(--c-gold)', color:'var(--c-ink)', fontFamily:'var(--f-mono)', fontSize:'10px', fontWeight:700, padding:'3px 8px' }}>{article.read_time} MIN READ</span>}
           <span className="t-caption">{CATEGORY_LABELS[article.category]}</span>
           <span className="t-caption">{article.profiles?.display_name||'편집부'}</span>
+          {article.source_name && (
+            <span className="source-badge">출처 · {article.source_name}</span>
+          )}
         </div>
       </div>
     </article>
@@ -118,6 +135,7 @@ export function ArticleSideItem({ article, onClick }) {
       <div className="t-caption" style={{ marginBottom:'8px', letterSpacing:'2px' }}>{CATEGORY_LABELS[article.category]}</div>
       <h3 style={{ fontFamily:'var(--f-serif)', fontSize:'15px', fontWeight:600, lineHeight:1.4, marginBottom:'8px' }}>{article.title}</h3>
       <div className="t-caption">{article.read_time?`${article.read_time}분 읽기`:''}</div>
+      {article.source_name && <div className="source-badge" style={{ marginTop:'6px' }}>출처 · {article.source_name}</div>}
     </article>
   )
 }

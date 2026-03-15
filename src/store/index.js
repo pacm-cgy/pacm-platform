@@ -60,6 +60,25 @@ export const useAuthStore = create(
   )
 )
 
+// ── THEME STORE ─────────────────────────────────────────────────
+export const useThemeStore = create(
+  persist(
+    (set, get) => ({
+      theme: 'dark', // 'dark' | 'light'
+      toggleTheme: () => {
+        const next = get().theme === 'dark' ? 'light' : 'dark'
+        set({ theme: next })
+        document.documentElement.setAttribute('data-theme', next)
+      },
+      initTheme: () => {
+        const theme = get().theme || 'dark'
+        document.documentElement.setAttribute('data-theme', theme)
+      },
+    }),
+    { name: 'insightship_theme', storage: createJSONStorage(() => localStorage) }
+  )
+)
+
 // ── UI STORE ────────────────────────────────────────────────────
 export const useUIStore = create((set) => ({
   searchOpen: false,

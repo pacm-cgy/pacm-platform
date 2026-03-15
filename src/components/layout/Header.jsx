@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Search, Menu, X, Bookmark, ChevronDown } from 'lucide-react'
-import { useAuthStore, useUIStore } from '../../store'
+import { useAuthStore, useUIStore, useThemeStore } from '../../store'
 import { useSearchArticles } from '../../hooks/useData'
 import { supabase } from '../../lib/supabase'
 
@@ -209,6 +209,7 @@ export default function Header() {
   const location = useLocation()
   const { user, profile, signOut } = useAuthStore()
   const { searchOpen, openSearch, closeSearch, mobileMenuOpen, toggleMobileMenu, closeMobileMenu } = useUIStore()
+  const { theme, toggleTheme } = useThemeStore()
   const [scrolled, setScrolled] = useState(false)
   const [authModal, setAuthModal] = useState(null)
 
@@ -269,6 +270,13 @@ export default function Header() {
 
           {/* Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {/* 테마 토글 */}
+            <button
+              onClick={toggleTheme}
+              className="theme-toggle no-mobile"
+              title={theme === 'dark' ? '라이트 모드' : '다크 모드'}
+              aria-label="테마 전환"
+            />
             <button onClick={openSearch} style={{ background: 'none', border: 'none', color: '#777', padding: '8px', transition: 'var(--t-fast)' }}
               onMouseEnter={e => e.currentTarget.style.color = 'var(--c-paper)'}
               onMouseLeave={e => e.currentTarget.style.color = '#777'}
