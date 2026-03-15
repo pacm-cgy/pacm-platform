@@ -77,7 +77,8 @@ export default function ConnectPage() {
       <div style={{ padding:'40px 0 24px' }}>
         <div className="t-eyebrow" style={{ marginBottom:'8px' }}>PACM CONNECT</div>
         <h1 style={{ fontFamily:'var(--f-serif)', fontSize:'34px', fontWeight:700, marginBottom:'8px' }}>기업 · 청소년 연결</h1>
-        <p style={{ color:'var(--c-muted)', fontSize:'14px', maxWidth:'560px' }}>실제 기업 프로젝트에 참여하고 경험을 쌓으세요. 기업은 신선한 시각의 인재를 만납니다.</p>
+        <p style={{ color:'var(--c-muted)', fontSize:'14px', maxWidth:'560px' }}>실제 기업 프로젝트에 참여하고 경험을 쌓으세요. 기업은 신선한 시각의 인재를 만납니다.
+        기업 파트너십 문의: <a href="mailto:contact@pacm.kr" style={{color:"var(--c-gold)"}}>contact@pacm.kr</a></p>
       </div>
 
       {/* Stats */}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Search, Menu, X, Bell, Bookmark, ChevronDown } from 'lucide-react'
+import { Search, Menu, X, Bookmark, ChevronDown } from 'lucide-react'
 import { useAuthStore, useUIStore } from '../../store'
 import { useSearchArticles } from '../../hooks/useData'
 import { supabase } from '../../lib/supabase'
@@ -14,13 +14,29 @@ const NAV_ITEMS = [
   { id: 'connect',   label: '기업연결', path: '/connect' },
 ]
 
-// ── TOPBAR ────────────────────────────────────────────────────────
 const TICKER_ITEMS = [
-  'PACM 플랫폼 정식 출시 — 청소년 창업가와 기업을 연결합니다',
+  'Insightship 정식 출시 — 청소년 창업가와 기업을 연결합니다',
   '창업 인사이트 뉴스레터 구독자 돌파 기념 이벤트 진행 중',
   '2026 Q1 한국 스타트업 트렌드 리포트 공개 예정',
-  '기업 파트너 모집 중 — 청소년 인재를 찾는 기업이라면 지금 신청하세요',
+  '기업 파트너 모집 중 — contact@pacm.kr 로 문의하세요',
 ]
+
+// ── INSIGHTSHIP SVG LOGO ─────────────────────────────────────────
+function InsightshipLogo({ size = 36 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* 돛 */}
+      <path d="M20 4 L20 26 L8 26 Z" fill="#C8982A" opacity="0.9"/>
+      <path d="M20 8 L20 26 L30 26 Z" fill="#C8982A" opacity="0.55"/>
+      {/* 선체 */}
+      <path d="M5 28 Q20 34 35 28 L32 31 Q20 37 8 31 Z" fill="#F5F3EE"/>
+      {/* 물결 */}
+      <path d="M2 33 Q8 31 14 33 Q20 35 26 33 Q32 31 38 33" stroke="#C8982A" strokeWidth="1.2" fill="none" opacity="0.5"/>
+      {/* 돛대 */}
+      <line x1="20" y1="3" x2="20" y2="27" stroke="#F5F3EE" strokeWidth="1.2"/>
+    </svg>
+  )
+}
 
 function Topbar() {
   return (
@@ -31,7 +47,7 @@ function Topbar() {
       overflow: 'hidden',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', maxWidth: 'var(--max-width)', margin: '0 auto', padding: '0 var(--pad-x)' }}>
-        <span style={{ color: 'var(--c-gold)', whiteSpace: 'nowrap', marginRight: '16px' }}>PACM</span>
+        <span style={{ color: 'var(--c-gold)', whiteSpace: 'nowrap', marginRight: '16px' }}>INSIGHTSHIP</span>
         <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
           <div style={{
             display: 'flex', gap: '60px', whiteSpace: 'nowrap',
@@ -50,7 +66,6 @@ function Topbar() {
   )
 }
 
-// ── SEARCH BAR ────────────────────────────────────────────────────
 function SearchOverlay({ onClose }) {
   const [query, setQuery] = useState('')
   const { data: results = [] } = useSearchArticles(query)
@@ -64,10 +79,7 @@ function SearchOverlay({ onClose }) {
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  const go = (slug) => {
-    navigate(`/article/${slug}`)
-    onClose()
-  }
+  const go = (slug) => { navigate(`/article/${slug}`); onClose() }
 
   return (
     <div style={{
@@ -79,7 +91,6 @@ function SearchOverlay({ onClose }) {
       animation: 'fadeIn 0.15s ease',
     }}>
       <div style={{ width: '100%', maxWidth: '640px', padding: '0 20px' }}>
-        {/* Input */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '2px solid var(--c-gold)', paddingBottom: '12px' }}>
           <Search size={20} color="var(--c-gold)" />
           <input
@@ -95,8 +106,6 @@ function SearchOverlay({ onClose }) {
           />
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--c-paper)', fontSize: '20px', lineHeight: 1 }}>✕</button>
         </div>
-
-        {/* Results */}
         {results.length > 0 ? (
           <div style={{ marginTop: '16px' }}>
             {results.map(r => (
@@ -136,7 +145,6 @@ function SearchOverlay({ onClose }) {
   )
 }
 
-// ── USER MENU ─────────────────────────────────────────────────────
 function UserMenu({ profile, onSignOut }) {
   const [open, setOpen] = useState(false)
   const ref = useRef()
@@ -164,7 +172,6 @@ function UserMenu({ profile, onSignOut }) {
         </div>
         <ChevronDown size={12} />
       </button>
-
       {open && (
         <div style={{
           position: 'absolute', top: 'calc(100% + 8px)', right: 0,
@@ -197,14 +204,13 @@ function UserMenu({ profile, onSignOut }) {
   )
 }
 
-// ── MAIN HEADER ───────────────────────────────────────────────────
 export default function Header() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, profile, signOut } = useAuthStore()
   const { searchOpen, openSearch, closeSearch, mobileMenuOpen, toggleMobileMenu, closeMobileMenu } = useUIStore()
   const [scrolled, setScrolled] = useState(false)
-  const [authModal, setAuthModal] = useState(null) // 'signin' | 'signup'
+  const [authModal, setAuthModal] = useState(null)
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 10)
@@ -214,28 +220,29 @@ export default function Header() {
 
   useEffect(() => { closeMobileMenu() }, [location.pathname])
 
-  const handleNavClick = (path) => { navigate(path) }
-
   return (
     <>
       <Topbar />
       <header style={{
         background: 'var(--c-ink)',
         position: 'sticky', top: 0, zIndex: 'var(--z-nav)',
-        borderBottom: `2px solid ${scrolled ? 'var(--c-gold)' : 'var(--c-gold)'}`,
+        borderBottom: '2px solid var(--c-gold)',
         transition: 'box-shadow 0.2s',
         boxShadow: scrolled ? 'var(--shadow-md)' : 'none',
       }}>
         <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
           {/* Logo */}
-          <button onClick={() => handleNavClick('/')} style={{
-            display: 'flex', alignItems: 'baseline', gap: '10px',
+          <button onClick={() => navigate('/')} style={{
+            display: 'flex', alignItems: 'center', gap: '10px',
             background: 'none', border: 'none', cursor: 'pointer',
           }}>
-            <span style={{ fontFamily: 'var(--f-mono)', fontWeight: 700, fontSize: '24px', color: 'var(--c-paper)', letterSpacing: '3px' }}>
-              P<span style={{ color: 'var(--c-gold)' }}>A</span>CM
-            </span>
-            <span style={{ fontFamily: 'var(--f-serif)', fontSize: '10px', color: 'var(--c-muted)', letterSpacing: '1px' }}>청소년 창업 플랫폼</span>
+            <InsightshipLogo size={36} />
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+              <span style={{ fontFamily: 'var(--f-mono)', fontWeight: 700, fontSize: '16px', color: 'var(--c-paper)', letterSpacing: '2px', lineHeight: 1.1 }}>
+                INSIGHT<span style={{ color: 'var(--c-gold)' }}>SHIP</span>
+              </span>
+              <span style={{ fontFamily: 'var(--f-serif)', fontSize: '9px', color: 'var(--c-muted)', letterSpacing: '1px' }}>청소년 창업 플랫폼</span>
+            </div>
           </button>
 
           {/* Desktop Nav */}
@@ -244,15 +251,14 @@ export default function Header() {
               const active = location.pathname === item.path ||
                 (item.path !== '/' && location.pathname.startsWith(item.path))
               return (
-                <button key={item.id} onClick={() => handleNavClick(item.path)}
+                <button key={item.id} onClick={() => navigate(item.path)}
                   style={{
                     background: 'none', border: 'none', cursor: 'pointer',
                     color: active ? 'var(--c-gold)' : '#888',
                     fontSize: '13px', fontFamily: 'var(--f-sans)',
                     fontWeight: active ? 700 : 400,
                     padding: '8px 14px', borderRadius: '3px',
-                    transition: 'var(--t-fast)',
-                    letterSpacing: '0.3px',
+                    transition: 'var(--t-fast)', letterSpacing: '0.3px',
                   }}
                   onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--c-paper)' }}
                   onMouseLeave={e => { if (!active) e.currentTarget.style.color = '#888' }}
@@ -283,7 +289,6 @@ export default function Header() {
               </>
             )}
 
-            {/* Mobile Menu Toggle */}
             <button onClick={toggleMobileMenu}
               style={{ background: 'none', border: 'none', color: 'var(--c-paper)', display: 'none', padding: '8px' }}
               className="mobile-only"
@@ -291,14 +296,10 @@ export default function Header() {
           </div>
         </div>
 
-        {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div style={{
-            background: '#0a0a08', borderTop: '1px solid #222',
-            animation: 'fadeUp 0.2s ease',
-          }}>
+          <div style={{ background: '#0a0a08', borderTop: '1px solid #222', animation: 'fadeUp 0.2s ease' }}>
             {NAV_ITEMS.map(item => (
-              <button key={item.id} onClick={() => handleNavClick(item.path)}
+              <button key={item.id} onClick={() => navigate(item.path)}
                 style={{
                   width: '100%', textAlign: 'left',
                   padding: '14px 20px', background: 'none', border: 'none',
@@ -312,13 +313,9 @@ export default function Header() {
         )}
       </header>
 
-      {/* Search Overlay */}
       {searchOpen && <SearchOverlay onClose={closeSearch} />}
-
-      {/* Auth Modal */}
       {authModal && <AuthModal mode={authModal} onClose={() => setAuthModal(null)} onSwitch={setAuthModal} />}
 
-      {/* Inline styles for responsive */}
       <style>{`
         @media (max-width: 768px) {
           .no-mobile { display: none !important; }
@@ -337,28 +334,49 @@ function AuthModal({ mode, onClose, onSwitch }) {
   const [form, setForm] = useState({ email: '', password: '', username: '', displayName: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
 
   const update = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  // 보안: 입력값 검증
+  const validateEmail = (email) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)
+  const validatePassword = (pw) => pw.length >= 8 && pw.length <= 128
+  const validateUsername = (u) => /^[a-zA-Z0-9_]{3,30}$/.test(u)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError(''); setLoading(true)
     try {
+      if (!validateEmail(form.email)) throw new Error('올바른 이메일 주소를 입력해주세요')
+
       if (mode === 'signin') {
+        if (!form.password) throw new Error('비밀번호를 입력해주세요')
         const { error } = await supabase.auth.signInWithPassword({
-          email: form.email, password: form.password,
+          email: form.email.trim().toLowerCase(),
+          password: form.password,
         })
-        if (error) throw error
+        if (error) {
+          // 보안: 구체적인 에러 메시지 숨김
+          if (error.message.includes('Invalid login')) throw new Error('이메일 또는 비밀번호가 올바르지 않습니다')
+          throw error
+        }
+        onClose()
       } else {
-        if (form.password.length < 8) throw new Error('비밀번호는 8자 이상이어야 합니다')
-        if (!/^[a-zA-Z0-9_]{3,30}$/.test(form.username)) throw new Error('아이디는 영문/숫자/밑줄 3-30자로 입력해주세요')
+        if (!validatePassword(form.password)) throw new Error('비밀번호는 8자 이상 128자 이하여야 합니다')
+        if (!validateUsername(form.username)) throw new Error('아이디는 영문/숫자/밑줄 3-30자로 입력해주세요')
+        // 보안: XSS 방지를 위한 displayName 제한
+        const displayName = (form.displayName || form.username).replace(/[<>&"']/g, '').slice(0, 50)
         const { error } = await supabase.auth.signUp({
-          email: form.email, password: form.password,
-          options: { data: { username: form.username, display_name: form.displayName || form.username }, emailRedirectTo: `${window.location.origin}/` },
+          email: form.email.trim().toLowerCase(),
+          password: form.password,
+          options: {
+            data: { username: form.username, display_name: displayName },
+            emailRedirectTo: `${window.location.origin}/`,
+          },
         })
         if (error) throw error
+        setSuccess(true)
       }
-      onClose()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -366,11 +384,35 @@ function AuthModal({ mode, onClose, onSwitch }) {
     }
   }
 
+  if (success) {
+    return (
+      <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+        <div className="modal animate-fade-up" style={{ textAlign: 'center' }}>
+          <div style={{ padding: '40px 32px' }}>
+            <InsightshipLogo size={48} />
+            <div style={{ fontFamily: 'var(--f-serif)', fontSize: '20px', marginTop: '16px', marginBottom: '8px' }}>
+              이메일을 확인해주세요
+            </div>
+            <div style={{ color: 'var(--c-muted)', fontSize: '14px', lineHeight: 1.7 }}>
+              <strong style={{ color: 'var(--c-gold)' }}>{form.email}</strong>로<br />
+              인증 링크를 보냈습니다.<br />
+              메일함을 확인하고 링크를 클릭하면 가입이 완료됩니다.
+            </div>
+            <button onClick={onClose} className="btn btn-gold" style={{ marginTop: '24px', width: '100%' }}>확인</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal animate-fade-up">
         <div className="modal-header">
-          <div className="modal-title">{mode === 'signin' ? '로그인' : '회원가입'}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <InsightshipLogo size={28} />
+            <div className="modal-title">{mode === 'signin' ? '로그인' : '회원가입'}</div>
+          </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: 'var(--c-muted)' }}>✕</button>
         </div>
         <div className="modal-body">
@@ -382,16 +424,16 @@ function AuthModal({ mode, onClose, onSwitch }) {
           <form onSubmit={handleSubmit}>
             {mode === 'signup' && (
               <>
-                <label className="label">아이디 (영문/숫자)</label>
+                <label className="label">아이디 (영문/숫자/밑줄)</label>
                 <input className="input" type="text" value={form.username}
                   onChange={e => update('username', e.target.value)}
-                  placeholder="my_startup" autoComplete="username" required
+                  placeholder="my_startup" autoComplete="username" required maxLength={30}
                   style={{ marginBottom: '12px' }}
                 />
                 <label className="label">닉네임</label>
                 <input className="input" type="text" value={form.displayName}
                   onChange={e => update('displayName', e.target.value)}
-                  placeholder="이름 또는 닉네임"
+                  placeholder="이름 또는 닉네임" maxLength={50}
                   style={{ marginBottom: '12px' }}
                 />
               </>
@@ -399,13 +441,13 @@ function AuthModal({ mode, onClose, onSwitch }) {
             <label className="label">이메일</label>
             <input className="input" type="email" value={form.email}
               onChange={e => update('email', e.target.value)}
-              placeholder="email@example.com" autoComplete="email" required
+              placeholder="email@example.com" autoComplete="email" required maxLength={254}
               style={{ marginBottom: '12px' }}
             />
             <label className="label">비밀번호 {mode === 'signup' ? '(8자 이상)' : ''}</label>
             <input className="input" type="password" value={form.password}
               onChange={e => update('password', e.target.value)}
-              placeholder="••••••••" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} required
+              placeholder="••••••••" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} required maxLength={128}
               style={{ marginBottom: '20px' }}
             />
             <button type="submit" className="btn btn-gold btn-full btn-lg" disabled={loading}>
@@ -424,3 +466,5 @@ function AuthModal({ mode, onClose, onSwitch }) {
     </div>
   )
 }
+
+export { InsightshipLogo }
