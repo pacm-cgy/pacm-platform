@@ -27,7 +27,7 @@ async function fetchOgMeta(url) {
         'User-Agent': 'Mozilla/5.0 (compatible; InsightshipBot/1.0)',
         'Accept': 'text/html',
       },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(1500),
     })
     if (!res.ok) return {}
     const html = await res.text()
@@ -123,9 +123,9 @@ export default async function handler(req) {
         const title = stripHtml(item.title).slice(0, 200)
         const description = stripHtml(item.description).slice(0, 400)
 
-        // OG 이미지 수집 (빠른 타임아웃)
-        const { image, description: ogDesc } = await fetchOgMeta(link)
-        const excerpt = description || ogDesc || title
+        // OG 이미지는 타임아웃 방지를 위해 비활성화
+        const image = null
+        const excerpt = description || title
 
         // 발행일
         let pubIso
