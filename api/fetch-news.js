@@ -1,124 +1,59 @@
 // Vercel Serverless Function - 뉴스 자동 수집
-// Cron: 매일 UTC 00:00 (KST 09:00) - Hobby 플랜 제한
+// 네이버 뉴스 검색 API 사용 (무료 25,000건/일)
+// NAVER_CLIENT_ID, NAVER_CLIENT_SECRET 환경변수 필요
 
 export const config = { runtime: 'edge' }
 
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+const NAVER_ID = process.env.NAVER_CLIENT_ID
+const NAVER_SECRET = process.env.NAVER_CLIENT_SECRET
 const CRON_SECRET = process.env.CRON_SECRET
 
-const RSS_FEEDS = [
-  { url: 'https://news.google.com/rss/search?q=%EC%B2%AD%EC%86%8C%EB%85%84+%EC%B0%BD%EC%97%85&hl=ko&gl=KR&ceid=KR:ko', tag: '청소년창업' },
-  { url: 'https://news.google.com/rss/search?q=%EC%8A%A4%ED%83%80%ED%8A%B8%EC%97%85+%ED%88%AC%EC%9E%90&hl=ko&gl=KR&ceid=KR:ko', tag: '스타트업투자' },
-  { url: 'https://news.google.com/rss/search?q=%EC%B0%BD%EC%97%85+%EC%9D%B8%EC%82%AC%EC%9D%B4%ED%8A%B8&hl=ko&gl=KR&ceid=KR:ko', tag: '창업인사이트' },
-  { url: 'https://news.google.com/rss/search?q=AI+%EC%8A%A4%ED%83%80%ED%8A%B8%EC%97%85&hl=ko&gl=KR&ceid=KR:ko', tag: 'AI스타트업' },
-  { url: 'https://news.google.com/rss/search?q=%EC%9C%A0%EB%8B%88%EC%BD%98+%EC%8A%A4%ED%83%80%ED%8A%B8%EC%97%85&hl=ko&gl=KR&ceid=KR:ko', tag: '유니콘' },
-  { url: 'https://news.google.com/rss/search?q=%EC%8A%A4%ED%83%80%ED%8A%B8%EC%97%85+%EC%84%B1%EA%B3%B5&hl=ko&gl=KR&ceid=KR:ko', tag: '성공사례' },
+const KEYWORDS = [
+  { q: '청소년 창업', tag: '청소년창업' },
+  { q: '스타트업 투자', tag: '스타트업투자' },
+  { q: '창업 인사이트', tag: '창업인사이트' },
+  { q: 'AI 스타트업', tag: 'AI스타트업' },
+  { q: '유니콘 스타트업', tag: '유니콘' },
+  { q: '스타트업 성공', tag: '성공사례' },
 ]
 
-// ── HTML 완전 제거 ──────────────────────────────────────────
-function stripHtml(str) {
-  if (!str) return ''
-  return str
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
-    .replace(/&#[0-9]+;/g, '').replace(/&[a-z]+;/g, '')
-    .replace(/\s+/g, ' ').trim()
-}
+// OG 메타데이터 추출 (이미지, 설명)
+async function fetchOgMeta(url) {
+  try {
+    const res = await fetch(url, {
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (compatible; InsightshipBot/1.0)',
+        'Accept': 'text/html',
+      },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) return {}
+    const html = await res.text()
+    
+    const getMeta = (prop) => {
+      const m = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i'))
+        || html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${prop}["']`, 'i'))
+      return m ? m[1].trim() : null
+    }
 
-// ── XML 태그 값 추출 (CDATA + 일반 HTML 모두 처리) ────────
-function getXmlTag(block, tag) {
-  // CDATA 방식
-  const cdataReg = new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>`)
-  const cdataMatch = block.match(cdataReg)
-  if (cdataMatch) return cdataMatch[1].trim()
-  
-  // 일반 방식 (HTML 포함 가능)
-  const plainReg = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`)
-  const plainMatch = block.match(plainReg)
-  if (plainMatch) return plainMatch[1].trim()
-  
-  return ''
-}
-
-// ── 구글 뉴스 description에서 텍스트와 출처 추출 ──────────
-// 형식: <a href="...">제목</a>&nbsp;&nbsp;<font color="#6f6f6f">출처</font>
-function parseGoogleDesc(rawDesc) {
-  if (!rawDesc) return { text: '', source: null }
-  
-  // 출처 추출 (<font color="#6f6f6f">출처명</font>)
-  const sourceMatch = rawDesc.match(/<font[^>]*color="#6f6f6f"[^>]*>([\s\S]+?)<\/font>/i)
-  const source = sourceMatch ? sourceMatch[1].replace(/<[^>]+>/g, '').trim() : null
-  
-  // 링크 텍스트 추출 (<a href="...">텍스트</a>) - 특수문자/줄바꿈 포함
-  const linkMatch = rawDesc.match(/<a[^>]+>([\s\S]+?)<\/a>/)
-  const linkText = linkMatch 
-    ? linkMatch[1].replace(/<[^>]+>/g, '').trim()  // 내부 HTML 태그도 제거
-    : stripHtml(rawDesc)
-  
-  return { text: linkText.slice(0, 300), source }
+    return {
+      image: getMeta('og:image') || getMeta('twitter:image'),
+      description: getMeta('og:description') || getMeta('description') || getMeta('twitter:description'),
+    }
+  } catch {
+    return {}
+  }
 }
 
 function makeSlug() {
   return `news-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function extractSourceFromTitle(rawTitle) {
-  const m = rawTitle?.match(/ - ([^-]+)$/)
-  return m ? m[1].trim() : null
-}
-
-async function parseRSS(url) {
-  try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'InsightshipBot/1.0 (+https://www.insightship.pacm.kr)' },
-      signal: AbortSignal.timeout(10000),
-    })
-    if (!res.ok) return []
-    const xml = await res.text()
-    const items = []
-    const itemReg = /<item>([\s\S]*?)<\/item>/g
-    let m
-    
-    while ((m = itemReg.exec(xml)) !== null) {
-      const block = m[1]
-      const rawTitle = getXmlTag(block, 'title')
-      const link = getXmlTag(block, 'link') || getXmlTag(block, 'guid')
-      if (!rawTitle || !link) continue
-
-      // 제목에서 출처 제거
-      const cleanTitle = rawTitle.replace(/ - [^-]+$/, '').trim()
-      
-      // description 파싱 (구글 뉴스 HTML 형식 처리)
-      const rawDesc = getXmlTag(block, 'description')
-      const { text: descText, source: descSource } = parseGoogleDesc(rawDesc)
-      
-      // source 태그에서 출처
-      const sourceMeta = block.match(/<source[^>]*url="([^"]*)"[^>]*>([\s\S]*?)<\/source>/)
-      const sourceName = (sourceMeta ? stripHtml(sourceMeta[2]) : null)
-        || descSource
-        || extractSourceFromTitle(rawTitle)
-        || '뉴스'
-      
-      // 실제 기사 텍스트 (제목과 다르면 description 사용, 같으면 빈값)
-      const excerpt = (descText && descText !== cleanTitle) 
-        ? descText.slice(0, 300)
-        : cleanTitle.slice(0, 200)
-      
-      items.push({
-        title: cleanTitle.slice(0, 200),
-        link,
-        excerpt,
-        pubDate: getXmlTag(block, 'pubDate'),
-        sourceName,
-        sourceUrl: link,
-      })
-    }
-    return items.slice(0, 6)
-  } catch (e) {
-    return []
-  }
+function stripHtml(s) {
+  if (!s) return ''
+  return s.replace(/<[^>]+>/g, '').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 async function articleExists(url) {
@@ -139,9 +74,15 @@ export default async function handler(req) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-    return new Response(JSON.stringify({ error: 'Missing env vars' }), { status: 500 })
+    return new Response(JSON.stringify({ error: 'Missing Supabase env vars' }), { status: 500 })
   }
 
+  // 네이버 API 키 없으면 에러
+  if (!NAVER_ID || !NAVER_SECRET) {
+    return new Response(JSON.stringify({ error: 'NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 환경변수 없음. https://developers.naver.com 에서 발급 필요' }), { status: 500 })
+  }
+
+  // 관리자 계정
   const profileRes = await fetch(
     `${SUPABASE_URL}/rest/v1/profiles?role=eq.admin&limit=1&select=id`,
     { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
@@ -154,14 +95,61 @@ export default async function handler(req) {
 
   const results = { inserted: 0, skipped: 0, errors: [] }
 
-  for (const feed of RSS_FEEDS) {
-    const items = await parseRSS(feed.url)
-    for (const item of items) {
-      try {
-        const exists = await articleExists(item.link)
-        if (exists) { results.skipped++; continue }
+  for (const { q, tag } of KEYWORDS) {
+    try {
+      // 네이버 뉴스 검색 API
+      const naverRes = await fetch(
+        `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(q)}&display=10&sort=date`,
+        {
+          headers: {
+            'X-Naver-Client-Id': NAVER_ID,
+            'X-Naver-Client-Secret': NAVER_SECRET,
+          },
+          signal: AbortSignal.timeout(8000),
+        }
+      )
+      if (!naverRes.ok) {
+        results.errors.push(`네이버 API 오류: ${naverRes.status}`)
+        continue
+      }
+      const naverData = await naverRes.json()
+      const items = naverData.items || []
 
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/articles`, {
+      for (const item of items.slice(0, 5)) {
+        const link = item.originallink || item.link
+        if (!link) continue
+        if (await articleExists(link)) { results.skipped++; continue }
+
+        const title = stripHtml(item.title).slice(0, 200)
+        const description = stripHtml(item.description).slice(0, 400)
+
+        // OG 이미지 수집 (빠른 타임아웃)
+        const { image, description: ogDesc } = await fetchOgMeta(link)
+        const excerpt = description || ogDesc || title
+
+        // 발행일
+        let pubIso
+        try { pubIso = new Date(item.pubDate).toISOString() }
+        catch { pubIso = new Date().toISOString() }
+
+        const article = {
+          title,
+          slug: makeSlug(),
+          excerpt: excerpt.slice(0, 400),
+          body: `${excerpt}\n\n원문 보기: ${link}`,
+          cover_image: image || null,
+          category: 'news',
+          status: 'published',
+          author_id: authorId,
+          read_time: 2,
+          source_name: new URL(link).hostname.replace('www.', ''),
+          source_url: link,
+          published_at: pubIso,
+          tags: ['뉴스', tag],
+          featured: false,
+        }
+
+        const saveRes = await fetch(`${SUPABASE_URL}/rest/v1/articles`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -169,30 +157,18 @@ export default async function handler(req) {
             Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
             Prefer: 'return=minimal',
           },
-          body: JSON.stringify({
-            title: item.title,
-            slug: makeSlug(),
-            excerpt: item.excerpt,
-            body: `${item.excerpt}\n\n원문 보기: ${item.link}`,
-            category: 'news',
-            status: 'published',
-            author_id: authorId,
-            read_time: 2,
-            source_name: item.sourceName,
-            source_url: item.link,
-            published_at: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
-            tags: ['뉴스', feed.tag],
-            featured: false,
-          }),
+          body: JSON.stringify(article),
         })
-        if (res.status === 201) results.inserted++
+
+        if (saveRes.status === 201) results.inserted++
         else {
-          const err = await res.text()
-          results.errors.push(err.slice(0, 100))
+          const err = await saveRes.text()
+          if (!err.includes('23505')) results.errors.push(err.slice(0, 80))
+          else results.skipped++
         }
-      } catch (e) {
-        results.errors.push(e.message?.slice(0, 80))
       }
+    } catch (e) {
+      results.errors.push(`${tag}: ${e.message?.slice(0, 60)}`)
     }
   }
 
