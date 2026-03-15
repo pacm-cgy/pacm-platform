@@ -44,7 +44,7 @@ export function useNewsArticles({ limit = 20, page = 0 } = {}) {
       const { data, error } = await supabase
         .from('articles')
         .select(`
-          id, title, slug, excerpt, category,
+          id, title, slug, excerpt, cover_image, category,
           tags, read_time, published_at, source_name, source_url,
           profiles!author_id (id, display_name)
         `)

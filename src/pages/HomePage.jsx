@@ -19,7 +19,7 @@ function TrendCard({ snapshot }) {
 
   return (
     <div className="card" style={{ padding: '22px', cursor: 'pointer' }}
-      onMouseEnter={e => e.currentTarget.style.background = '#fff'}
+      onMouseEnter={e => e.currentTarget.style.background = 'var(--c-gray-1)'}
       onMouseLeave={e => e.currentTarget.style.background = 'var(--c-card)'}
     >
       <div style={{ fontSize: '32px', marginBottom: '10px' }}>{ICONS[snapshot.category] || '📊'}</div>

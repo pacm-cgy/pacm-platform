@@ -30,11 +30,11 @@ function InsightshipLogo({ size = 36 }) {
       <path d="M20 4 L20 26 L8 26 Z" fill="#C8982A" opacity="0.9"/>
       <path d="M20 8 L20 26 L30 26 Z" fill="#C8982A" opacity="0.55"/>
       {/* 선체 */}
-      <path d="M5 28 Q20 34 35 28 L32 31 Q20 37 8 31 Z" fill="#F5F3EE"/>
+      <path d="M5 28 Q20 34 35 28 L32 31 Q20 37 8 31 Z" fill="var(--c-paper)"/>
       {/* 물결 */}
       <path d="M2 33 Q8 31 14 33 Q20 35 26 33 Q32 31 38 33" stroke="#C8982A" strokeWidth="1.2" fill="none" opacity="0.5"/>
       {/* 돛대 */}
-      <line x1="20" y1="3" x2="20" y2="27" stroke="#F5F3EE" strokeWidth="1.2"/>
+      <line x1="20" y1="3" x2="20" y2="27" stroke="var(--c-paper)" strokeWidth="1.2"/>
     </svg>
   )
 }
@@ -129,13 +129,13 @@ function SearchOverlay({ onClose }) {
               {['AI 스타트업', '청소년 창업', '시드 투자', '제품 기획', '팀 빌딩', '피치덱'].map(t => (
                 <button key={t} onClick={() => setQuery(t)}
                   style={{
-                    padding: '5px 14px', border: '1px solid #333',
+                    padding: '5px 14px', border: '1px solid var(--c-border)',
                     background: 'none', color: '#777', fontSize: '12px',
                     borderRadius: '20px', cursor: 'pointer',
                     fontFamily: 'var(--f-sans)', transition: 'var(--t-fast)',
                   }}
                   onMouseEnter={e => { e.target.style.borderColor = 'var(--c-gold)'; e.target.style.color = 'var(--c-gold)' }}
-                  onMouseLeave={e => { e.target.style.borderColor = '#333'; e.target.style.color = '#777' }}
+                  onMouseLeave={e => { e.target.style.borderColor = 'var(--c-border)'; e.target.style.color = 'var(--c-muted)' }}
                 >{t}</button>
               ))}
             </div>
@@ -176,11 +176,11 @@ function UserMenu({ profile, onSignOut }) {
       {open && (
         <div style={{
           position: 'absolute', top: 'calc(100% + 8px)', right: 0,
-          background: 'var(--c-ink)', border: '1px solid #333',
+          background: 'var(--c-ink)', border: '1px solid var(--c-border)',
           minWidth: '180px', zIndex: 200,
           animation: 'fadeUp 0.15s ease',
         }}>
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid #333' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--c-border)' }}>
             <div style={{ color: 'var(--c-paper)', fontSize: '13px', fontWeight: 700 }}>{profile.display_name}</div>
             <div style={{ color: '#666', fontSize: '11px', fontFamily: 'var(--f-mono)', marginTop: '2px' }}>{profile.role}</div>
           </div>
@@ -194,7 +194,7 @@ function UserMenu({ profile, onSignOut }) {
               onMouseLeave={e => { e.target.style.color = '#888'; e.target.style.background = 'none' }}
             >{item.label}</a>
           ))}
-          <div style={{ borderTop: '1px solid #333' }}>
+          <div style={{ borderTop: '1px solid var(--c-border)' }}>
             <button onClick={() => { onSignOut(); setOpen(false) }}
               style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none', color: 'var(--c-red)', fontSize: '13px', textAlign: 'left', cursor: 'pointer' }}
             >로그아웃</button>
@@ -280,7 +280,7 @@ export default function Header() {
             />
             <button onClick={openSearch} style={{ background: 'none', border: 'none', color: '#777', padding: '8px', transition: 'var(--t-fast)' }}
               onMouseEnter={e => e.currentTarget.style.color = 'var(--c-paper)'}
-              onMouseLeave={e => e.currentTarget.style.color = '#777'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--c-muted)'}
             ><Search size={17} /></button>
 
             {user && profile ? (

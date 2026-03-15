@@ -4,6 +4,7 @@ import { ArrowLeft, ExternalLink, Clock, Calendar } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { supabase } from '../lib/supabase'
+import { validateSlug } from '../lib/security'
 
 function useNewsArticle(slug) {
   return useQuery({
@@ -13,7 +14,7 @@ function useNewsArticle(slug) {
         .from('articles')
         .select('*')
         .eq('slug', slug)
-        .eq('category', 'news')
+        .eq('status', 'published')
         .single()
       if (error) throw error
       // 조회수 증가
@@ -143,7 +144,7 @@ export default function NewsDetailPage() {
               <div style={{ fontSize: '13px', color: 'var(--c-muted)' }}>{article.source_name}</div>
             </div>
             <a
-              href={article.source_url}
+              href={article.source_url?.startsWith("http") ? article.source_url : "#"}
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-gold"

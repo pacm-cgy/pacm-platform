@@ -35,10 +35,12 @@ function NewsCard({ article }) {
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
         ) : (
-          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '8px' }}>
-            <Image size={24} color="var(--c-gray-4)" />
-            <span style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: 'var(--c-gray-5)', letterSpacing: '1px' }}>
-              {article.source_name?.slice(0, 15)}
+          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '10px', background: 'linear-gradient(135deg, var(--c-gray-2) 0%, var(--c-gray-3) 100%)' }}>
+            <div style={{ width: '40px', height: '40px', border: '1px solid var(--c-gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.5 }}>
+              <Image size={16} color="var(--c-gold)" />
+            </div>
+            <span style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: 'var(--c-gray-6)', letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+              {article.source_name?.replace('.com','').replace('.co.kr','').slice(0, 12) || 'NEWS'}
             </span>
           </div>
         )}

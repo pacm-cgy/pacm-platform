@@ -1,3 +1,4 @@
+import { validateInput, checkRateLimit, safeErrorMessage } from '../lib/security'
 import { useState } from 'react'
 import { MessageCircle, Heart, Eye, Pin } from 'lucide-react'
 import { format } from 'date-fns'
@@ -135,7 +136,7 @@ export default function CommunityPage() {
           <div style={{ display:'flex', gap:'0', borderBottom:'2px solid var(--c-border)', marginBottom:'0' }}>
             {POST_TYPES.map(t=>(
               <button key={t.id} onClick={()=>setActiveType(t.id)}
-                style={{ padding:'10px 16px', background:'none', border:'none', borderBottom:`2px solid ${activeType===t.id?'var(--c-ink)':'transparent'}`, marginBottom:'-2px', fontFamily:'var(--f-mono)', fontSize:'11px', letterSpacing:'1px', color:activeType===t.id?'var(--c-ink)':'var(--c-muted)', cursor:'pointer', fontWeight:activeType===t.id?700:400 }}
+                style={{ padding:'10px 16px', background:'none', border:'none', borderBottom:`2px solid ${activeType===t.id?'var(--c-gold)':'transparent'}`, marginBottom:'-2px', fontFamily:'var(--f-mono)', fontSize:'11px', letterSpacing:'1px', color:activeType===t.id?'var(--c-paper)':'var(--c-muted)', cursor:'pointer', fontWeight:activeType===t.id?700:400 }}
               >{t.label}</button>
             ))}
           </div>

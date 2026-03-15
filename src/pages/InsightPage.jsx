@@ -25,7 +25,7 @@ export default function InsightPage() {
       <div style={{ display: 'flex', gap: '0', borderBottom: '2px solid var(--c-border)', marginBottom: '28px' }}>
         {CATS.map(c => (
           <button key={c.id} onClick={() => setActive(c.id)}
-            style={{ padding: '10px 18px', background: 'none', border: 'none', borderBottom: `2px solid ${active === c.id ? 'var(--c-ink)' : 'transparent'}`, marginBottom: '-2px', fontFamily: 'var(--f-mono)', fontSize: '12px', letterSpacing: '1px', color: active === c.id ? 'var(--c-ink)' : 'var(--c-muted)', cursor: 'pointer', fontWeight: active === c.id ? 700 : 400 }}
+            style={{ padding: '10px 18px', background: 'none', border: 'none', borderBottom: `2px solid ${active === c.id ? 'var(--c-gold)' : 'transparent'}`, marginBottom: '-2px', fontFamily: 'var(--f-mono)', fontSize: '12px', letterSpacing: '1px', color: active === c.id ? 'var(--c-paper)' : 'var(--c-muted)', cursor: 'pointer', fontWeight: active === c.id ? 700 : 400 }}
           >{c.label}</button>
         ))}
       </div>
