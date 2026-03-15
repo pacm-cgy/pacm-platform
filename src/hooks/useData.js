@@ -1,0 +1,275 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { supabase, checkRateLimit } from '../lib/supabase'
+import { useAuthStore } from '../store'
+
+// ── ARTICLES ─────────────────────────────────────────────────────
+
+export function useArticles({ category, featured, limit = 10, page = 0 } = {}) {
+  return useQuery({
+    queryKey: ['articles', { category, featured, limit, page }],
+    queryFn: async () => {
+      let q = supabase
+        .from('articles')
+        .select(`
+          id, title, slug, excerpt, cover_image, category,
+          tags, read_time, view_count, like_count, featured,
+          published_at, created_at,
+          profiles!author_id (id, display_name, avatar_url, startup_name)
+        `)
+        .eq('status', 'published')
+        .order('published_at', { ascending: false })
+        .range(page * limit, (page + 1) * limit - 1)
+
+      if (category) q = q.eq('category', category)
+      if (featured) q = q.eq('featured', true)
+
+      const { data, error } = await q
+      if (error) throw error
+      return data
+    },
+    staleTime: 5 * 60 * 1000, // 5분 캐시
+  })
+}
+
+export function useArticle(slug) {
+  return useQuery({
+    queryKey: ['article', slug],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('articles')
+        .select(`
+          *,
+          profiles!author_id (id, display_name, avatar_url, startup_name, bio),
+          article_images (id, url, alt_text, order_index)
+        `)
+        .eq('slug', slug)
+        .eq('status', 'published')
+        .single()
+      if (error) throw error
+
+      // 조회수 증가 (fire & forget)
+      supabase.rpc('increment_view', { article_id: data.id }).then(() => {})
+      return data
+    },
+    enabled: !!slug,
+    staleTime: 2 * 60 * 1000,
+  })
+}
+
+export function useSearchArticles(query) {
+  return useQuery({
+    queryKey: ['search', query],
+    queryFn: async () => {
+      if (!query?.trim()) return []
+      const { data, error } = await supabase
+        .from('articles')
+        .select('id, title, slug, excerpt, category, cover_image, published_at')
+        .eq('status', 'published')
+        .or(`title.ilike.%${query}%,excerpt.ilike.%${query}%`)
+        .limit(10)
+      if (error) throw error
+      return data
+    },
+    enabled: !!query && query.length >= 2,
+    staleTime: 30 * 1000,
+  })
+}
+
+export function useLikeArticle() {
+  const qc = useQueryClient()
+  const { user } = useAuthStore()
+  return useMutation({
+    mutationFn: async ({ articleId, liked }) => {
+      if (!user) throw new Error('로그인이 필요합니다')
+      checkRateLimit('like', 20, 60000)
+      if (liked) {
+        await supabase.from('article_likes').delete()
+          .match({ user_id: user.id, article_id: articleId })
+      } else {
+        await supabase.from('article_likes').insert(
+          { user_id: user.id, article_id: articleId }
+        )
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['articles'] }),
+  })
+}
+
+// ── COMMUNITY POSTS ───────────────────────────────────────────────
+
+export function usePosts({ postType, limit = 20, page = 0 } = {}) {
+  return useQuery({
+    queryKey: ['posts', { postType, limit, page }],
+    queryFn: async () => {
+      let q = supabase
+        .from('community_posts')
+        .select(`
+          id, title, body, post_type, tags,
+          view_count, like_count, reply_count, is_pinned,
+          created_at,
+          profiles!author_id (id, display_name, avatar_url, startup_name, school)
+        `)
+        .eq('is_deleted', false)
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .range(page * limit, (page + 1) * limit - 1)
+
+      if (postType && postType !== 'all') q = q.eq('post_type', postType)
+      const { data, error } = await q
+      if (error) throw error
+      return data
+    },
+    staleTime: 60 * 1000,
+  })
+}
+
+export function useCreatePost() {
+  const qc = useQueryClient()
+  const { user } = useAuthStore()
+  return useMutation({
+    mutationFn: async ({ title, body, postType, tags }) => {
+      if (!user) throw new Error('로그인이 필요합니다')
+      checkRateLimit('create_post', 3, 60000) // 분당 3개 제한
+      const { data, error } = await supabase.from('community_posts').insert({
+        title: title.trim().slice(0, 200),
+        body: body.trim().slice(0, 10000),
+        post_type: postType || 'free',
+        tags: (tags || []).slice(0, 10),
+        author_id: user.id,
+      }).select().single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['posts'] }),
+  })
+}
+
+export function useComments(postId) {
+  return useQuery({
+    queryKey: ['comments', postId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('comments')
+        .select(`
+          id, body, parent_id, created_at,
+          profiles!author_id (id, display_name, avatar_url)
+        `)
+        .eq('post_id', postId)
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: true })
+      if (error) throw error
+      return data
+    },
+    enabled: !!postId,
+    staleTime: 30 * 1000,
+  })
+}
+
+export function useCreateComment() {
+  const qc = useQueryClient()
+  const { user } = useAuthStore()
+  return useMutation({
+    mutationFn: async ({ postId, body, parentId }) => {
+      if (!user) throw new Error('로그인이 필요합니다')
+      checkRateLimit('comment', 10, 60000)
+      const { data, error } = await supabase.from('comments').insert({
+        post_id: postId,
+        body: body.trim().slice(0, 2000),
+        parent_id: parentId || null,
+        author_id: user.id,
+      }).select().single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: (_, { postId }) => qc.invalidateQueries({ queryKey: ['comments', postId] }),
+  })
+}
+
+// ── PROJECTS ─────────────────────────────────────────────────────
+
+export function useProjects() {
+  return useQuery({
+    queryKey: ['projects'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .neq('status', 'archived')
+        .order('status', { ascending: false })
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useApplyProject() {
+  const qc = useQueryClient()
+  const { user } = useAuthStore()
+  return useMutation({
+    mutationFn: async ({ projectId, motivation }) => {
+      if (!user) throw new Error('로그인이 필요합니다')
+      checkRateLimit('apply', 5, 60000)
+      const { error } = await supabase.from('project_applications').insert({
+        project_id: projectId,
+        user_id: user.id,
+        motivation: (motivation || '').trim().slice(0, 1000),
+      })
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+  })
+}
+
+// ── TREND ─────────────────────────────────────────────────────────
+
+export function useTrends() {
+  return useQuery({
+    queryKey: ['trends'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('trend_snapshots')
+        .select('*')
+        .eq('snapshot_date', new Date().toISOString().split('T')[0])
+        .order('category')
+      if (error) throw error
+      return data
+    },
+    staleTime: 30 * 60 * 1000, // 30분 캐시
+  })
+}
+
+// ── NEWSLETTER ────────────────────────────────────────────────────
+
+export function useSubscribeNewsletter() {
+  return useMutation({
+    mutationFn: async (email) => {
+      checkRateLimit('newsletter', 3, 60000)
+      const emailRegex = /^[^@]+@[^@]+\.[^@]+$/
+      if (!emailRegex.test(email)) throw new Error('올바른 이메일 주소를 입력해주세요')
+      const { error } = await supabase
+        .from('newsletter_subscribers')
+        .upsert({ email: email.toLowerCase().trim() }, { onConflict: 'email' })
+      if (error) throw error
+    },
+  })
+}
+
+// ── REPORT ────────────────────────────────────────────────────────
+export function useReport() {
+  const { user } = useAuthStore()
+  return useMutation({
+    mutationFn: async ({ targetType, targetId, reason }) => {
+      if (!user) throw new Error('로그인이 필요합니다')
+      checkRateLimit('report', 5, 300000) // 5분에 5개
+      const { error } = await supabase.from('reports').insert({
+        reporter_id: user.id,
+        target_type: targetType,
+        target_id: targetId,
+        reason: reason.trim().slice(10, 500),
+      })
+      if (error) throw error
+    },
+  })
+}
