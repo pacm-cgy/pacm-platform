@@ -55,11 +55,11 @@ function Topbar() {
             animation: 'ticker 30s linear infinite',
           }}>
             {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
-              <span key={i} style={{ color: '#888' }}>▸ {item}</span>
+              <span key={i} style={{ color: 'var(--c-gray-5)' }}>▸ {item}</span>
             ))}
           </div>
         </div>
-        <span style={{ color: '#444', whiteSpace: 'nowrap', marginLeft: '16px' }}>
+        <span style={{ color: 'var(--c-gray-4)', whiteSpace: 'nowrap', marginLeft: '16px' }}>
           {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' })}
         </span>
       </div>
@@ -121,21 +121,20 @@ function SearchOverlay({ onClose }) {
             ))}
           </div>
         ) : query.length >= 2 ? (
-          <div style={{ marginTop: '20px', color: '#555', fontFamily: 'var(--f-mono)', fontSize: '13px' }}>검색 결과가 없습니다</div>
+          <div style={{ marginTop: '20px', color: 'var(--c-muted)', fontFamily: 'var(--f-mono)', fontSize: '13px' }}>검색 결과가 없습니다</div>
         ) : (
           <div style={{ marginTop: '20px' }}>
-            <div style={{ fontFamily: 'var(--f-mono)', fontSize: '11px', color: '#555', letterSpacing: '2px', marginBottom: '12px' }}>인기 검색어</div>
+            <div style={{ fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--c-gray-5)', letterSpacing: '2px', marginBottom: '12px' }}>추천 검색어</div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {['AI 스타트업', '청소년 창업', '시드 투자', '제품 기획', '팀 빌딩', '피치덱'].map(t => (
+              {['스타트업', '창업', '투자', '청소년', 'AI'].map(t => (
                 <button key={t} onClick={() => setQuery(t)}
                   style={{
-                    padding: '5px 14px', border: '1px solid var(--c-border)',
-                    background: 'none', color: '#777', fontSize: '12px',
-                    borderRadius: '20px', cursor: 'pointer',
-                    fontFamily: 'var(--f-sans)', transition: 'var(--t-fast)',
+                    padding: '5px 14px', border: '1px solid var(--c-gray-3)',
+                    background: 'none', color: 'var(--c-muted)', fontSize: '12px',
+                    cursor: 'pointer', fontFamily: 'var(--f-sans)', transition: 'var(--t-fast)',
                   }}
                   onMouseEnter={e => { e.target.style.borderColor = 'var(--c-gold)'; e.target.style.color = 'var(--c-gold)' }}
-                  onMouseLeave={e => { e.target.style.borderColor = 'var(--c-border)'; e.target.style.color = 'var(--c-muted)' }}
+                  onMouseLeave={e => { e.target.style.borderColor = 'var(--c-gray-3)'; e.target.style.color = 'var(--c-muted)' }}
                 >{t}</button>
               ))}
             </div>
@@ -163,10 +162,10 @@ function UserMenu({ profile, onSignOut }) {
       <button onClick={() => setOpen(!open)} style={{
         display: 'flex', alignItems: 'center', gap: '8px',
         background: 'none', border: 'none', cursor: 'pointer',
-        color: '#999', transition: 'var(--t-fast)',
+        color: 'var(--c-gray-5)', transition: 'var(--t-fast)',
       }}
         onMouseEnter={e => e.currentTarget.style.color = 'var(--c-paper)'}
-        onMouseLeave={e => e.currentTarget.style.color = '#999'}
+        onMouseLeave={e => e.currentTarget.style.color = 'var(--c-gray-5)'}
       >
         <div className="avatar avatar-sm" style={{ background: 'var(--c-gold-dim)', color: 'var(--c-gold)', border: '1px solid var(--c-gold)44' }}>
           {profile.avatar_url ? <img src={profile.avatar_url} alt={initial} /> : initial}
@@ -182,16 +181,16 @@ function UserMenu({ profile, onSignOut }) {
         }}>
           <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--c-border)' }}>
             <div style={{ color: 'var(--c-paper)', fontSize: '13px', fontWeight: 700 }}>{profile.display_name}</div>
-            <div style={{ color: '#666', fontSize: '11px', fontFamily: 'var(--f-mono)', marginTop: '2px' }}>{profile.role}</div>
+            <div style={{ color: 'var(--c-gray-6)', fontSize: '11px', fontFamily: 'var(--f-mono)', marginTop: '2px' }}>{profile.role}</div>
           </div>
           {[
             { label: '내 프로필', path: '/profile' },
             { label: '내 북마크', path: '/bookmarks' },
             { label: '내 게시글', path: '/my-posts' },
           ].map(item => (
-            <a key={item.path} href={item.path} style={{ display: 'block', padding: '10px 16px', color: '#888', fontSize: '13px', transition: 'var(--t-fast)' }}
+            <a key={item.path} href={item.path} style={{ display: 'block', padding: '10px 16px', color: 'var(--c-gray-6)', fontSize: '13px', transition: 'var(--t-fast)' }}
               onMouseEnter={e => { e.target.style.color = 'var(--c-paper)'; e.target.style.background = '#ffffff08' }}
-              onMouseLeave={e => { e.target.style.color = '#888'; e.target.style.background = 'none' }}
+              onMouseLeave={e => { e.target.style.color = 'var(--c-gray-6)'; e.target.style.background = 'none' }}
             >{item.label}</a>
           ))}
           <div style={{ borderTop: '1px solid var(--c-border)' }}>
@@ -263,7 +262,7 @@ export default function Header() {
                     transition: 'var(--t-fast)', letterSpacing: '0.3px',
                   }}
                   onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--c-paper)' }}
-                  onMouseLeave={e => { if (!active) e.currentTarget.style.color = '#888' }}
+                  onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--c-gray-6)' }}
                 >{item.label}</button>
               )
             })}

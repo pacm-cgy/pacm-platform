@@ -261,7 +261,7 @@ export default function HomePage() {
               <div style={{ position: 'relative', zIndex: 1 }}>
                 <span style={{ background: 'var(--c-gold)', color: 'var(--c-ink)', fontFamily: 'var(--f-mono)', fontSize: '10px', fontWeight: 700, letterSpacing: '2px', padding: '4px 10px', marginBottom: '14px', display: 'inline-block' }}>COVER FEATURE</span>
                 <h2 style={{ fontFamily: 'var(--f-serif)', fontSize: '26px', fontWeight: 700, lineHeight: 1.25, marginBottom: '10px' }}>{magazineFeature.title}</h2>
-                <p style={{ color: '#aaa', fontSize: '14px', lineHeight: 1.6 }}>{magazineFeature.excerpt}</p>
+                <p style={{ color: 'var(--c-gray-7)', fontSize: '14px', lineHeight: 1.6 }}>{magazineFeature.excerpt}</p>
               </div>
             </div>
           ) : (
@@ -323,13 +323,13 @@ export default function HomePage() {
             <h2 style={{ fontFamily: 'var(--f-serif)', fontSize: '26px', fontWeight: 700, marginBottom: '8px' }}>
               기업과 <span style={{ color: 'var(--c-gold)' }}>청소년 창업가</span>를 연결합니다
             </h2>
-            <p style={{ color: '#888', fontSize: '14px', maxWidth: '480px' }}>
+            <p style={{ color: 'var(--c-gray-6)', fontSize: '14px', maxWidth: '480px' }}>
               실제 프로젝트를 통해 경험을 쌓고, 기업은 신선한 시각의 인재를 만납니다.
             </p>
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
             <button className="btn btn-gold" onClick={() => navigate('/connect')}>프로젝트 보기</button>
-            <button className="btn btn-outline" style={{ borderColor: '#444', color: 'var(--c-paper)' }}>기업 파트너 신청</button>
+            <button className="btn btn-outline">기업 파트너 신청</button>
           </div>
         </div>
       </section>
