@@ -25,7 +25,8 @@ async function callGemini(prompt) {
 - 마크다운 형식 (## 헤더, **굵게**, - 리스트 활용)
 - 구체적 수치, 기업명, 날짜 반드시 포함
 - ~입니다/~했습니다/~합니다 체
-- 인사말 없이 바로 본문 시작` }] },
+- 절대로 인사말 없이 ## 헤더로 바로 시작 ("안녕하세요", "AI 어시스턴트", "전해드립니다" 등 일체 금지)
+- 첫 줄이 반드시 ## 로 시작` }] },
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: {
           maxOutputTokens: 4096,

@@ -8,6 +8,36 @@ import { useLikeArticle, useToggleBookmark, useIsBookmarked } from '../hooks/use
 import { useAuthStore } from '../store'
 
 
+function renderMarkdown(text) {
+  if (!text) return ''
+  const lines = text.split('\n')
+  const out = []
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]
+    if (line.startsWith('### ')) {
+      out.push('<h3 style="font-family:var(--f-serif);font-size:18px;font-weight:700;margin:24px 0 8px;color:var(--c-paper)">' + md(line.slice(4)) + '</h3>')
+    } else if (line.startsWith('## ')) {
+      out.push('<h2 style="font-family:var(--f-serif);font-size:20px;font-weight:700;margin:32px 0 12px;color:var(--c-paper);border-bottom:1px solid var(--c-border);padding-bottom:8px">' + md(line.slice(3)) + '</h2>')
+    } else if (line.startsWith('# ')) {
+      out.push('<h1 style="font-family:var(--f-serif);font-size:24px;font-weight:700;margin:36px 0 14px;color:var(--c-paper)">' + md(line.slice(2)) + '</h1>')
+    } else if (line.match(/^[*-] /)) {
+      out.push('<li style="margin:6px 0;color:var(--c-gray-7);line-height:1.8;list-style:disc;margin-left:20px">' + md(line.slice(2)) + '</li>')
+    } else if (line.match(/^---+$/)) {
+      out.push('<hr style="border:none;border-top:1px solid var(--c-border);margin:20px 0"/>')
+    } else if (line.trim() === '') {
+      out.push('<br/>')
+    } else {
+      out.push('<p style="margin:0 0 10px;color:var(--c-gray-7);line-height:1.85;font-size:16px">' + md(line) + '</p>')
+    }
+    i++
+  }
+  return out.join('')
+}
+function md(t) {
+  return t.replace(/\*\*([^*]+)\*\*/g, '<strong style="color:var(--c-paper);font-weight:700">$1</strong>')
+}
+
 function BookmarkButton({ articleId }) {
   const { data: isBookmarked = false } = useIsBookmarked(articleId)
   const toggle = useToggleBookmark()
@@ -158,7 +188,7 @@ export default function ArticlePage() {
                 )}
               </div>
             ) : (
-              <div className="article-body" dangerouslySetInnerHTML={{ __html: article.body || article.excerpt || '' }}/>
+              <div className="article-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(article.body || article.excerpt || '') }}/>
             )}
             {/* 원문 보기 링크 */}
             {article.source_url && (
@@ -177,7 +207,7 @@ export default function ArticlePage() {
           </div>
         ) : (
           /* 일반 아티클: body 그대로 */
-          <div className="article-body" dangerouslySetInnerHTML={{ __html: article.body || article.excerpt || '' }}/>
+          <div className="article-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(article.body || article.excerpt || '') }}/>
         )}
 
         {/* Tags */}
