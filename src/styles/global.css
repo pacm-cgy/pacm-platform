@@ -9,7 +9,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; font-size: 16px; }
+html { scroll-behavior: smooth; font-size: 16px; -webkit-text-size-adjust: 100%; }
 img { max-width: 100%; display: block; }
 button { cursor: pointer; }
 a { text-decoration: none; color: inherit; }
@@ -19,13 +19,13 @@ input, textarea, select { font-family: inherit; }
 :root, [data-theme="dark"] {
   --c-bg:       #0A0A09;
   --c-ink:      #0A0A09;
-  --c-paper:    #F0EEE8;
+  --c-paper:    #EDEAE3;
   --c-cream:    #161614;
   --c-card:     #111110;
   --c-border:   #2A2A27;
   --c-muted:    #666660;
-  --c-gold:     #D4AF37;
-  --c-gold-lt:  #F0C040;
+  --c-gold:     #C9A227;
+  --c-gold-lt:  #E8B84B;
   --c-gold-dim: #D4AF3720;
   --c-red:      #C0392B;
   --c-red-dim:  #C0392B18;
@@ -77,8 +77,8 @@ input, textarea, select { font-family: inherit; }
   --c-card:     #FDFCF9;
   --c-border:   #D4CFC5;
   --c-muted:    #7A7368;
-  --c-gold:     #A0890F;
-  --c-gold-lt:  #C4AC30;
+  --c-gold:     #8B7210;
+  --c-gold-lt:  #A08920;
   --c-gold-dim: #A0890F20;
   --c-red:      #C0392B;
   --c-red-dim:  #C0392B18;
@@ -523,4 +523,16 @@ header nav button.active,
 header nav button[style*="border-bottom"] {
   color: #F0EEE8 !important;
   border-color: var(--c-gold) !important;
+}
+
+/* ── 링크 기본 스타일 ────────────────────────────────────────── */
+a { color: var(--c-gold); }
+a:hover { color: var(--c-gold-lt); }
+
+/* ── 뉴스 그리드 반응형 ────────────────────────────────────── */
+.news-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+}
+@media (max-width: 600px) {
+  .news-grid { grid-template-columns: 1fr !important; }
 }

@@ -177,7 +177,7 @@ export default function NewsPage() {
             </div>
 
             <AdSlot position="content-top" />
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: '2px' }}>
+            <div className="news-grid" style={{ display: 'grid', gap: '2px' }}>
               {filtered.map(article => <NewsCard key={article.id} article={article} />)}
             </div>
 
