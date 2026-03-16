@@ -32,8 +32,8 @@ function NewsCard({ article }) {
           <img
             src={article.cover_image}
             alt={article.title}
-            onError={() => setImgError(true)}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            onError={(e) => { e.target.style.display='none'; setImgError(true) }}
+            referrerPolicy="no-referrer" crossOrigin="anonymous" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
         ) : (
           <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '10px', background: 'linear-gradient(135deg, var(--c-gray-2) 0%, var(--c-gray-3) 100%)' }}>
