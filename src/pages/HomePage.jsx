@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { ArticleCard, ArticleHero, ArticleSideItem, ArticleMagItem, ArticleCardSkeleton } from '../components/article/ArticleCard'
@@ -137,6 +137,18 @@ function Newsletter() {
 export default function HomePage() {
   const navigate = useNavigate()
 
+  // 모바일 반응형 (인라인 style override용)
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
+  const [isSmall, setIsSmall] = useState(() => window.innerWidth <= 480)
+  useEffect(() => {
+    const handler = () => {
+      setIsMobile(window.innerWidth <= 768)
+      setIsSmall(window.innerWidth <= 480)
+    }
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
+
   const { data: allArticles = [], isLoading: loadingArticles } = useArticles({ limit: 20 })
   const { data: featuredArticles = [] } = useArticles({ featured: true, limit: 4 })
   const { data: projects = [], isLoading: loadingProjects } = useProjects()
@@ -164,7 +176,7 @@ export default function HomePage() {
       <section style={{ paddingTop: '36px' }}>
         <div className="hero-grid" style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 320px',
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 320px',
           gap: '2px',
           background: 'var(--c-border)',
           border: '1px solid var(--c-border)',
@@ -183,7 +195,7 @@ export default function HomePage() {
           ) : null}
 
           {/* Sidebar */}
-          <div className="hero-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          {!isMobile && <div className="hero-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {sideArticles.length > 0 ? sideArticles.map(a => (
               <ArticleSideItem key={a.id} article={a} onClick={openPanel} />
             )) : [0, 1, 2].map(i => (
@@ -193,7 +205,7 @@ export default function HomePage() {
                 <div className="skeleton skeleton-text" style={{ width: '80%' }} />
               </div>
             ))}
-          </div>
+          </div>}
 
           {/* Trending bar */}
           {TRENDING.length > 0 && (
@@ -245,7 +257,7 @@ export default function HomePage() {
           <div className="section-title">이번 주 매거진</div>
           <button className="btn btn-ghost" onClick={() => navigate('/story')}>전체 보기 <ChevronRight size={13} /></button>
         </div>
-        <div className="magazine-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2px', background: 'var(--c-border)', border: '1px solid var(--c-border)' }}>
+        <div className="magazine-grid" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: '2px', background: 'var(--c-border)', border: '1px solid var(--c-border)' }}>
           {magazineFeature ? (
             <div onClick={() => openPanel(magazineFeature)}
               style={{ background: 'var(--c-ink)', color: 'var(--c-paper)', padding: '44px', cursor: 'pointer', minHeight: '360px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', overflow: 'hidden', transition: 'var(--t-fast)' }}
