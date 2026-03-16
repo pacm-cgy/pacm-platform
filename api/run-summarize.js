@@ -1,4 +1,5 @@
-// 뉴스 AI 요약 실행 (버그 수정본 - excerpt/body 모두 지원)
+// 뉴스 AI 요약 - 병렬 처리로 Edge 25초 제한 내 완료
+// 5개씩 병렬 처리, limit=8 (25초 내 안전)
 export const config = { runtime: 'edge' }
 
 const GEMINI_KEY  = process.env.GEMINI_API_KEY
@@ -18,23 +19,28 @@ const SYSTEM = `당신은 청소년 창업 플랫폼 'Insightship'의 뉴스 에
 6. ~입니다/~했습니다/~합니다 체
 7. 정리된 내용만 출력 (제목, 인사말 없이)`
 
-async function summarize(title, text) {
-  const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM }] },
-        contents: [{ role: 'user', parts: [{ text: `제목: ${title}\n\n내용:\n${text}` }] }],
-        generationConfig: { maxOutputTokens: 800, temperature: 0.3 },
-      }),
-      signal: AbortSignal.timeout(20000),
-    }
-  )
-  if (!r.ok) throw new Error(r.status + '')
-  const d = await r.json()
-  return d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
+async function summarizeOne(article) {
+  const text = (article.body?.length > 30) ? article.body.slice(0, 2000)
+             : (article.excerpt?.length > 20) ? article.excerpt
+             : article.title
+  try {
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: SYSTEM }] },
+          contents: [{ role: 'user', parts: [{ text: `제목: ${article.title}\n\n내용:\n${text}` }] }],
+          generationConfig: { maxOutputTokens: 700, temperature: 0.3 },
+        }),
+        signal: AbortSignal.timeout(12000),
+      }
+    )
+    if (!r.ok) return null
+    const d = await r.json()
+    return d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
+  } catch { return null }
 }
 
 export default async function handler(req) {
@@ -44,43 +50,46 @@ export default async function handler(req) {
 
   const H = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
 
-  // ai_summary 없는 published 뉴스 가져오기 (body + excerpt 모두 select)
+  // 요약 없는 뉴스 8개 가져오기 (병렬 처리로 25초 내 완료)
   const r = await fetch(
-    `${SB_URL}/rest/v1/articles?ai_summary=is.null&status=eq.published&select=id,title,body,excerpt&order=published_at.desc&limit=40`,
+    `${SB_URL}/rest/v1/articles?ai_summary=is.null&status=eq.published&select=id,title,body,excerpt&order=published_at.desc&limit=8`,
     { headers: H }
   )
   const articles = await r.json()
   if (!Array.isArray(articles) || !articles.length) {
-    return new Response(JSON.stringify({ message: '요약할 뉴스 없음' }), { status: 200 })
+    return new Response(JSON.stringify({ message: '요약할 뉴스 없음' }), { status: 200, headers: { 'Content-Type': 'application/json' } })
   }
 
-  let done = 0, failed = 0, skipped = 0
+  // 병렬 처리 (모두 동시에 Gemini 호출)
+  const results = await Promise.allSettled(
+    articles.map(a => summarizeOne(a))
+  )
 
-  for (const a of articles) {
-    // body 우선, 없으면 excerpt 사용
-    const text = (a.body && a.body.length > 30) ? a.body.slice(0, 3000)
-               : (a.excerpt && a.excerpt.length > 20) ? a.excerpt.slice(0, 1000)
-               : null
+  let done = 0, failed = 0
+  const saves = []
 
-    if (!text) { skipped++; continue }
-
-    try {
-      const summary = await summarize(a.title, text)
-      if (!summary) { failed++; continue }
-
-      const upR = await fetch(`${SB_URL}/rest/v1/articles?id=eq.${a.id}`, {
+  for (let i = 0; i < articles.length; i++) {
+    const summary = results[i].status === 'fulfilled' ? results[i].value : null
+    if (!summary) { failed++; continue }
+    saves.push(
+      fetch(`${SB_URL}/rest/v1/articles?id=eq.${articles[i].id}`, {
         method: 'PATCH',
         headers: { ...H, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
         body: JSON.stringify({ ai_summary: summary }),
-      })
-      if (upR.ok || upR.status === 204) done++; else failed++
-
-      await new Promise(res => setTimeout(res, 200))
-    } catch { failed++ }
+      }).then(r => { if (r.ok || r.status === 204) done++ }).catch(() => { failed++ })
+    )
   }
+  await Promise.allSettled(saves)
+
+  // 남은 뉴스 수 확인
+  const countR = await fetch(
+    `${SB_URL}/rest/v1/articles?ai_summary=is.null&status=eq.published&select=id`,
+    { headers: { ...H, 'Range-Unit': 'items', 'Range': '0-0', 'Prefer': 'count=exact' } }
+  )
+  const remaining = parseInt(countR.headers.get('content-range')?.split('/')[1] || '0')
 
   return new Response(JSON.stringify({
-    total: articles.length, done, failed, skipped,
+    processed: articles.length, done, failed, remaining,
     model: 'gemini-2.5-flash',
     timestamp: new Date().toISOString(),
   }), { status: 200, headers: { 'Content-Type': 'application/json' } })
