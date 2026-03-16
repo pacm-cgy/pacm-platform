@@ -1,3 +1,29 @@
+import React from 'react'
+
+// 전역 에러 바운더리 - 검은 화면 방지
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null } }
+  static getDerivedStateFromError(error) { return { hasError: true, error } }
+  componentDidCatch(error, info) { console.error('React Error:', error, info) }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px', background: '#0F0E0A', color: '#F0EEE8', fontFamily: 'Pretendard, sans-serif', padding: '40px', textAlign: 'center' }}>
+          <div style={{ fontSize: '48px' }}>⚠️</div>
+          <h2 style={{ fontSize: '20px', fontWeight: 700 }}>페이지 로딩 오류</h2>
+          <p style={{ color: '#888', fontSize: '14px', maxWidth: '400px' }}>일시적인 오류가 발생했습니다.<br/>아래 버튼을 눌러 새로고침해주세요.</p>
+          <button onClick={() => { if ('caches' in window) { caches.keys().then(k => Promise.all(k.map(c => caches.delete(c)))).then(() => window.location.reload()) } else { window.location.reload() } }}
+            style={{ padding: '12px 24px', background: '#FB923C', border: 'none', color: '#fff', fontWeight: 700, fontSize: '14px', cursor: 'pointer', borderRadius: '2px' }}>
+            캐시 삭제 후 새로고침
+          </button>
+          <p style={{ color: '#555', fontSize: '12px' }}>{this.state.error?.message?.slice(0, 80)}</p>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Suspense, lazy, useEffect } from 'react'

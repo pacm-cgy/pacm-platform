@@ -16,6 +16,25 @@
   <title>Insightship — 청소년 창업 플랫폼</title>
   <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
+  <script>
+    // 이전 서비스워커 캐시 자동 정리
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(reg => {
+          reg.update() // 최신 SW 강제 체크
+        })
+      })
+      caches.keys().then(keys => {
+        keys.forEach(key => {
+          // 이전 버전 캐시만 삭제 (v4 이전)
+          if (!key.includes('insightship-v4') && !key.includes('workbox')) {
+            caches.delete(key)
+          }
+        })
+      })
+    }
+  </script>
 </head>
 <body>
   <div id="root"></div>
