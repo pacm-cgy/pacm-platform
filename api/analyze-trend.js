@@ -41,6 +41,7 @@ async function callGemini(model, systemText, userText, timeoutMs) {
         contents: [{ role: 'user', parts: [{ text: userText }] }],
         generationConfig: {
           maxOutputTokens: 2048,
+          thinkingConfig: { thinkingBudget: 0 },
           temperature: 0.4,
           topP: 0.95,
           stopSequences: [],

@@ -30,7 +30,9 @@ async function summarizeOne(article) {
         body: JSON.stringify({
           system_instruction: { parts: [{ text: SYSTEM }] },
           contents: [{ role: 'user', parts: [{ text: `제목: ${article.title}\n\n내용:\n${text}` }] }],
-          generationConfig: { maxOutputTokens: 700, temperature: 0.4 },
+          generationConfig: { maxOutputTokens: 1024,
+          thinkingConfig: { thinkingBudget: 0 },
+          temperature: 0.4 },
         }),
         signal: AbortSignal.timeout(12000),
       }

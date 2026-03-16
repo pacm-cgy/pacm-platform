@@ -125,6 +125,7 @@ async function callGemini(systemPrompt, userPrompt, model, timeoutMs = 30000) {
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         generationConfig: {
           maxOutputTokens: 1500,
+          thinkingConfig: { thinkingBudget: 0 },
           temperature: 0.5,
           topP: 0.9,
         },
