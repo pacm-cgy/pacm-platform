@@ -75,8 +75,8 @@ export default async function handler(req) {
   const tagCounts = {}
   news.forEach(a => {
     const cat = a.ai_category || 'general'
-    catCounts[cat] = (catCounts[cat] || 0) + 1;
-    (a.tags || []).forEach(t => { tagCounts[t] = (tagCounts[t] || 0) + 1 })
+    catCounts[cat] = (catCounts[cat] || 0) + 1
+    ;(a.tags || []).forEach(t => { tagCounts[t] = (tagCounts[t] || 0) + 1 })
   })
 
   const topTags = Object.entries(tagCounts)
@@ -88,26 +88,23 @@ export default async function handler(req) {
   const topTagStr = topTags.map(([t, c]) => `${t}(${c}건)`).join(', ')
   const sampleTitles = news.slice(0, 10).map(a => a.title).join('\n')
 
+  const exampleJson = '[{"metric_name":"AI스타트업","metric_value":45,"metric_unit":"건/주","change_pct":25,"category":"ai","source_name":"뉴스 트렌드 분석","description":"AI 스타트업 관련 뉴스 증가"},{"metric_name":"에듀테크","metric_value":18,"metric_unit":"건/주","change_pct":12,"category":"edutech","source_name":"뉴스 트렌드 분석","description":"교육 기술 스타트업 관심 증가"}]'
+
   const prompt = `아래 최근 뉴스 데이터를 분석해서 현재 가장 주목받는 트렌드 지표 3개를 추출하세요.
 
-[카테고리별 기사 수]
-${catSummary}
-
-[많이 언급된 키워드]
-${topTagStr}
-
-[주요 기사 제목]
+카테고리별 기사 수: ${catSummary}
+많이 언급된 키워드: ${topTagStr}
+주요 기사 제목:
 ${sampleTitles}
 
-반드시 아래와 같은 JSON 배열 형식만 출력하세요 (```나 다른 텍스트 없이):
-[{"metric_name":"AI스타트업","metric_value":45,"metric_unit":"건/주","change_pct":25,"category":"ai","source_name":"뉴스 트렌드 분석","description":"AI 스타트업 관련 뉴스가 증가하며 투자 열기 지속"},{"metric_name":"에듀테크","metric_value":18,"metric_unit":"건/주","change_pct":12,"category":"edutech","source_name":"뉴스 트렌드 분석","description":"교육 기술 스타트업에 대한 관심 증가"},{"metric_name":"기후테크","metric_value":12,"metric_unit":"건/주","change_pct":8,"category":"climate","source_name":"뉴스 트렌드 분석","description":"친환경 스타트업 투자 지속"}]`
+반드시 JSON 배열 형식만 출력하세요 (코드블록이나 다른 텍스트 없이 순수 JSON만):
+${exampleJson}`
 
   let extracted = []
   try {
     const result = await callAI(prompt)
     if (result) {
       const clean = result.replace(/```json|```/g, '').trim()
-      // JSON 배열 추출 시도
       const arrMatch = clean.match(/\[\s*\{[\s\S]*?\}\s*\]/)
       if (arrMatch) {
         try { extracted = JSON.parse(arrMatch[0]) } catch {}
@@ -124,7 +121,8 @@ ${sampleTitles}
   if (!extracted.length) return new Response(JSON.stringify({ message: '추출 실패', catSummary }), { status: 200 })
 
   const today = new Date().toISOString().slice(0, 10)
-  let saved = 0, errors = []
+  let saved = 0
+  const errors = []
 
   for (const t of extracted.slice(0, 5)) {
     try {
