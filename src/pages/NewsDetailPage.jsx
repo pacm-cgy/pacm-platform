@@ -68,8 +68,8 @@ export default function NewsDetailPage() {
     : ''
 
   // body에서 "원문 보기: URL" 부분 제거
-  const cleanBody = article.body
-    ? article.body
+  const cleanBody = (article.body || article.excerpt || '')
+    ? (article.body || article.excerpt || '')
         .replace(`\n\n원문 보기: ${article.source_url}`, '')
         .replace(article.excerpt || '', '')
         .trim()

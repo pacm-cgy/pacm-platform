@@ -39,7 +39,7 @@ export const useAuthStore = create(
           .from('profiles')
           .select('*')
           .eq('id', userId)
-          .single()
+          .maybeSingle()
         if (data) set({ profile: data })
       },
 

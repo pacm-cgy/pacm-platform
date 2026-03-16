@@ -146,7 +146,7 @@ export default function ArticlePage() {
         )}
 
         {/* Body */}
-        <div className="article-body" dangerouslySetInnerHTML={{ __html: article.body }}/>
+        <div className="article-body" dangerouslySetInnerHTML={{ __html: article.body || article.excerpt || '' }}/>
 
         {/* Tags */}
         {article.tags?.length > 0 && (

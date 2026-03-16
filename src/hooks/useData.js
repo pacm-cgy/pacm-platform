@@ -72,7 +72,7 @@ export function useArticle(slug) {
         `)
         .eq('slug', slug)
         .eq('status', 'published')
-        .single()
+        .maybeSingle()
       if (error) throw error
 
       // 조회수 증가 (fire & forget)
