@@ -86,6 +86,14 @@
     {
       "path": "/api/send-newsletter",
       "schedule": "0 0 * * 1"
+    },
+    {
+      "path": "/api/fetch-og",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/generate-report",
+      "schedule": "0 1 * * 1"
     }
   ]
 }
