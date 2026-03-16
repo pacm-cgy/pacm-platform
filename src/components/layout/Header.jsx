@@ -249,7 +249,7 @@ export default function Header() {
               <span style={{ fontFamily: 'var(--f-mono)', fontWeight: 700, fontSize: '16px', color: 'var(--c-paper)', letterSpacing: '2px', lineHeight: 1.1 }}>
                 INSIGHT<span style={{ color: 'var(--c-gold)' }}>SHIP</span>
               </span>
-              <span style={{ fontFamily: 'var(--f-serif)', fontSize: '9px', color: 'var(--c-muted)', letterSpacing: '1px' }}>청소년 창업 플랫폼</span>
+              <span style={{ fontFamily: 'var(--f-sans)', fontSize: '10px', fontWeight: 500, color: '#BDBAB2', letterSpacing: '0.5px', marginTop: '2px' }}>청소년 창업 플랫폼</span>
             </div>
           </button>
 

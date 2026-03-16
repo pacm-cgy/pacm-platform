@@ -20,7 +20,7 @@ export default function Footer() {
                 <div style={{ fontFamily: 'var(--f-sans)', fontWeight: 800, fontSize: '14px', letterSpacing: '1.5px', color: 'var(--c-paper)' }}>
                   INSIGHT<span style={{ color: 'var(--c-gold)' }}>SHIP</span>
                 </div>
-                <div style={{ fontFamily: 'var(--f-sans)', fontSize: '9px', fontWeight: 500, color: 'var(--c-gray-5)', letterSpacing: '0.3px', marginTop: '2px' }}>청소년 창업 플랫폼</div>
+                <div style={{ fontFamily: 'var(--f-sans)', fontSize: '10px', fontWeight: 500, color: '#9A978F', letterSpacing: '0.3px', marginTop: '3px' }}>청소년 창업 플랫폼</div>
               </div>
             </div>
             <p style={{ color: 'var(--c-gray-6)', fontSize: '13px', lineHeight: 1.8, maxWidth: '280px', marginBottom: '16px' }}>
