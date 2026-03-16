@@ -8,11 +8,32 @@ import { useNewsArticles } from '../hooks/useData'
 
 const TAG_FILTERS = ['전체', '청소년창업', '스타트업투자', '창업인사이트', 'AI스타트업', '유니콘', '성공사례']
 
+
+const CATEGORY_COLORS = {
+  funding:        ['#1a2f1a', '#2d5a2d'],
+  ai:             ['#0f1f2e', '#1a3a5c'],
+  ai_startup:     ['#0f1f2e', '#1a3a5c'],
+  edutech:        ['#2a1a0f', '#5c3a1a'],
+  youth:          ['#1a0f2a', '#3a1a5c'],
+  entrepreneurship: ['#2a1a0f', '#5c3a1a'],
+  unicorn:        ['#0f2a1a', '#1a5c3a'],
+  climate:        ['#0f2a0f', '#1a5c1a'],
+  health:         ['#2a0f1a', '#5c1a3a'],
+  fintech:        ['#0f1a2a', '#1a3a5c'],
+  general:        ['#1a1a1a', '#2d2d2d'],
+}
+const CATEGORY_ICONS = {
+  funding: '📈', ai: '🤖', ai_startup: '🤖', edutech: '📚',
+  youth: '🚀', entrepreneurship: '💡', unicorn: '🦄',
+  climate: '🌱', health: '❤️', fintech: '💰', general: '📰',
+}
+
 function NewsCard({ article }) {
   const navigate = useNavigate()
   const date = article.published_at
     ? format(new Date(article.published_at), 'M월 d일 HH:mm', { locale: ko })
     : ''
+  const isPollinations = article.cover_image?.includes('pollinations.ai')
   const [imgError, setImgError] = useState(false)
 
   return (
@@ -28,7 +49,7 @@ function NewsCard({ article }) {
     >
       {/* 이미지 */}
       <div style={{ width: '100%', aspectRatio: '16/9', background: 'var(--c-gray-2)', overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
-        {article.cover_image && !imgError ? (
+        {article.cover_image && !imgError && !isPollinations ? (
           <img
             src={article.cover_image}
             alt={article.title}
@@ -36,11 +57,13 @@ function NewsCard({ article }) {
             referrerPolicy="no-referrer" crossOrigin="anonymous" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
         ) : (
-          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '10px', background: 'linear-gradient(135deg, var(--c-gray-2) 0%, var(--c-gray-3) 100%)' }}>
-            <div style={{ width: '40px', height: '40px', border: '1px solid var(--c-gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.5 }}>
-              <Image size={16} color="var(--c-gold)" />
-            </div>
-            <span style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: 'var(--c-gray-6)', letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+          <div style={{
+            width: '100%', height: '100%',
+            background: `linear-gradient(135deg, ${(CATEGORY_COLORS[article.ai_category] || CATEGORY_COLORS.general)[0]} 0%, ${(CATEGORY_COLORS[article.ai_category] || CATEGORY_COLORS.general)[1]} 100%)`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '8px'
+          }}>
+            <span style={{ fontSize: '28px', opacity: 0.7 }}>{CATEGORY_ICONS[article.ai_category] || '📰'}</span>
+            <span style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: 'rgba(255,255,255,0.4)', letterSpacing: '1.5px', textTransform: 'uppercase' }}>
               {article.source_name?.replace('.com','').replace('.co.kr','').slice(0, 12) || 'NEWS'}
             </span>
           </div>
