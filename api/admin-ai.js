@@ -46,9 +46,10 @@ const SYSTEM_PROMPTS = {
 }
 
 export default async function handler(req) {
-  // 어드민 인증
+  // 어드민 인증 - CRON_SECRET 또는 x-vercel-cron 헤더
   const auth = req.headers.get('authorization')
-  if (auth !== 'Bearer ' + CRON_SECRET) {
+  const isCron = req.headers.get('x-vercel-cron') === '1'
+  if (!isCron && auth !== 'Bearer ' + CRON_SECRET) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
@@ -126,7 +127,10 @@ export default async function handler(req) {
       timestamp: new Date().toISOString(),
     }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      }
     })
 
   } catch (e) {

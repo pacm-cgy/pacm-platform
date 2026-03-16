@@ -8,12 +8,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 export default async function handler(req) {
-  // 인증 (로그인 불필요 - 공개 API지만 CORS 제한)
-  const origin = req.headers.get('origin') || ''
-  const isAllowed = origin.includes('insightship.pacm.kr') || origin.includes('localhost')
-  if (!isAllowed && req.headers.get('authorization') !== 'Bearer ' + CRON_SECRET) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
-  }
+  // 공개 API (프론트에서 직접 호출) - 인증 불필요, 캐시로 rate limit 처리
 
   const { metric_name, metric_value, metric_unit, change_pct, category, source_name } = await req.json().catch(() => ({}))
   if (!metric_name) return new Response(JSON.stringify({ error: 'metric_name required' }), { status: 400 })
