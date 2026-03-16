@@ -481,3 +481,44 @@ hr { border: none; border-top: 1px solid var(--c-border); margin: 32px 0; }
 @media (min-width: 769px) {
   .mobile-only { display: none !important; }
 }
+
+/* ════════════════════════════════════════════════════════════════
+   홈페이지 모바일 특화
+════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* 히어로 그리드 사이드바 숨김 */
+  .hero-sidebar { display: none !important; }
+
+  /* section 기본 paddingTop 줄이기 */
+  section { padding-top: 36px !important; }
+
+  /* trending bar */
+  .trending-bar { display: none !important; }
+
+  /* 패딩 과도한 요소 */
+  div[style*="padding: '48px 0'"] { padding: 28px 0 !important; }
+  div[style*="padding: '52px 0'"] { padding: 32px 0 !important; }
+
+  /* Connect 배너 세로 정렬 */
+  div[style*="justifyContent: 'space-between'"][style*="flexWrap: 'wrap'"] {
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+
+  /* 섹션 헤더 */
+  .section-header { flex-wrap: wrap; gap: 8px; }
+  .section-title { font-size: 16px !important; }
+
+  /* 뉴스레터 섹션 패딩 */
+  section[style*="paddingTop: '52px'"] { padding-top: 32px !important; }
+}
+
+@media (max-width: 480px) {
+  /* 홈 히어로 헤딩 */
+  h1[style*="font-family: var(--f-serif)"] { font-size: 22px !important; }
+  h2[style*="font-family: var(--f-serif)"] { font-size: 18px !important; }
+
+  /* 과도한 inner padding */
+  div[style*="padding: '44px'"] { padding: 20px !important; }
+  div[style*="padding: '48px'"] { padding: 20px !important; }
+}

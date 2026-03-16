@@ -343,10 +343,47 @@ export default function HomePage() {
 
       {/* Responsive */}
       <style>{`
+        /* 태블릿 */
         @media (max-width: 900px) {
           section > div[style*="gridTemplateColumns: 1fr 320px"],
           section > div[style*="gridTemplateColumns: 2fr 1fr"] {
             grid-template-columns: 1fr !important;
+          }
+        }
+        /* 모바일 */
+        @media (max-width: 768px) {
+          section > div[style*="gridTemplateColumns: 1fr 320px"],
+          section > div[style*="gridTemplateColumns: 2fr 1fr"],
+          section > div[style*="gridTemplateColumns: repeat(3"],
+          section > div[style*="gridTemplateColumns: repeat(4"] {
+            grid-template-columns: 1fr !important;
+          }
+          /* 트렌딩 바 패딩 */
+          div[style*="padding: '14px 40px'"] {
+            padding: 12px 16px !important;
+          }
+          /* 매거진 featrure 패딩 */
+          div[style*="padding: '44px'"] {
+            padding: 24px !important;
+          }
+          /* Connect banner 버튼 */
+          div[style*="justifyContent: 'space-between'"] > div {
+            width: 100%;
+          }
+          /* grid-4 트렌드 */
+          .grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+        }
+        @media (max-width: 480px) {
+          .grid-4 { grid-template-columns: 1fr !important; }
+          /* 뉴스레터 폼 세로 정렬 */
+          form[style*="flexWrap: 'wrap'"] {
+            flex-direction: column !important;
+          }
+          form[style*="flexWrap: 'wrap'"] input {
+            width: 100% !important;
+          }
+          form[style*="flexWrap: 'wrap'"] button {
+            width: 100% !important;
           }
         }
       `}</style>

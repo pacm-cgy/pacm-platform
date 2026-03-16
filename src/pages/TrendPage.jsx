@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { TrendingUp, TrendingDown, Minus, BarChart2, ChevronDown, ChevronUp, ExternalLink, Zap } from 'lucide-react'
 import { ArticleCard, ArticleCardSkeleton } from '../components/article/ArticleCard'
 import { useArticles, useTrends } from '../hooks/useData'
@@ -50,7 +50,7 @@ function WhyPanel({ snapshot, onClose }) {
   }, [snapshot, done, loading])
 
   // 마운트 시 자동 분석
-  useState(() => { fetchAnalysis() }, [])
+  useEffect(() => { fetchAnalysis() }, [])
 
   // 마크다운 볼드(**text**) → <strong> 간단 파서
   const renderMd = (text) => {
