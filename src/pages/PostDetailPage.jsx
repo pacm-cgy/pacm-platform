@@ -35,9 +35,8 @@ function useComments(postId) {
       if (!postId) return []
       const { data, error } = await supabase
         .from('comments')
-        .select(`id, body, created_at, profiles!author_id(id, display_name, avatar_url)`)
+        .select(`id, body, created_at, author_id, profiles!author_id(id, display_name, avatar_url)`)
         .eq('post_id', postId)
-        .eq('is_deleted', false)
         .order('created_at', { ascending: true })
       if (error) return [] // 테이블 없으면 빈 배열
       return data || []
