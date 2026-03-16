@@ -18,6 +18,7 @@ const ProfilePage   = lazy(() => import('./pages/ProfilePage'))
 const NotFoundPage  = lazy(() => import('./pages/NotFoundPage'))
 const NewsPage      = lazy(() => import('./pages/NewsPage'))
 const NewsDetailPage = lazy(() => import('./pages/NewsDetailPage'))
+const AboutPage      = lazy(() => import('./pages/AboutPage'))
 const AdminPage      = lazy(() => import('./pages/AdminPage'))
 const TermsPage       = lazy(() => import('./pages/TermsPage'))
 const PrivacyPage     = lazy(() => import('./pages/PrivacyPage'))
@@ -79,6 +80,7 @@ export default function App() {
                       <Route path="/community"  element={<CommunityPage />} />
                       <Route path="/news"        element={<NewsPage />} />
                       <Route path="/news/:slug"   element={<NewsDetailPage />} />
+                      <Route path="/about"          element={<AboutPage />} />
                       <Route path="/admin"          element={<AdminPage />} />
                       <Route path="/terms"          element={<TermsPage />} />
                       <Route path="/privacy"         element={<PrivacyPage />} />

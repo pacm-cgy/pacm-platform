@@ -48,7 +48,7 @@ export default function Footer() {
               { label: '팀원 모집', path: '/community' },
             ]},
             { title: 'INSIGHTSHIP', links: [
-              { label: '서비스 소개', path: '/?section=about' },
+              { label: '서비스 소개', path: '/about' },
               { label: '파트너십', path: '/connect', external: false },
               { label: '뉴스레터', path: '/?section=newsletter' },
               { label: '문의하기', href: 'mailto:contact@pacm.kr' },
