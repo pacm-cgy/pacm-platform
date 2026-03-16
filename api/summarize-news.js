@@ -19,8 +19,8 @@ const SUMMARIZE_SYSTEM = `당신은 청소년 창업 플랫폼 'Insightship'의 
 6. ~입니다/~했습니다/~합니다 체
 7. 요약문만 출력 (제목, 설명 없이)`
 
-async function summarizeOne(title, content) {
-  const prompt = `다음 뉴스 기사를 청소년 창업가가 이해하기 쉽게 정리해주세요.\n\n제목: ${title}\n\n내용:\n${body?.slice(0, 3000) || ''}`
+async function summarizeOne(title, body) {
+  const prompt = `다음 뉴스 기사를 청소년 창업가가 이해하기 쉽게 정리해주세요.\n\n제목: ${title}\n\n내용:\n${body?.slice(0, 3000) || title}`
   const r = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
     {
