@@ -57,7 +57,12 @@ export function ArticleCard({ article, onClick }) {
       <CoverImage url={article.cover_image} category={article.category} alt={article.title}/>
       <div style={{ padding:'20px', flex:1, display:'flex', flexDirection:'column', gap:'7px' }}>
         <div className="t-eyebrow">{CATEGORY_LABELS[article.category]||article.category}</div>
-        <h3 style={{ fontFamily:'var(--f-serif)', fontSize:'16px', fontWeight:700, lineHeight:1.4, flex:1 }}>{article.title}</h3>
+        <h3 style={{ fontFamily:'var(--f-serif)', fontSize:'16px', fontWeight:700, lineHeight:1.4, flex:1 }}>
+          {article.title?.startsWith('[AI 정리본]') && (
+            <span style={{ display:'inline-block', background:'var(--c-gold)', color:'var(--c-ink)', fontFamily:'var(--f-mono)', fontSize:'9px', fontWeight:700, padding:'2px 6px', marginBottom:'6px', marginRight:'6px', verticalAlign:'middle' }}>AI</span>
+          )}
+          {article.title?.replace('[AI 정리본] ', '')}
+        </h3>
         {article.excerpt && (
           <p style={{ fontSize:'13px', color:'var(--c-muted)', lineHeight:1.6,
             display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden'

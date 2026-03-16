@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { AdSlot } from '../components/ads/AdBanner'
 import { ArticleCard, ArticleCardSkeleton } from '../components/article/ArticleCard'
 import { useArticles } from '../hooks/useData'
 
