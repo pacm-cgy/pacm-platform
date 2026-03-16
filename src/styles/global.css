@@ -506,3 +506,21 @@ body {
   .card { border-radius: 0 !important; }
   article.card { margin-left: 0 !important; margin-right: 0 !important; }
 }
+
+/* ── 헤더: 라이트/다크 무관 항상 다크 스타일 ──────────────── */
+header {
+  background: var(--c-ink) !important;
+  color: #F0EEE8 !important;
+}
+header button, header a, header span {
+  color: inherit;
+}
+header .t-eyebrow, header [style*="var(--c-gold)"] {
+  color: var(--c-gold) !important;
+}
+/* 네비게이션 활성 버튼 */
+header nav button.active,
+header nav button[style*="border-bottom"] {
+  color: #F0EEE8 !important;
+  border-color: var(--c-gold) !important;
+}

@@ -28,7 +28,7 @@ function InsightshipLogo({ size = 36, theme }) {
   const hullColor = "currentColor"
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"
-      style={{ color: 'var(--c-paper)', flexShrink: 0 }}>
+      style={{ color: '#F0EEE8', flexShrink: 0 }}>
       {/* 돛대 */}
       <line x1="20" y1="3" x2="20" y2="27" stroke="currentColor" strokeWidth="1.5"/>
       {/* 메인 돛 */}
@@ -284,20 +284,20 @@ export default function Header() {
               title={theme === 'dark' ? '라이트 모드' : '다크 모드'}
               aria-label="테마 전환"
             />
-            <button onClick={openSearch} style={{ background: 'none', border: 'none', color: '#777', padding: '8px', transition: 'var(--t-fast)' }}
+            <button onClick={openSearch} style={{ background: 'none', border: 'none', color: '#999', padding: '8px', transition: 'var(--t-fast)' }}
               onMouseEnter={e => e.currentTarget.style.color = 'var(--c-paper)'}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--c-muted)'}
             ><Search size={17} /></button>
 
             {user && profile ? (
               <>
-                <button style={{ background: 'none', border: 'none', color: 'var(--c-muted)', padding: '8px' }}><Bookmark size={17} /></button>
+                <button style={{ background: 'none', border: 'none', color: '#aaa', padding: '8px' }}><Bookmark size={17} /></button>
                 <UserMenu profile={profile} onSignOut={signOut} />
               </>
             ) : (
               <>
                 <button onClick={() => setAuthModal('signin')}
-                  style={{ background: 'none', border: 'none', color: '#888', fontSize: '13px', fontFamily: 'var(--f-sans)', padding: '8px 14px', cursor: 'pointer' }}
+                  style={{ background: 'none', border: 'none', color: '#aaa', fontSize: '13px', fontFamily: 'var(--f-sans)', padding: '8px 14px', cursor: 'pointer' }}
                   className="no-mobile"
                 >로그인</button>
                 <button onClick={() => setAuthModal('signup')} className="btn btn-gold btn-sm">구독하기</button>
@@ -305,7 +305,7 @@ export default function Header() {
             )}
 
             <button onClick={toggleMobileMenu}
-              style={{ background: 'none', border: 'none', color: 'var(--c-paper)', display: 'none', padding: '8px' }}
+              style={{ background: 'none', border: 'none', color: '#F0EEE8', display: 'none', padding: '8px' }}
               className="mobile-only"
             >{mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}</button>
           </div>
