@@ -5,16 +5,40 @@ import { useArticles, useTrends } from '../hooks/useData'
 import { useNavigate } from 'react-router-dom'
 
 const SECTORS = [
-  { name: 'AI / 머신러닝', note: '2024 가장 활발한 투자 분야' },
-  { name: '에듀테크', note: '청소년 타깃 급성장' },
-  { name: '기후테크/그린', note: 'ESG 트렌드 수혜' },
-  { name: 'B2B SaaS', note: '안정적 수익 모델 주목' },
-  { name: '헬스케어 AI', note: '디지털 헬스 규제 완화' },
-  { name: '핀테크', note: '마이데이터 2기 준비' },
+  { name: 'AI / 머신러닝', note: '2024 가장 활발한 투자 분야', icon: '🤖', category: 'ai' },
+  { name: '에듀테크', note: '청소년 타깃 급성장', icon: '📱', category: 'edutech' },
+  { name: '기후테크/그린', note: 'ESG 트렌드 수혜', icon: '🌿', category: 'climate' },
+  { name: 'B2B SaaS', note: '안정적 수익 모델 주목', icon: '💼', category: 'saas' },
+  { name: '헬스케어 AI', note: '디지털 헬스 규제 완화', icon: '🏥', category: 'health' },
+  { name: '핀테크', note: '마이데이터 2기 준비', icon: '💰', category: 'fintech' },
 ]
 
-// ── 왜 그럴까? 분석 패널 ─────────────────────────────────────────
-function WhyPanel({ snapshot, onClose }) {
+// ── 공통 마크다운 렌더러 ─────────────────────────────────────────
+function renderMd(text) {
+  if (!text) return null
+  return text.split('\n').map((line, i) => {
+    if (!line.trim()) return <div key={i} style={{ height: '6px' }} />
+    const parts = line.split(/\*\*([^*]+)\*\*/g)
+    const isHeader = line.trim().startsWith('**') && line.trim().endsWith('**')
+    return (
+      <p key={i} style={{
+        margin: isHeader ? '16px 0 6px' : '3px 0',
+        lineHeight: 1.8,
+        fontSize: '14px',
+        color: isHeader ? 'var(--c-paper)' : 'var(--c-gray-7)',
+      }}>
+        {parts.map((part, j) =>
+          j % 2 === 1
+            ? <strong key={j} style={{ color: 'var(--c-paper)', fontWeight: 700 }}>{part}</strong>
+            : part
+        )}
+      </p>
+    )
+  })
+}
+
+// ── 공통 AI 분석 패널 ────────────────────────────────────────────
+function WhyPanel({ payload, label, onClose }) {
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
   const [analysis, setAnalysis] = useState(null)
@@ -28,18 +52,11 @@ function WhyPanel({ snapshot, onClose }) {
       const r = await fetch('/api/analyze-trend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          metric_name: snapshot.metric_name,
-          metric_value: snapshot.metric_value,
-          metric_unit: snapshot.metric_unit,
-          change_pct: snapshot.change_pct,
-          category: snapshot.category,
-          source_name: snapshot.source_name,
-        }),
+        body: JSON.stringify(payload),
       })
       const d = await r.json()
       if (d.analysis) { setAnalysis(d.analysis); setSources(d.sources || []) }
-      else setError('분석을 가져오지 못했습니다.')
+      else setError('분석을 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.')
       setDone(true)
     } catch {
       setError('네트워크 오류가 발생했습니다.')
@@ -47,23 +64,9 @@ function WhyPanel({ snapshot, onClose }) {
     } finally {
       setLoading(false)
     }
-  }, [snapshot, done, loading])
+  }, [payload, done, loading])
 
-  // 마운트 시 자동 분석
   useEffect(() => { fetchAnalysis() }, [])
-
-  // 마크다운 볼드(**text**) → <strong> 간단 파서
-  const renderMd = (text) => {
-    if (!text) return null
-    return text.split('\n').map((line, i) => {
-      const parts = line.split(/\*\*([^*]+)\*\*/g)
-      return (
-        <p key={i} style={{ margin: line.startsWith('**') ? '14px 0 6px' : '4px 0', lineHeight: 1.75, fontSize: '14px', color: line.startsWith('**') ? 'var(--c-paper)' : 'var(--c-gray-7)' }}>
-          {parts.map((part, j) => j % 2 === 1 ? <strong key={j} style={{ color: 'var(--c-paper)', fontWeight: 700 }}>{part}</strong> : part)}
-        </p>
-      )
-    })
-  }
 
   return (
     <div style={{
@@ -74,27 +77,39 @@ function WhyPanel({ snapshot, onClose }) {
       marginTop: '2px',
       animation: 'fadeInUp 0.2s ease',
     }}>
+      {/* 헤더 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Zap size={14} color="var(--c-gold)" />
           <span style={{ fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--c-gold)', letterSpacing: '1px' }}>
-            AI 트렌드 분석 · 웹 서치 기반
+            AI 분석 · {label}
           </span>
         </div>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--c-muted)', cursor: 'pointer', fontSize: '16px' }}>✕</button>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--c-muted)', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}>✕</button>
       </div>
 
+      {/* 로딩 */}
       {loading && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '20px 0' }}>
           <div style={{ width: '18px', height: '18px', border: '2px solid var(--c-gold)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
-          <span style={{ fontSize: '13px', color: 'var(--c-muted)', fontFamily: 'var(--f-mono)' }}>뉴스와 최신 데이터를 검색하고 있습니다...</span>
+          <span style={{ fontSize: '13px', color: 'var(--c-muted)', fontFamily: 'var(--f-mono)' }}>
+            AI가 분석하고 있습니다...
+          </span>
         </div>
       )}
 
+      {/* 에러 */}
       {error && (
-        <div style={{ color: 'var(--c-red)', fontSize: '13px', padding: '10px 0' }}>{error}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--c-red)', fontSize: '13px', padding: '10px 0' }}>
+          <span>⚠️</span> {error}
+          <button onClick={() => { setError(null); setDone(false); fetchAnalysis() }}
+            style={{ marginLeft: '8px', background: 'none', border: '1px solid var(--c-red)', color: 'var(--c-red)', fontSize: '11px', padding: '2px 8px', cursor: 'pointer' }}>
+            재시도
+          </button>
+        </div>
       )}
 
+      {/* 분석 결과 */}
       {analysis && (
         <div>
           <div style={{ marginBottom: '14px' }}>{renderMd(analysis)}</div>
@@ -117,43 +132,41 @@ function WhyPanel({ snapshot, onClose }) {
           )}
         </div>
       )}
-
-      <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
     </div>
   )
 }
 
-// ── 트렌드 카드 ──────────────────────────────────────────────────
+// ── 지표 카드 (공공기관 데이터) ──────────────────────────────────
 function TrendCard({ snapshot }) {
   const [showWhy, setShowWhy] = useState(false)
   const up   = (snapshot.change_pct || 0) > 0
   const down = (snapshot.change_pct || 0) < 0
   const Icon  = up ? TrendingUp : down ? TrendingDown : Minus
   const color = up ? 'var(--c-green)' : down ? 'var(--c-red)' : 'var(--c-muted)'
-
   const isNewsTrend = snapshot.source_name === '뉴스 트렌드 분석'
+
+  const whyPayload = {
+    metric_name: snapshot.metric_name,
+    metric_value: snapshot.metric_value,
+    metric_unit: snapshot.metric_unit,
+    change_pct: snapshot.change_pct,
+    category: snapshot.category,
+    source_name: snapshot.source_name,
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <div className="card" style={{ padding: '22px', transition: 'border-color 0.15s', borderBottom: showWhy ? '1px solid var(--c-gold)' : undefined }}>
-        {/* 뱃지 */}
+      <div className="card" style={{ padding: '22px' }}>
         {isNewsTrend && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '8px' }}>
-            <span style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: '#60a5fa', border: '1px solid #60a5fa', padding: '1px 6px', letterSpacing: '1px' }}>뉴스 트렌드</span>
-          </div>
+          <span style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: '#60a5fa', border: '1px solid #60a5fa', padding: '1px 6px', letterSpacing: '1px', display: 'inline-block', marginBottom: '8px' }}>뉴스 트렌드</span>
         )}
-
-        {/* 지표 */}
         <div className="t-caption" style={{ marginBottom: '6px' }}>{snapshot.metric_name}</div>
         <div style={{ fontFamily: 'var(--f-serif)', fontSize: '22px', fontWeight: 700, marginBottom: '6px' }}>
-          {snapshot.metric_unit === '억원' || snapshot.metric_unit?.includes('억')
-            ? '₩' : ''}{Number(snapshot.metric_value).toLocaleString()}{snapshot.metric_unit !== '억원' ? snapshot.metric_unit : '억'}
+          {snapshot.metric_unit === '억원' ? '₩' : ''}{Number(snapshot.metric_value).toLocaleString()}{snapshot.metric_unit !== '억원' ? snapshot.metric_unit : '억'}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'var(--f-mono)', fontSize: '11px', color, marginBottom: '10px' }}>
           <Icon size={11} /> {Math.abs(snapshot.change_pct || 0).toFixed(1)}% YoY
         </div>
-
-        {/* 출처 */}
         {snapshot.source_name && (
           <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gray-5)', marginBottom: '12px', lineHeight: 1.4 }}>
             출처: {snapshot.source_url
@@ -161,40 +174,76 @@ function TrendCard({ snapshot }) {
               : snapshot.source_name}
           </div>
         )}
-
-        {/* 왜 그럴까? 버튼 */}
-        <button
-          onClick={() => setShowWhy(v => !v)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '5px',
-            background: showWhy ? 'var(--c-gold-dim)' : 'none',
-            border: `1px solid ${showWhy ? 'var(--c-gold)' : 'var(--c-gray-3)'}`,
-            color: showWhy ? 'var(--c-gold)' : 'var(--c-muted)',
-            fontFamily: 'var(--f-mono)', fontSize: '11px', letterSpacing: '0.5px',
-            padding: '5px 12px', cursor: 'pointer', transition: 'var(--t-fast)', minHeight: '30px',
-          }}
-          onMouseEnter={e => { if (!showWhy) { e.currentTarget.style.borderColor = 'var(--c-gold)'; e.currentTarget.style.color = 'var(--c-gold)' } }}
-          onMouseLeave={e => { if (!showWhy) { e.currentTarget.style.borderColor = 'var(--c-gray-3)'; e.currentTarget.style.color = 'var(--c-muted)' } }}
-        >
-          <Zap size={11} />
-          왜 그럴까?
-          {showWhy ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-        </button>
+        <WhyButton active={showWhy} onClick={() => setShowWhy(v => !v)} />
       </div>
-
-      {/* 분석 패널 */}
-      {showWhy && <WhyPanel snapshot={snapshot} onClose={() => setShowWhy(false)} />}
+      {showWhy && <WhyPanel payload={whyPayload} label="공식 데이터 기반" onClose={() => setShowWhy(false)} />}
     </div>
   )
 }
 
-// ── TREND PAGE ───────────────────────────────────────────────────
+// ── 섹터 카드 (HOT SECTORS) ──────────────────────────────────────
+function SectorCard({ sector }) {
+  const [showWhy, setShowWhy] = useState(false)
+
+  const whyPayload = {
+    type: 'sector',
+    sector_name: sector.name,
+    sector_note: sector.note,
+    category: sector.category,
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div className="card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {/* 상단: 아이콘 + 이름 */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '22px' }}>{sector.icon}</span>
+            <div>
+              <div style={{ fontFamily: 'var(--f-serif)', fontSize: '15px', fontWeight: 600 }}>{sector.name}</div>
+              <div style={{ fontSize: '12px', color: 'var(--c-muted)', marginTop: '2px' }}>{sector.note}</div>
+            </div>
+          </div>
+          <BarChart2 size={16} color="var(--c-gold)" style={{ flexShrink: 0 }} />
+        </div>
+        {/* 왜 그럴까? 버튼 */}
+        <WhyButton active={showWhy} onClick={() => setShowWhy(v => !v)} />
+      </div>
+      {showWhy && <WhyPanel payload={whyPayload} label={sector.name} onClose={() => setShowWhy(false)} />}
+    </div>
+  )
+}
+
+// ── 왜 그럴까? 버튼 (공통) ───────────────────────────────────────
+function WhyButton({ active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: '5px',
+        background: active ? 'rgba(249,115,22,0.1)' : 'none',
+        border: `1px solid ${active ? 'var(--c-gold)' : 'var(--c-gray-3)'}`,
+        color: active ? 'var(--c-gold)' : 'var(--c-muted)',
+        fontFamily: 'var(--f-mono)', fontSize: '11px', letterSpacing: '0.5px',
+        padding: '5px 12px', cursor: 'pointer', transition: 'var(--t-fast)', minHeight: '30px',
+        alignSelf: 'flex-start',
+      }}
+      onMouseEnter={e => { if (!active) { e.currentTarget.style.borderColor = 'var(--c-gold)'; e.currentTarget.style.color = 'var(--c-gold)' } }}
+      onMouseLeave={e => { if (!active) { e.currentTarget.style.borderColor = 'var(--c-gray-3)'; e.currentTarget.style.color = 'var(--c-muted)' } }}
+    >
+      <Zap size={11} />
+      왜 그럴까?
+      {active ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+    </button>
+  )
+}
+
+// ── TREND PAGE ────────────────────────────────────────────────────
 export default function TrendPage() {
   const navigate = useNavigate()
   const { data: trendArticles = [], isLoading } = useArticles({ category: 'trend', limit: 6 })
   const { data: snapshots = [] } = useTrends()
 
-  // 공공기관 vs 뉴스 트렌드 분리
   const officialSnaps = snapshots.filter(s => s.source_name !== '뉴스 트렌드 분석')
   const newsSnaps     = snapshots.filter(s => s.source_name === '뉴스 트렌드 분석')
 
@@ -207,7 +256,8 @@ export default function TrendPage() {
           창업 트렌드 트래커
         </h1>
         <p style={{ color: 'var(--c-muted)', fontSize: '14px', lineHeight: 1.7 }}>
-          한국 스타트업 생태계의 흐름을 추적합니다. 각 지표의 <strong style={{ color: 'var(--c-gold)', fontWeight: 600 }}>왜 그럴까?</strong>를 눌러 AI 분석을 받아보세요.
+          한국 스타트업 생태계의 흐름을 추적합니다.
+          각 지표와 섹터의 <strong style={{ color: 'var(--c-gold)', fontWeight: 600 }}>왜 그럴까?</strong>를 눌러 AI 분석을 받아보세요.
         </p>
       </div>
 
@@ -218,13 +268,11 @@ export default function TrendPage() {
           <section>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--c-border)' }}>
               <div className="t-eyebrow">LIVE METRICS · 공공기관 공식 데이터</div>
-              <span style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gray-5)' }}>
-                중기부, 벤처캐피탈협회 등
-              </span>
+              <span style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gray-5)' }}>중기부, 벤처캐피탈협회 등</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '2px', background: 'var(--c-border)', border: '1px solid var(--c-border)' }}>
               {officialSnaps.map((s, i) => (
-                <div key={i} style={{ background: 'var(--c-card)', display: 'flex', flexDirection: 'column' }}>
+                <div key={i} style={{ background: 'var(--c-card)' }}>
                   <TrendCard snapshot={s} />
                 </div>
               ))}
@@ -241,7 +289,7 @@ export default function TrendPage() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '2px', background: 'var(--c-border)', border: '1px solid var(--c-border)' }}>
               {newsSnaps.map((s, i) => (
-                <div key={i} style={{ background: 'var(--c-card)', display: 'flex', flexDirection: 'column' }}>
+                <div key={i} style={{ background: 'var(--c-card)' }}>
                   <TrendCard snapshot={s} />
                 </div>
               ))}
@@ -261,20 +309,16 @@ export default function TrendPage() {
           </section>
         )}
 
-        {/* 주목 섹터 */}
+        {/* HOT SECTORS — 왜 그럴까? 탭 포함 */}
         <section>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--c-border)' }}>
             <div className="t-eyebrow">HOT SECTORS · 2024-2025</div>
             <span style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gray-5)' }}>출처: 중소벤처기업부, 벤처캐피탈협회</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '2px', background: 'var(--c-border)', border: '1px solid var(--c-border)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '2px', background: 'var(--c-border)', border: '1px solid var(--c-border)' }}>
             {SECTORS.map((s, i) => (
-              <div key={i} className="card" style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontFamily: 'var(--f-serif)', fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>{s.name}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--c-muted)' }}>{s.note}</div>
-                </div>
-                <BarChart2 size={18} color="var(--c-gold)" style={{ flexShrink: 0 }} />
+              <div key={i} style={{ background: 'var(--c-card)' }}>
+                <SectorCard sector={s} />
               </div>
             ))}
           </div>
@@ -306,14 +350,13 @@ export default function TrendPage() {
 
       <style>{`
         @keyframes fadeInUp { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
+        @keyframes spin { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }
         @media (max-width: 768px) {
           div[style*="minmax(240px"] { grid-template-columns: repeat(2,1fr) !important; }
-          div[style*="minmax(260px"] { grid-template-columns: 1fr !important; }
           div[style*="minmax(280px"] { grid-template-columns: 1fr !important; }
         }
         @media (max-width: 480px) {
-          div[style*="minmax(240px"],
-          div[style*="minmax(260px"] { grid-template-columns: 1fr !important; }
+          div[style*="minmax(240px"] { grid-template-columns: 1fr !important; }
         }
       `}</style>
     </div>

@@ -20,7 +20,7 @@ const SUMMARIZE_SYSTEM = `당신은 청소년 창업 플랫폼 'Insightship'의 
 7. 요약문만 출력 (제목, 설명 없이)`
 
 async function summarizeOne(title, content) {
-  const prompt = `다음 뉴스를 요약해주세요.\n\n제목: ${title}\n\n내용:\n${content?.slice(0, 2000) || ''}`
+  const prompt = `다음 뉴스 기사를 청소년 창업가가 이해하기 쉽게 정리해주세요.\n\n제목: ${title}\n\n내용:\n${content?.slice(0, 3000) || ''}`
   const r = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
     {
@@ -29,7 +29,7 @@ async function summarizeOne(title, content) {
       body: JSON.stringify({
         system_instruction: { parts: [{ text: SUMMARIZE_SYSTEM }] },
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 300, temperature: 0.3 },
+        generationConfig: { maxOutputTokens: 800, temperature: 0.3 },
       }),
       signal: AbortSignal.timeout(15000),
     }

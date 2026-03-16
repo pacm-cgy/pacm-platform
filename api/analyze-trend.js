@@ -69,7 +69,7 @@ async function callGemini(prompt, model, timeoutMs = 25000) {
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          maxOutputTokens: 900,
+          maxOutputTokens: 2000,
           temperature: 0.4,
           topP: 0.9,
         },
@@ -121,7 +121,8 @@ ${contextSection}
 **🚀 청소년 창업가에게 어떤 의미인가**
 이 트렌드가 만드는 창업 기회와 지금 준비할 수 있는 구체적 행동 1~2가지를 제시하세요. 실현 가능하고 희망적인 톤으로 작성하세요.
 
-문체: ~입니다/~했습니다/~합니다 체 | 전체 450~550자 | 섹션 헤더 굵게(**) | 분석 내용만 출력`
+문체: ~입니다/~했습니다/~합니다 체 | 전체 600~800자 | 섹션 헤더 굵게(**) 필수
+반드시 3개 섹션 모두 완전하게 작성하고, 마지막 문장까지 끊기지 않게 출력하세요.`
 }
 
 // ── 피드백 저장 ───────────────────────────────────────────────────
@@ -153,10 +154,29 @@ export default async function handler(req) {
     return new Response(null, { status: 204, headers: corsHeaders() })
   }
 
+  const body = await req.json().catch(() => ({}))
   const {
     metric_name, metric_value, metric_unit,
-    change_pct, category, source_name
-  } = await req.json().catch(() => ({}))
+    change_pct, category, source_name,
+    sector_name, sector_note, type
+  } = body
+
+  // 섹터 분석 모드
+  if (type === 'sector' && sector_name) {
+    const ragDocs = await searchKnowledge(
+      `${sector_name} ${sector_note || ''} 스타트업 창업 트렌드 투자`,
+      null
+    )
+    const prompt = buildSectorPrompt(sector_name, sector_note || '', ragDocs)
+    let analysis = null, modelUsed = null, error = null
+    try { analysis = await callGemini(prompt, 'gemini-2.5-pro', 35000); modelUsed = 'gemini-2.5-pro' } catch {}
+    if (!analysis) {
+      try { analysis = await callGemini(prompt, 'gemini-2.5-flash', 25000); modelUsed = 'gemini-2.5-flash' } catch(e) { error = e.message }
+    }
+    if (!analysis) return new Response(JSON.stringify({ error: '분석 실패', detail: error }), { status: 200, headers: corsHeaders() })
+    saveFeedback('analyze_sector', sector_name, analysis.slice(0, 200))
+    return new Response(JSON.stringify({ analysis, model: modelUsed, rag_docs_used: ragDocs?.length || 0, timestamp: new Date().toISOString() }), { status: 200, headers: { ...corsHeaders(), 'Cache-Control': 'public, max-age=7200' } })
+  }
 
   if (!metric_name) {
     return new Response(JSON.stringify({ error: 'metric_name required' }), {
