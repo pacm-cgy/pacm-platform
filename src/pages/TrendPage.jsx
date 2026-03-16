@@ -174,7 +174,11 @@ function TrendCard({ snapshot }) {
               : snapshot.source_name}
           </div>
         )}
-        <WhyButton active={showWhy} onClick={() => setShowWhy(v => !v)} />
+        <WhyButton
+          active={showWhy}
+          onClick={() => setShowWhy(v => !v)}
+          label={up ? '왜 상승했을까?' : down ? '왜 하락했을까?' : '왜 그럴까?'}
+        />
       </div>
       {showWhy && <WhyPanel payload={whyPayload} label="공식 데이터 기반" onClose={() => setShowWhy(false)} />}
     </div>
@@ -207,7 +211,11 @@ function SectorCard({ sector }) {
           <BarChart2 size={16} color="var(--c-gold)" style={{ flexShrink: 0 }} />
         </div>
         {/* 왜 그럴까? 버튼 */}
-        <WhyButton active={showWhy} onClick={() => setShowWhy(v => !v)} />
+        <WhyButton
+          active={showWhy}
+          onClick={() => setShowWhy(v => !v)}
+          label="왜 트렌드가 되었을까?"
+        />
       </div>
       {showWhy && <WhyPanel payload={whyPayload} label={sector.name} onClose={() => setShowWhy(false)} />}
     </div>
@@ -215,7 +223,7 @@ function SectorCard({ sector }) {
 }
 
 // ── 왜 그럴까? 버튼 (공통) ───────────────────────────────────────
-function WhyButton({ active, onClick }) {
+function WhyButton({ active, onClick, label = '왜 그럴까?' }) {
   return (
     <button
       onClick={onClick}
@@ -232,7 +240,7 @@ function WhyButton({ active, onClick }) {
       onMouseLeave={e => { if (!active) { e.currentTarget.style.borderColor = 'var(--c-gray-3)'; e.currentTarget.style.color = 'var(--c-muted)' } }}
     >
       <Zap size={11} />
-      왜 그럴까?
+      {label}
       {active ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
     </button>
   )

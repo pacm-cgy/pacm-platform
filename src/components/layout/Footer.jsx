@@ -59,7 +59,11 @@ export default function Footer() {
                 {col.title}
               </div>
               {col.links.map(l => (
-                <button key={l.label} onClick={() => navigate(l.path)}
+                <button key={l.label} onClick={() => {
+                    if (l.href) { window.location.href = l.href }
+                    else if (l.path === '/?section=newsletter') { navigate('/'); setTimeout(() => { const el = document.querySelector('.newsletter-form, [id="newsletter"]'); el?.scrollIntoView({ behavior: 'smooth' }) }, 300) }
+                    else if (l.path) { navigate(l.path) }
+                  }}
                   style={{
                     display: 'block', background: 'none', border: 'none',
                     color: 'var(--c-gray-6)', fontSize: '13px', marginBottom: '10px',

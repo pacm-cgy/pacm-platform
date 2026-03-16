@@ -60,7 +60,7 @@ async function insertArticle(title, body, tags, slug) {
       author_id: ADMIN_ID,
       body,
       excerpt: body.slice(0, 300),
-      category: 'insight',
+      category: 'trend',
       status: 'published',
       tags,
       ai_summary: body.slice(0, 400),
