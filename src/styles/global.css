@@ -477,3 +477,32 @@ body {
     padding-right: var(--pad-x) !important;
   }
 }
+
+/* ── 홈 히어로 그리드 모바일 ─────────────────────────────────── */
+.home-hero-grid {
+  grid-template-columns: 1fr 340px;
+}
+@media (max-width: 900px) {
+  .home-hero-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── 뉴스 상세 본문 모바일 ───────────────────────────────────── */
+@media (max-width: 600px) {
+  .news-detail-body { font-size: 15px !important; }
+  .news-detail-header h1 { font-size: 22px !important; line-height: 1.4 !important; }
+  /* ArticleHero 패딩 */
+  [style*="padding: '44px 44px"] { padding: 20px !important; }
+}
+
+/* ── Footer 모바일 그리드 ────────────────────────────────────── */
+@media (max-width: 600px) {
+  footer .footer-grid { grid-template-columns: 1fr !important; }
+}
+
+/* ── 카드 모바일 패딩 ────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .card { border-radius: 0 !important; }
+  article.card { margin-left: 0 !important; margin-right: 0 !important; }
+}
