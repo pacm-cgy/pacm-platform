@@ -1,3 +1,4 @@
+import React from 'react'
 import { TrendingUp, TrendingDown, Minus, BarChart2, Clock } from 'lucide-react'
 import { ArticleCard, ArticleCardSkeleton } from '../components/article/ArticleCard'
 import { useArticles, useTrends } from '../hooks/useData'

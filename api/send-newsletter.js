@@ -7,7 +7,7 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
 const CRON_SECRET = process.env.CRON_SECRET
 
-async function callClaude(prompt, maxTokens = 2000) {
+async function callGemini(prompt, maxTokens = 2000) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -97,7 +97,7 @@ HTML 이메일 형식으로 작성 (인라인 스타일 포함):`
 
   let newsletterHtml
   try {
-    const aiContent = await callClaude(newsletterPrompt, 2000)
+    const aiContent = await callGemini(newsletterPrompt, 2000)
     newsletterHtml = aiContent
   } catch (e) {
     // AI 실패 시 기본 템플릿

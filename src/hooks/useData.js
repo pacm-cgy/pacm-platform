@@ -69,7 +69,6 @@ export function useArticle(slug) {
         .select(`
           *,
           profiles!author_id (id, display_name, avatar_url, startup_name, bio),
-          article_images (id, url, alt_text, order_index)
         `)
         .eq('slug', slug)
         .eq('status', 'published')
@@ -144,7 +143,8 @@ export function usePosts({ postType, post_type, limit = 20, page = 0 } = {}) {
         .order('created_at', { ascending: false })
         .range(page * limit, (page + 1) * limit - 1)
 
-      if (postType && postType !== 'all') q = q.eq('post_type', postType)
+      const ft = postType || post_type
+      if (ft && ft !== 'all') q = q.eq('post_type', ft)
       const { data, error } = await q
       if (error) throw error
       return data

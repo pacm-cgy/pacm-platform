@@ -7,21 +7,6 @@ import { useArticle } from '../hooks/useArticle'
 import { useLikeArticle, useToggleBookmark, useIsBookmarked } from '../hooks/useData'
 import { useAuthStore } from '../store'
 
-function useArticleFull(slug) {
-  return useQuery({
-    queryKey: ['article', slug],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('articles')
-        .select(`*, profiles!author_id(*), article_images(*)`)
-        .eq('slug', slug).eq('status','published').single()
-      if (error) throw error
-      try { await supabase.rpc('increment_view', { article_id: data.id }) } catch {}
-      return data
-    },
-    enabled: !!slug,
-  })
-}
 
 function BookmarkButton({ articleId }) {
   const { data: isBookmarked = false } = useIsBookmarked(articleId)
