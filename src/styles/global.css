@@ -78,6 +78,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
   overflow-x: hidden;
+  max-width: 100vw;
+}
+
+html {
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
 /* 스크롤바 */
@@ -486,39 +492,53 @@ hr { border: none; border-top: 1px solid var(--c-border); margin: 32px 0; }
    홈페이지 모바일 특화
 ════════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
-  /* 히어로 그리드 사이드바 숨김 */
-  .hero-sidebar { display: none !important; }
+  /* Hero 그리드 강제 1열 */
+  section > div[style*="320px"],
+  section > div[style*="340px"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* 사이드바 숨기기 */
+  section > div[style*="320px"] > div:last-child,
+  section > div[style*="340px"] > div:last-child {
+    display: none !important;
+  }
+  /* 매거진 2열 → 1열 */
+  section > div[style*="2fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* Topbar 티커 INSIGHTSHIP 레이블 숨김 */
+  /* 날짜 span은 .no-mobile 클래스로 처리 */
 
-  /* section 기본 paddingTop 줄이기 */
-  section { padding-top: 36px !important; }
+  /* 섹션 패딩 압축 */
+  section { padding-top: 32px !important; }
 
-  /* trending bar */
-  .trending-bar { display: none !important; }
-
-  /* 패딩 과도한 요소 */
-  div[style*="padding: '48px 0'"] { padding: 28px 0 !important; }
-  div[style*="padding: '52px 0'"] { padding: 32px 0 !important; }
+  /* 너무 넓은 padding 요소들 */
+  div[style*="padding: '44px'"],
+  div[style*="padding: '48px'"],
+  div[style*="padding: '40px var(--pad-x)'"] {
+    padding: 24px var(--pad-x) !important;
+  }
 
   /* Connect 배너 세로 정렬 */
   div[style*="justifyContent: 'space-between'"][style*="flexWrap: 'wrap'"] {
     flex-direction: column !important;
-    gap: 16px !important;
   }
 
-  /* 섹션 헤더 */
-  .section-header { flex-wrap: wrap; gap: 8px; }
+  /* 뉴스레터 */
   .section-title { font-size: 16px !important; }
-
-  /* 뉴스레터 섹션 패딩 */
-  section[style*="paddingTop: '52px'"] { padding-top: 32px !important; }
 }
 
 @media (max-width: 480px) {
-  /* 홈 히어로 헤딩 */
-  h1[style*="font-family: var(--f-serif)"] { font-size: 22px !important; }
-  h2[style*="font-family: var(--f-serif)"] { font-size: 18px !important; }
+  /* 4열 트렌드 → 1열 */
+  .grid-4 { grid-template-columns: 1fr !important; }
 
-  /* 과도한 inner padding */
-  div[style*="padding: '44px'"] { padding: 20px !important; }
-  div[style*="padding: '48px'"] { padding: 20px !important; }
+  /* 뉴스레터 폼 세로 */
+  form { flex-direction: column !important; }
+  form input, form button { width: 100% !important; }
+
+  /* heading */
+  h1 { font-size: clamp(20px, 5.5vw, 28px) !important; }
+  h2 { font-size: clamp(17px, 4.5vw, 22px) !important; }
 }
+
+

@@ -53,8 +53,10 @@ function Topbar() {
       fontFamily: 'var(--f-mono)', fontSize: '11px',
       padding: '7px 0', borderBottom: '1px solid #ffffff12',
       overflow: 'hidden',
+      maxWidth: '100vw',        /* 화면 너비 초과 방지 */
+      boxSizing: 'border-box',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', maxWidth: 'var(--max-width)', margin: '0 auto', padding: '0 var(--pad-x)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', maxWidth: 'var(--max-width)', margin: '0 auto', padding: '0 var(--pad-x)', overflow: 'hidden' }}>
         <span style={{ color: 'var(--c-gold)', whiteSpace: 'nowrap', marginRight: '16px' }}>INSIGHTSHIP</span>
         <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
           <div style={{
@@ -66,7 +68,7 @@ function Topbar() {
             ))}
           </div>
         </div>
-        <span style={{ color: 'var(--c-gray-4)', whiteSpace: 'nowrap', marginLeft: '16px' }}>
+        <span className="no-mobile" style={{ color: 'var(--c-gray-4)', whiteSpace: 'nowrap', marginLeft: '16px', flexShrink: 0 }}>
           {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' })}
         </span>
       </div>

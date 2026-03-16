@@ -120,7 +120,7 @@ function Newsletter() {
           ✓ 구독이 완료되었습니다! 다음 발행일에 인사이트를 보내드릴게요.
         </div>
       ) : (
-        <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '2px', maxWidth: '420px', margin: '0 auto', flexWrap: 'wrap' }}>
+        <form onSubmit={handleSubmit} className="newsletter-form" style={{ display: 'flex', gap: '2px', maxWidth: '420px', margin: '0 auto', flexWrap: 'wrap' }}>
           <input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)}
             placeholder="이메일 주소를 입력하세요" required style={{ flex: '1 1 200px' }} />
           <button type="submit" className="btn btn-ink" disabled={subscribe.isPending} style={{ flexShrink: 0 }}>
@@ -162,7 +162,7 @@ export default function HomePage() {
 
       {/* ── HERO GRID */}
       <section style={{ paddingTop: '36px' }}>
-        <div style={{
+        <div className="hero-grid" style={{
           display: 'grid',
           gridTemplateColumns: '1fr 320px',
           gap: '2px',
@@ -183,7 +183,7 @@ export default function HomePage() {
           ) : null}
 
           {/* Sidebar */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <div className="hero-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {sideArticles.length > 0 ? sideArticles.map(a => (
               <ArticleSideItem key={a.id} article={a} onClick={openPanel} />
             )) : [0, 1, 2].map(i => (
@@ -197,7 +197,7 @@ export default function HomePage() {
 
           {/* Trending bar */}
           {TRENDING.length > 0 && (
-            <div style={{ gridColumn: '1 / -1', background: 'var(--c-ink)', padding: '14px 40px', display: 'flex', alignItems: 'center', gap: '24px', overflow: 'hidden', borderTop: '1px solid var(--c-border)' }}>
+            <div className="trending-bar" style={{ gridColumn: '1 / -1', background: 'var(--c-ink)', padding: '14px 40px', display: 'flex', alignItems: 'center', gap: '24px', overflow: 'hidden', borderTop: '1px solid var(--c-border)' }}>
               <div className="t-eyebrow" style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>TRENDING</div>
               <div style={{ display: 'flex', gap: '20px', flexWrap: 'nowrap', overflow: 'hidden' }}>
                 {TRENDING.map((t, i) => (
@@ -245,7 +245,7 @@ export default function HomePage() {
           <div className="section-title">이번 주 매거진</div>
           <button className="btn btn-ghost" onClick={() => navigate('/story')}>전체 보기 <ChevronRight size={13} /></button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2px', background: 'var(--c-border)', border: '1px solid var(--c-border)' }}>
+        <div className="magazine-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2px', background: 'var(--c-border)', border: '1px solid var(--c-border)' }}>
           {magazineFeature ? (
             <div onClick={() => openPanel(magazineFeature)}
               style={{ background: 'var(--c-ink)', color: 'var(--c-paper)', padding: '44px', cursor: 'pointer', minHeight: '360px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', position: 'relative', overflow: 'hidden', transition: 'var(--t-fast)' }}
@@ -320,7 +320,7 @@ export default function HomePage() {
               실제 프로젝트를 통해 경험을 쌓고, 기업은 신선한 시각의 인재를 만납니다.
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <div className="connect-btn-group" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <button className="btn btn-gold" onClick={() => navigate('/connect')}>프로젝트 보기</button>
             <button className="btn btn-outline">기업 파트너 신청</button>
           </div>
