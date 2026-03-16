@@ -24,8 +24,8 @@ input, textarea, select { font-family: inherit; }
   --c-card:     #111110;
   --c-border:   #2A2A27;
   --c-muted:    #666660;
-  --c-gold:     #C9A227;
-  --c-gold-lt:  #E8B84B;
+  --c-gold:     #FBBF24;
+  --c-gold-lt:  #FCD34D;
   --c-gold-dim: #D4AF3720;
   --c-red:      #C0392B;
   --c-red-dim:  #C0392B18;
@@ -77,8 +77,8 @@ input, textarea, select { font-family: inherit; }
   --c-card:     #FDFCF9;
   --c-border:   #D4CFC5;
   --c-muted:    #7A7368;
-  --c-gold:     #8B7210;
-  --c-gold-lt:  #A08920;
+  --c-gold:     #D97706;
+  --c-gold-lt:  #F59E0B;
   --c-gold-dim: #A0890F20;
   --c-red:      #C0392B;
   --c-red-dim:  #C0392B18;
