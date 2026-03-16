@@ -14,7 +14,7 @@ export default async function handler(req) {
   // 최근 7일치 뉴스 요약 초기화 (오래된 건 그냥 둠)
   const since = new Date(Date.now() - 7 * 86400000).toISOString()
   const r = await fetch(
-    `${SB_URL}/rest/v1/articles?source_name=not.is.null&published_at=gte.${since}&status=eq.published`,
+    `${SB_URL}/rest/v1/articles?published_at=gte.${since}&status=eq.published`,
     { method: 'PATCH', headers: H, body: JSON.stringify({ ai_summary: null }) }
   )
   return new Response(JSON.stringify({ status: r.status, ok: r.ok, message: '최근 7일 요약 초기화 완료' }), {

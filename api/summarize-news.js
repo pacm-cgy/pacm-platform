@@ -48,7 +48,7 @@ export default async function handler(req) {
 
   // 요약 안 된 최근 뉴스 가져오기
   const r = await fetch(
-    `${SB_URL}/rest/v1/articles?source_name=not.is.null&ai_summary=is.null&status=eq.published&select=id,title,content&order=published_at.desc&limit=30`,
+    `${SB_URL}/rest/v1/articles?ai_summary=is.null&status=eq.published&select=id,title,content,source_name&order=published_at.desc&limit=40`,
     { headers: H }
   )
   const articles = await r.json()
