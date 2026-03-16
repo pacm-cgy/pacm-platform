@@ -199,9 +199,9 @@ export default async function handler(req) {
     modelUsed = 'gemini-2.5-pro-exp'
   } catch {
     try {
-      const r = await callGemini(systemPrompt, fullPrompt, 'gemini-2.0-flash', 25000)
+      const r = await callGemini(systemPrompt, fullPrompt, 'gemini-2.0-flash-001', 25000)
       result = r.text
-      modelUsed = 'gemini-2.0-flash'
+      modelUsed = 'gemini-2.0-flash-001'
     } catch (e) {
       return new Response(JSON.stringify({ error: 'AI 응답 실패. 잠시 후 다시 시도해주세요.', detail: e.message }), {
         status: 500, headers: corsHeaders()

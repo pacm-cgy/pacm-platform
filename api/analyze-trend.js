@@ -184,8 +184,8 @@ export default async function handler(req) {
   } catch (e1) {
     // 4. Gemini 2.0 Flash 폴백
     try {
-      analysis = await callGemini(prompt, 'gemini-2.0-flash', 20000)
-      modelUsed = 'gemini-2.0-flash'
+      analysis = await callGemini(prompt, 'gemini-2.0-flash-001', 20000)
+      modelUsed = 'gemini-2.0-flash-001'
     } catch (e2) {
       error = e2.message
     }
