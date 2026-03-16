@@ -26,13 +26,18 @@ const TYPE_PROMPTS = {
   trend_report: `${BASE_IDENTITY}
 
 현재 임무: 트렌드 리포트 작성
-- 인사말 없이 바로 ## 헤더로 시작 (예: ## 이번 주 핵심 요약)
+글자수 기준 (반드시 준수):
+- 전체: 3000~4000자
+- 각 섹션: 500~700자씩
+- 모든 섹션을 완전한 문장으로 마무리 (끊기지 않게)
+
+작성 규칙:
+- 인사말 없이 ## 헤더로 바로 시작
 - 요청한 섹션 구조를 반드시 따름
-- 각 섹션을 충분히 상세하게 (전체 2000자 이상)
-- 구체적 수치와 기업명 사례 반드시 포함
+- 구체적 수치·기업명·날짜 반드시 포함
 - 어려운 용어는 괄호로 설명: GPU(그래픽처리장치, AI 학습용 반도체)
 - 마크다운 형식 (## 헤더, **굵게**, - 리스트)
-- "안녕하세요", "AI 어시스턴트입니다" 등 일체 없이 바로 본문 시작`,
+- "안녕하세요", "AI 어시스턴트" 등 일체 없이 ## 헤더로만 시작`,
 
   insight_article: `${BASE_IDENTITY}
 
@@ -54,12 +59,17 @@ const TYPE_PROMPTS = {
 
   market_analysis: `${BASE_IDENTITY}
 
-현재 임무: 시장 분석 보고서 작성 보조
-- 한국 스타트업 생태계 현재 상황 분석
+현재 임무: 시장 분석 보고서 작성
+글자수 기준 (반드시 준수):
+- 전체: 3000~4000자
+- 각 섹션: 500~700자씩
+- 모든 섹션을 완전한 문장으로 마무리
+
+작성 규칙:
+- 한국 스타트업 생태계 현황 분석
 - 주목할 투자 섹터와 기회 요인
-- 위험 요인과 주의사항
-- 데이터 기반 근거 제시
-- 구조화된 마크다운 보고서 형식`,
+- 구체적 수치·기업명 반드시 포함
+- 구조화된 마크다운 형식 (## 헤더, **굵게**, - 리스트)`,
 
   story_interview: `${BASE_IDENTITY}
 
@@ -127,7 +137,7 @@ async function callGemini(systemPrompt, userPrompt, model, timeoutMs = 30000) {
         system_instruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         generationConfig: {
-          maxOutputTokens: 1500,
+          maxOutputTokens: 4096,
           thinkingConfig: { thinkingBudget: 0 },
           temperature: 0.5,
           topP: 0.9,
