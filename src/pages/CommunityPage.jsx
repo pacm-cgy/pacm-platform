@@ -26,8 +26,8 @@ function PostCard({ post }) {
     <div className="card card-clickable" onClick={() => navigate(`/community/${post.id}`)} style={{ padding: '20px 24px', borderBottom: '1px solid var(--c-border)' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          {post.is_pinned && <span style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: 'var(--c-red)', border: '1px solid var(--c-red)', padding: '1px 6px' }}>PINNED</span>}
-          <span style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: TYPE_COLORS[post.post_type] || 'var(--c-muted)', border: `1px solid ${TYPE_COLORS[post.post_type] || 'var(--c-border)'}`, padding: '1px 6px' }}>
+          {post.is_pinned && <span style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-red)', border: '1px solid var(--c-red)', padding: '1px 6px' }}>PINNED</span>}
+          <span style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: TYPE_COLORS[post.post_type] || 'var(--c-muted)', border: `1px solid ${TYPE_COLORS[post.post_type] || 'var(--c-border)'}`, padding: '1px 6px' }}>
             {TYPE_LABELS[post.post_type] || post.post_type}
           </span>
         </div>

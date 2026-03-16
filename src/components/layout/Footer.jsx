@@ -92,10 +92,19 @@ export default function Footer() {
 
       <style>{`
         @media (max-width: 900px) {
-          footer .container > div:first-child { grid-template-columns: 1fr 1fr !important; }
+          footer [style*="gridTemplateColumns: 2fr 1fr 1fr 1fr"] {
+            grid-template-columns: 1fr 1fr !important;
+          }
         }
-        @media (max-width: 480px) {
-          footer .container > div:first-child { grid-template-columns: 1fr !important; }
+        @media (max-width: 560px) {
+          footer [style*="gridTemplateColumns"],
+          footer [style*="grid-template-columns"] {
+            grid-template-columns: 1fr !important;
+          }
+          footer [style*="padding: '48px"] {
+            padding-top: 32px !important;
+            padding-bottom: 24px !important;
+          }
         }
       `}</style>
     </footer>

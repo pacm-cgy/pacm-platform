@@ -20,7 +20,7 @@ function ProjectCard({ project, onApply }) {
           </div>
         </div>
         <span style={{
-          fontFamily: 'var(--f-mono)', fontSize: '9px', padding: '3px 8px', letterSpacing: '1px', whiteSpace: 'nowrap',
+          fontFamily: 'var(--f-mono)', fontSize: '10px', padding: '3px 8px', letterSpacing: '1px', whiteSpace: 'nowrap',
           color: STATUS_COLORS[project.status] || 'var(--c-muted)',
           border: `1px solid ${STATUS_COLORS[project.status] || 'var(--c-border)'}`,
         }}>{STATUS_LABELS[project.status] || project.status}</span>

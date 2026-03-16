@@ -18,9 +18,9 @@ export default function InsightPage() {
 
   return (
     <div style={{ paddingBottom: '64px' }}>
-      <div style={{ padding: '40px 0 24px' }}>
+      <div style={{ padding: '32px 0 20px' }}>
         <div className="t-eyebrow" style={{ marginBottom: '8px' }}>PACM INSIGHT</div>
-        <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: '34px', fontWeight: 700, marginBottom: '8px' }}>창업 인사이트</h1>
+        <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(24px, 5vw, 34px)', fontWeight: 700, marginBottom: '8px' }}>창업 인사이트</h1>
         <p style={{ color: 'var(--c-muted)', fontSize: '14px', maxWidth: '560px' }}>아이디어부터 스케일업까지. 매주 깊이 있는 분석과 실전 가이드를 제공합니다.</p>
       </div>
       <div style={{ display: 'flex', gap: '0', borderBottom: '2px solid var(--c-border)', marginBottom: '28px' }}>

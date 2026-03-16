@@ -36,7 +36,7 @@ export default function TrendPage() {
   return (
     <div style={{ paddingBottom: '80px' }}>
       {/* 헤더 */}
-      <div style={{ padding: '40px 0 24px', borderBottom: '1px solid var(--c-gray-3)' }}>
+      <div style={{ padding: '32px 0 20px', borderBottom: '1px solid var(--c-gray-3)' }}>
         <div className="container">
           <div className="t-eyebrow" style={{ marginBottom: '8px' }}>TREND TRACKER</div>
           <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(24px,4vw,34px)', fontWeight: 700, marginBottom: '8px' }}>창업 트렌드 트래커</h1>
@@ -66,7 +66,7 @@ export default function TrendPage() {
                       <Icon size={12} /> {Math.abs(s.change_pct || 0).toFixed(1)}% YoY
                     </div>
                     {s.source && (
-                      <div style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: 'var(--c-gray-5)', marginTop: '4px', lineHeight: 1.4 }}>
+                      <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gray-5)', marginTop: '4px', lineHeight: 1.4 }}>
                         출처: {s.source_url ? <a href={s.source_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--c-gold)', textDecoration: 'none' }}>{s.source}</a> : s.source}
                       </div>
                     )}
