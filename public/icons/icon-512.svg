@@ -1,12 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#0F0E0A"/>
-  <rect x="0" y="496" width="512" height="16" fill="#C8982A"/>
-  <text x="256" y="295" 
-    font-family="monospace" font-weight="900" font-size="200"
-    fill="#F5F3EE" text-anchor="middle" dominant-baseline="middle"
-    letter-spacing="8">PACM</text>
-  <rect x="64" y="340" width="384" height="4" fill="#C8982A" opacity="0.6"/>
-  <text x="256" y="380"
-    font-family="monospace" font-size="36" font-weight="400"
-    fill="#7A7368" text-anchor="middle" letter-spacing="6">청소년 창업</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="96" fill="#0F0E0A"/>
+  <line x1="256" y1="38" x2="256" y2="346" stroke="#F0EEE8" stroke-width="18"/>
+  <path d="M256 48 L256 333 L90 333 Z" fill="#C8982A" opacity="0.95"/>
+  <path d="M256 115 L256 333 L387 333 Z" fill="#C8982A" opacity="0.5"/>
+  <path d="M64 346 Q256 424 448 346 L422 384 Q256 461 90 384 Z" fill="#F0EEE8"/>
+  <path d="M38 423 Q115 397 192 423 Q269 448 346 423 Q422 397 474 423" stroke="#C8982A" stroke-width="18" fill="none" opacity="0.6"/>
+  <path d="M256 38 L333 90 L256 128 Z" fill="#C8982A"/>
 </svg>
