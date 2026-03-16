@@ -24,9 +24,9 @@ input, textarea, select { font-family: inherit; }
   --c-card:     #111110;
   --c-border:   #2A2A27;
   --c-muted:    #666660;
-  --c-gold:     #FBBF24;
-  --c-gold-lt:  #FCD34D;
-  --c-gold-dim: #D4AF3720;
+  --c-gold:     #FB923C;
+  --c-gold-lt:  #FDBA74;
+  --c-gold-dim: #FB923C20;
   --c-red:      #C0392B;
   --c-red-dim:  #C0392B18;
   --c-green:    #27AE60;
@@ -77,9 +77,9 @@ input, textarea, select { font-family: inherit; }
   --c-card:     #FDFCF9;
   --c-border:   #D4CFC5;
   --c-muted:    #7A7368;
-  --c-gold:     #D97706;
-  --c-gold-lt:  #F59E0B;
-  --c-gold-dim: #A0890F20;
+  --c-gold:     #EA7010;
+  --c-gold-lt:  #FB923C;
+  --c-gold-dim: #EA701018;
   --c-red:      #C0392B;
   --c-red-dim:  #C0392B18;
   --c-green:    #1E8449;
