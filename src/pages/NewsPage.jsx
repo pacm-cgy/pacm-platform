@@ -1,3 +1,4 @@
+import { AdSlot } from '../components/ads/AdBanner'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Clock, ExternalLink, RefreshCw, Image } from 'lucide-react'
@@ -175,10 +176,12 @@ export default function NewsPage() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '2px' }}>
+            <AdSlot position="content-top" />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: '2px' }}>
               {filtered.map(article => <NewsCard key={article.id} article={article} />)}
             </div>
 
+            <AdSlot position="content-bottom" />
             {/* 페이지네이션 */}
             <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', padding: '40px 0 0' }}>
               {page > 0 && <button onClick={() => setPage(p => p - 1)} className="btn btn-outline btn-sm">← 이전</button>}

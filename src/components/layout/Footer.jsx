@@ -17,10 +17,10 @@ export default function Footer() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '18px' }}>
               <InsightshipLogo size={30} />
               <div>
-                <div style={{ fontFamily: 'var(--f-mono)', fontWeight: 700, fontSize: '15px', letterSpacing: '2px' }}>
+                <div style={{ fontFamily: 'var(--f-sans)', fontWeight: 800, fontSize: '14px', letterSpacing: '1.5px', color: 'var(--c-paper)' }}>
                   INSIGHT<span style={{ color: 'var(--c-gold)' }}>SHIP</span>
                 </div>
-                <div style={{ fontFamily: 'var(--f-serif)', fontSize: '9px', color: 'var(--c-gray-6)', letterSpacing: '1px', marginTop: '2px' }}>청소년 창업 플랫폼</div>
+                <div style={{ fontFamily: 'var(--f-sans)', fontSize: '9px', fontWeight: 500, color: 'var(--c-gray-5)', letterSpacing: '0.3px', marginTop: '2px' }}>청소년 창업 플랫폼</div>
               </div>
             </div>
             <p style={{ color: 'var(--c-gray-6)', fontSize: '13px', lineHeight: 1.8, maxWidth: '280px', marginBottom: '16px' }}>
@@ -48,10 +48,10 @@ export default function Footer() {
               { label: '팀원 모집', path: '/community' },
             ]},
             { title: 'INSIGHTSHIP', links: [
-              { label: '서비스 소개', path: '/' },
-              { label: '파트너십', path: '/connect' },
-              { label: '뉴스레터', path: '/' },
-              { label: '문의하기', path: '/' },
+              { label: '서비스 소개', path: '/?section=about' },
+              { label: '파트너십', path: '/connect', external: false },
+              { label: '뉴스레터', path: '/?section=newsletter' },
+              { label: '문의하기', href: 'mailto:contact@pacm.kr' },
             ]},
           ].map(col => (
             <div key={col.title}>
@@ -82,14 +82,10 @@ export default function Footer() {
         }}>
           <div>© {year} <span style={{ color: 'var(--c-gold)' }}>INSIGHTSHIP</span> by PACM. All rights reserved.</div>
           <div style={{ display: 'flex', gap: '20px' }}>
-            <span style={{ cursor: 'pointer', transition: 'color 0.15s' }}
-              onMouseEnter={e => e.target.style.color = 'var(--c-paper)'}
-              onMouseLeave={e => e.target.style.color = 'var(--c-gray-5)'}
-            >개인정보처리방침</span>
-            <span style={{ cursor: 'pointer', transition: 'color 0.15s' }}
-              onMouseEnter={e => e.target.style.color = 'var(--c-paper)'}
-              onMouseLeave={e => e.target.style.color = 'var(--c-gray-5)'}
-            >이용약관</span>
+            <button onClick={() => navigate('/privacy')} style={{ background:'none',border:'none',color:'var(--c-gray-5)',cursor:'pointer',fontSize:'11px',fontFamily:'var(--f-mono)',transition:'color 0.15s',padding:0 }}
+              onMouseEnter={e=>e.target.style.color='var(--c-paper)'} onMouseLeave={e=>e.target.style.color='var(--c-gray-5)'}>개인정보처리방침</button>
+            <button onClick={() => navigate('/terms')} style={{ background:'none',border:'none',color:'var(--c-gray-5)',cursor:'pointer',fontSize:'11px',fontFamily:'var(--f-mono)',transition:'color 0.15s',padding:0 }}
+              onMouseEnter={e=>e.target.style.color='var(--c-paper)'} onMouseLeave={e=>e.target.style.color='var(--c-gray-5)'}>이용약관</button>
           </div>
         </div>
       </div>

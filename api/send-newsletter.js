@@ -1,146 +1,167 @@
-// Vercel Serverless Function - 뉴스레터 발송
-// Resend 무료: 월 3,000건, 하루 100건
-
+// AI 뉴스레터 자동 발송 - 매주 월요일 KST 09:00 (UTC 00:00)
 export const config = { runtime: 'edge' }
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+const RESEND_API_KEY = process.env.RESEND_API_KEY
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
 const CRON_SECRET = process.env.CRON_SECRET
 
-async function getSubscribers() {
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/newsletter_subscribers?is_active=eq.true&select=email,id`,
-    {
-      headers: {
-        'apikey': SUPABASE_SERVICE_KEY,
-        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
-      }
-    }
-  )
-  return res.json()
+async function callClaude(prompt, maxTokens = 2000) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+    signal: AbortSignal.timeout(45000),
+  })
+  if (!res.ok) throw new Error(`Claude API 오류: ${res.status}`)
+  const data = await res.json()
+  return data.content?.[0]?.text || ''
 }
 
-async function getLatestArticles() {
-  const yesterday = new Date(Date.now() - 86400000).toISOString()
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/articles?status=eq.published&published_at=gte.${yesterday}&order=published_at.desc&limit=5&select=title,slug,excerpt,category,source_name`,
-    {
-      headers: {
-        'apikey': SUPABASE_SERVICE_KEY,
-        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
-      }
-    }
-  )
-  return res.json()
+function getKSTDate() {
+  const now = new Date()
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+  return kst.toISOString().split('T')[0]
 }
 
-function buildEmailHTML(articles) {
-  const date = new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
-  const CATEGORY_KO = { insight: '인사이트', story: '스토리', trend: '트렌드', community: '커뮤니티' }
-
-  const articleHTML = articles.map(a => `
-    <div style="border-left:3px solid #C8982A;padding:12px 16px;margin-bottom:16px;background:#fafaf8;">
-      <div style="font-size:10px;color:#C8982A;letter-spacing:2px;font-family:monospace;margin-bottom:4px;">
-        ${CATEGORY_KO[a.category] || a.category}${a.source_name ? ` · 출처: ${a.source_name}` : ''}
-      </div>
-      <a href="https://www.insightship.pacm.kr/article/${a.slug}"
-         style="font-size:16px;font-weight:700;color:#0F0E0A;text-decoration:none;line-height:1.4;display:block;margin-bottom:6px;">
-        ${a.title}
-      </a>
-      <p style="font-size:13px;color:#7A7368;line-height:1.6;margin:0;">
-        ${a.excerpt || ''}
-      </p>
-    </div>
-  `).join('')
-
-  return `
-<!DOCTYPE html>
-<html lang="ko">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background:#F5F3EE;font-family:'Apple SD Gothic Neo','Noto Sans KR',sans-serif;">
-  <div style="max-width:600px;margin:0 auto;background:#ffffff;">
-    <!-- 헤더 -->
-    <div style="background:#0F0E0A;padding:28px 32px;text-align:center;">
-      <div style="font-family:monospace;font-size:20px;font-weight:700;letter-spacing:3px;color:#F5F3EE;">
-        INSIGHT<span style="color:#C8982A;">SHIP</span>
-      </div>
-      <div style="font-size:11px;color:#555;margin-top:4px;letter-spacing:1px;">청소년 창업 플랫폼</div>
-    </div>
-    <!-- 날짜 -->
-    <div style="background:#C8982A;padding:10px 32px;">
-      <div style="font-family:monospace;font-size:11px;color:#0F0E0A;letter-spacing:2px;">${date} DAILY BRIEF</div>
-    </div>
-    <!-- 본문 -->
-    <div style="padding:28px 32px;">
-      <h2 style="font-size:13px;color:#7A7368;letter-spacing:3px;font-family:monospace;margin:0 0 20px 0;">오늘의 창업 인사이트</h2>
-      ${articleHTML || '<p style="color:#999;font-size:14px;">오늘은 새로운 소식이 없습니다.</p>'}
-    </div>
-    <!-- CTA -->
-    <div style="padding:0 32px 28px;">
-      <a href="https://www.insightship.pacm.kr"
-         style="display:block;background:#0F0E0A;color:#C8982A;text-align:center;padding:14px;font-family:monospace;font-size:12px;letter-spacing:2px;text-decoration:none;">
-        INSIGHTSHIP 바로가기 →
-      </a>
-    </div>
-    <!-- 푸터 -->
-    <div style="background:#F5F3EE;padding:20px 32px;text-align:center;border-top:1px solid #E0DDD6;">
-      <p style="font-size:11px;color:#999;margin:0;line-height:1.8;">
-        © 2026 Insightship by PACM<br>
-        <a href="https://www.insightship.pacm.kr/unsubscribe?email={{email}}" style="color:#C8982A;">구독 해지</a>
-      </p>
-    </div>
-  </div>
-</body>
-</html>`
+function getLastWeekRange() {
+  const now = new Date()
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - now.getDay() - 6) // 지난주 월요일
+  monday.setHours(0, 0, 0, 0)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  sunday.setHours(23, 59, 59, 999)
+  return { from: monday.toISOString(), to: sunday.toISOString() }
 }
 
 export default async function handler(req) {
   const authHeader = req.headers.get('authorization')
-  const cronHeader = req.headers.get('x-vercel-cron')
-  if (!cronHeader && authHeader !== `Bearer ${CRON_SECRET}`) {
-    return new Response('Unauthorized', { status: 401 })
+  const isVercelCron = req.headers.get('x-vercel-cron') === '1'
+  if (!isVercelCron && authHeader !== `Bearer ${CRON_SECRET}`) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
-  const [subscribers, articles] = await Promise.all([
-    getSubscribers(),
-    getLatestArticles(),
-  ])
+  // 지난주 뉴스 가져오기
+  const { from, to } = getLastWeekRange()
+  const newsRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/articles?source_name=not.is.null&is_duplicate=eq.false&published_at=gte.${from}&published_at=lte.${to}&select=title,ai_summary,excerpt,source_name,source_url,ai_category&order=published_at.desc&limit=30`,
+    { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+  )
+  const articles = await newsRes.json()
 
-  if (!subscribers.length) {
+  if (!articles?.length) {
+    return new Response(JSON.stringify({ message: '발송할 뉴스 없음' }), { status: 200 })
+  }
+
+  // 구독자 목록
+  const subRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/newsletter_subscribers?is_active=eq.true&select=email`,
+    { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+  )
+  const subscribers = await subRes.json()
+  if (!subscribers?.length) {
     return new Response(JSON.stringify({ message: '구독자 없음' }), { status: 200 })
   }
 
-  const htmlTemplate = buildEmailHTML(articles)
-  const results = { sent: 0, failed: 0 }
+  // AI로 뉴스레터 내용 생성
+  const articleSummaries = articles.map((a, i) =>
+    `${i+1}. [${a.ai_category || '일반'}] ${a.title}\n   ${a.ai_summary || a.excerpt || ''}\n   출처: ${a.source_name}`
+  ).join('\n\n')
 
-  // Resend API - 배치 발송 (하루 100건 제한 준수)
-  const batchSize = 90 // 안전 마진
-  const batch = subscribers.slice(0, batchSize)
+  const newsletterPrompt = `당신은 청소년 창업 플랫폼 Insightship의 주간 뉴스레터 에디터입니다.
+지난 한 주간의 주요 창업/스타트업 뉴스를 청소년 독자를 위해 정리해주세요.
 
-  for (const sub of batch) {
-    try {
-      const html = htmlTemplate.replace('{{email}}', encodeURIComponent(sub.email))
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${RESEND_API_KEY}`,
-        },
-        body: JSON.stringify({
-          from: 'Insightship <newsletter@insightship.pacm.kr>',
-          to: sub.email,
-          subject: `[Insightship] ${new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} 창업 인사이트`,
-          html,
-        }),
-      })
-      results.sent++
-    } catch (e) {
-      results.failed++
-    }
+뉴스 목록:
+${articleSummaries}
+
+뉴스레터 작성 규칙:
+1. 청소년이 읽기 쉬운 문체
+2. 어려운 용어는 반드시 설명 추가
+3. 각 섹션은 명확한 소제목으로 구분 (투자, AI/기술, 창업 트렌드 등)
+4. 이 주의 핵심 메시지 1문장으로 시작
+5. 마지막에 "이번 주 창업 인사이트" 코너로 청소년에게 도움이 되는 조언 1개
+6. 전체 길이: HTML 이메일 형식, 읽는 시간 5분 내외
+7. 사실만 기반으로 작성, 추측 금지
+
+HTML 이메일 형식으로 작성 (인라인 스타일 포함):`
+
+  let newsletterHtml
+  try {
+    const aiContent = await callClaude(newsletterPrompt, 2000)
+    newsletterHtml = aiContent
+  } catch (e) {
+    // AI 실패 시 기본 템플릿
+    newsletterHtml = `<h2>이번 주 창업 뉴스</h2>${articles.slice(0,10).map(a => `<div><h3>${a.title}</h3><p>${a.ai_summary || a.excerpt || ''}</p><p><a href="${a.source_url || '#'}">원문 보기</a></p></div>`).join('')}`
   }
 
-  return new Response(JSON.stringify(results), {
+  const kstDate = getKSTDate()
+  const subject = `📰 Insightship 주간 창업 뉴스 - ${kstDate}`
+
+  // 이메일 발송 (배치)
+  const BATCH_SIZE = 50
+  let sent = 0
+  const emails = subscribers.map(s => s.email)
+
+  for (let i = 0; i < emails.length; i += BATCH_SIZE) {
+    const batch = emails.slice(i, i + BATCH_SIZE)
+    const sendRes = await fetch('https://api.resend.com/emails/batch', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(batch.map(to => ({
+        from: 'Insightship <newsletter@pacm.kr>',
+        to,
+        subject,
+        html: `
+<!DOCTYPE html>
+<html lang="ko">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: -apple-system, 'Noto Sans KR', sans-serif; background: #f5f3ee; margin: 0; padding: 20px;">
+  <div style="max-width: 600px; margin: 0 auto; background: #fff; border: 1px solid #d4cfc5;">
+    <div style="background: #0a0a09; padding: 24px 32px; display: flex; align-items: center; gap: 12px;">
+      <div style="color: #fff; font-weight: 800; font-size: 18px; letter-spacing: 2px;">
+        INSIGHT<span style="color: #D4AF37;">SHIP</span>
+      </div>
+      <div style="color: #888; font-size: 12px; margin-left: auto;">${kstDate}</div>
+    </div>
+    <div style="padding: 32px; color: #0f0e0a; line-height: 1.8;">
+      ${newsletterHtml}
+    </div>
+    <div style="background: #f5f3ee; padding: 20px 32px; border-top: 1px solid #d4cfc5; font-size: 11px; color: #888;">
+      <p>© ${new Date().getFullYear()} INSIGHTSHIP by PACM. 운영: 피에이씨엠(PACM)</p>
+      <p>사업자등록번호: 891-45-01385 | 문의: contact@pacm.kr</p>
+      <p><a href="https://www.insightship.pacm.kr" style="color: #D4AF37;">insightship.pacm.kr</a> 방문하기</p>
+    </div>
+  </div>
+</body>
+</html>`,
+      })))
+    })
+    if (sendRes.ok) sent += batch.length
+  }
+
+  // 발송 기록
+  await fetch(`${SUPABASE_URL}/rest/v1/newsletter_logs`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({ sent_count: sent, subject, sent_at: new Date().toISOString() }),
+  }).catch(() => {})
+
+  return new Response(JSON.stringify({ sent, subscribers: emails.length, subject }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   })

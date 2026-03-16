@@ -18,6 +18,8 @@ const ProfilePage   = lazy(() => import('./pages/ProfilePage'))
 const NotFoundPage  = lazy(() => import('./pages/NotFoundPage'))
 const NewsPage      = lazy(() => import('./pages/NewsPage'))
 const NewsDetailPage = lazy(() => import('./pages/NewsDetailPage'))
+const TermsPage       = lazy(() => import('./pages/TermsPage'))
+const PrivacyPage     = lazy(() => import('./pages/PrivacyPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -76,6 +78,8 @@ export default function App() {
                       <Route path="/community"  element={<CommunityPage />} />
                       <Route path="/news"        element={<NewsPage />} />
                       <Route path="/news/:slug"   element={<NewsDetailPage />} />
+                      <Route path="/terms"          element={<TermsPage />} />
+                      <Route path="/privacy"         element={<PrivacyPage />} />
                       <Route path="/connect"    element={<ConnectPage />} />
                       <Route path="/article/:slug" element={<ArticlePage />} />
                       <Route path="/profile"    element={<ProfilePage />} />

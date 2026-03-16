@@ -64,6 +64,11 @@ export default function TrendPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'var(--f-mono)', fontSize: '11px', color }}>
                       <Icon size={12} /> {Math.abs(s.change_pct || 0).toFixed(1)}% YoY
                     </div>
+                    {s.source && (
+                      <div style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: 'var(--c-gray-5)', marginTop: '4px', lineHeight: 1.4 }}>
+                        출처: {s.source_url ? <a href={s.source_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--c-gold)', textDecoration: 'none' }}>{s.source}</a> : s.source}
+                      </div>
+                    )}
                   </div>
                 )
               })}

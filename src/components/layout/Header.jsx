@@ -23,18 +23,25 @@ const TICKER_ITEMS = [
 ]
 
 // ── INSIGHTSHIP SVG LOGO ─────────────────────────────────────────
-function InsightshipLogo({ size = 36 }) {
+function InsightshipLogo({ size = 36, theme }) {
+  // 테마에 따라 선체/돛대 색상 결정
+  const hullColor = "currentColor"
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* 돛 */}
-      <path d="M20 4 L20 26 L8 26 Z" fill="#C8982A" opacity="0.9"/>
-      <path d="M20 8 L20 26 L30 26 Z" fill="#C8982A" opacity="0.55"/>
-      {/* 선체 */}
-      <path d="M5 28 Q20 34 35 28 L32 31 Q20 37 8 31 Z" fill="var(--c-paper)"/>
-      {/* 물결 */}
-      <path d="M2 33 Q8 31 14 33 Q20 35 26 33 Q32 31 38 33" stroke="#C8982A" strokeWidth="1.2" fill="none" opacity="0.5"/>
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"
+      style={{ color: 'var(--c-paper)', flexShrink: 0 }}>
       {/* 돛대 */}
-      <line x1="20" y1="3" x2="20" y2="27" stroke="var(--c-paper)" strokeWidth="1.2"/>
+      <line x1="20" y1="3" x2="20" y2="27" stroke="currentColor" strokeWidth="1.5"/>
+      {/* 메인 돛 */}
+      <path d="M20 4 L20 26 L7 26 Z" fill="var(--c-gold)" opacity="0.95"/>
+      {/* 보조 돛 */}
+      <path d="M20 9 L20 26 L30 26 Z" fill="var(--c-gold)" opacity="0.5"/>
+      {/* 선체 */}
+      <path d="M5 27 Q20 33 35 27 L33 30 Q20 36 7 30 Z" fill="currentColor"/>
+      {/* 물결 */}
+      <path d="M3 33 Q9 31 15 33 Q21 35 27 33 Q33 31 38 33" 
+        stroke="var(--c-gold)" strokeWidth="1.4" fill="none" opacity="0.6"/>
+      {/* 깃발 */}
+      <path d="M20 3 L26 7 L20 10 Z" fill="var(--c-gold)"/>
     </svg>
   )
 }
@@ -328,6 +335,8 @@ export default function Header() {
         @media (max-width: 768px) {
           .no-mobile { display: none !important; }
           .mobile-only { display: flex !important; }
+          /* 상단 바 모바일 */
+          .topbar-inner { font-size: 10px !important; }
         }
         @media (min-width: 769px) {
           .mobile-only { display: none !important; }

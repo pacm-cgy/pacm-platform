@@ -3,10 +3,13 @@
    흑백 + 다크/라이트 테마
    ================================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700;900&family=Noto+Sans+KR:wght@300;400;500;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+/* Pretendard - 한국어 최고 가독성 폰트 */
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+/* Noto Serif KR - 제목용 */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; font-size: 15px; }
+html { scroll-behavior: smooth; font-size: 16px; }
 img { max-width: 100%; display: block; }
 button { cursor: pointer; }
 a { text-decoration: none; color: inherit; }
@@ -21,9 +24,9 @@ input, textarea, select { font-family: inherit; }
   --c-card:     #111110;
   --c-border:   #2A2A27;
   --c-muted:    #666660;
-  --c-gold:     #C8982A;
-  --c-gold-lt:  #E8BF5A;
-  --c-gold-dim: #C8982A18;
+  --c-gold:     #D4AF37;
+  --c-gold-lt:  #F0C040;
+  --c-gold-dim: #D4AF3720;
   --c-red:      #C0392B;
   --c-red-dim:  #C0392B18;
   --c-green:    #27AE60;
@@ -44,7 +47,7 @@ input, textarea, select { font-family: inherit; }
   --c-gray-7:   #AAAAAA;
 
   --f-serif:  'Noto Serif KR', Georgia, serif;
-  --f-sans:   'Noto Sans KR', -apple-system, sans-serif;
+  --f-sans:   'Pretendard', -apple-system, BlinkMacSystemFont, 'Noto Sans KR', sans-serif;
   --f-mono:   'Space Mono', 'Courier New', monospace;
 
   --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;
@@ -74,9 +77,9 @@ input, textarea, select { font-family: inherit; }
   --c-card:     #FDFCF9;
   --c-border:   #D4CFC5;
   --c-muted:    #7A7368;
-  --c-gold:     #B8881A;
-  --c-gold-lt:  #D8AF4A;
-  --c-gold-dim: #C8982A18;
+  --c-gold:     #A0890F;
+  --c-gold-lt:  #C4AC30;
+  --c-gold-dim: #A0890F20;
   --c-red:      #C0392B;
   --c-red-dim:  #C0392B18;
   --c-green:    #1E8449;
@@ -105,7 +108,8 @@ body {
   font-family: var(--f-sans);
   background: var(--c-bg);
   color: var(--c-paper);
-  line-height: 1.7;
+  line-height: 1.75;
+  letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
@@ -412,4 +416,64 @@ body {
 @media print {
   body { background: white; color: black; }
   .no-print { display: none; }
+}
+
+/* ── 뉴스 카드 모바일 1열 ─────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* 뉴스 자동 그리드 → 1열 */
+  [style*="minmax(280px"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* 홈 히어로 그리드 → 1열 */
+  [style*="1fr 340px"] {
+    grid-template-columns: 1fr !important;
+  }
+  [style*="2fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* 트렌드 4열 → 2열 */
+  [style*="repeat(4,"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  /* 뉴스레터 섹션 */
+  [style*="flex-direction: row"][style*="wrap"] {
+    flex-direction: column !important;
+  }
+}
+
+/* ── 터치 영역 최소 44px ────────────────────────────────────── */
+@media (max-width: 768px) {
+  button, a, [role="button"] {
+    min-height: 36px;
+  }
+  .btn {
+    min-height: 44px;
+    font-size: 14px;
+  }
+  /* 카드 패딩 모바일 */
+  .card { border-radius: 0; }
+  /* 컨테이너 패딩 */
+  .container {
+    padding-left: var(--pad-x) !important;
+    padding-right: var(--pad-x) !important;
+  }
+}
+
+/* ── 홈페이지 모바일 ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* section 패딩 조정 */
+  section { padding-top: 32px !important; }
+  /* COVER 기사 */
+  [style*="padding: 48px"] { padding: 24px !important; }
+  [style*="padding: '48px 44px"] { padding: 24px !important; }
+  /* ArticleHero */
+  [style*="font-size: '32px'"] { font-size: 22px !important; }
+}
+
+/* ── 뉴스 상세 모바일 ─────────────────────────────────────────── */
+@media (max-width: 600px) {
+  [style*="max-width: '760px'"] {
+    padding-left: var(--pad-x) !important;
+    padding-right: var(--pad-x) !important;
+  }
 }

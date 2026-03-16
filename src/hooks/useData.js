@@ -44,12 +44,13 @@ export function useNewsArticles({ limit = 20, page = 0 } = {}) {
       const { data, error } = await supabase
         .from('articles')
         .select(`
-          id, title, slug, excerpt, cover_image, category,
-          tags, read_time, published_at, source_name, source_url,
+          id, title, slug, excerpt, ai_summary, cover_image, category,
+          tags, read_time, published_at, source_name, source_url, ai_category,
           profiles!author_id (id, display_name)
         `)
         .eq('status', 'published')
         .not('source_name', 'is', null)
+        .eq('is_duplicate', false)
         .order('published_at', { ascending: false })
         .range(page * limit, (page + 1) * limit - 1)
       if (error) throw error
@@ -260,8 +261,9 @@ export function useTrends() {
       const { data, error } = await supabase
         .from('trend_snapshots')
         .select('*')
-        .eq('snapshot_date', new Date().toISOString().split('T')[0])
+        .order('snapshot_date', { ascending: false })
         .order('category')
+        .limit(20)
       if (error) throw error
       return data
     },
@@ -300,5 +302,57 @@ export function useReport() {
       })
       if (error) throw error
     },
+  })
+}
+
+export function useBookmarks() {
+  const { user } = useAuthStore()
+  return useQuery({
+    queryKey: ['bookmarks', user?.id],
+    queryFn: async () => {
+      if (!user) return []
+      const { data, error } = await supabase
+        .from('article_bookmarks')
+        .select('article_id, articles(id,title,slug,excerpt,cover_image,category,published_at,source_name)')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data?.map(b => b.articles).filter(Boolean) || []
+    },
+    enabled: !!user,
+  })
+}
+
+export function useToggleBookmark() {
+  const qc = useQueryClient()
+  const { user } = useAuthStore()
+  return useMutation({
+    mutationFn: async ({ articleId, isBookmarked }) => {
+      if (!user) throw new Error('로그인이 필요합니다')
+      if (isBookmarked) {
+        const { error } = await supabase.from('article_bookmarks')
+          .delete().eq('user_id', user.id).eq('article_id', articleId)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('article_bookmarks')
+          .insert({ user_id: user.id, article_id: articleId })
+        if (error) throw error
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bookmarks'] }),
+  })
+}
+
+export function useIsBookmarked(articleId) {
+  const { user } = useAuthStore()
+  return useQuery({
+    queryKey: ['bookmark', articleId, user?.id],
+    queryFn: async () => {
+      if (!user || !articleId) return false
+      const { data } = await supabase.from('article_bookmarks')
+        .select('id').eq('user_id', user.id).eq('article_id', articleId).maybeSingle()
+      return !!data
+    },
+    enabled: !!user && !!articleId,
   })
 }
