@@ -19,12 +19,12 @@ function CoverImage({ url, category, alt }) {
   const BG = { insight:'var(--c-gray-2)', story:'var(--c-gray-2)', trend:'var(--c-gray-2)', magazine:'var(--c-gray-2)', community:'var(--c-gray-2)', opinion:'var(--c-gray-2)' }
   const ICON = { insight:'💡', story:'🎙️', trend:'📊', magazine:'📖', community:'👥', opinion:'✍️' }
   return (
-    <div style={{ width:'100%', aspectRatio:'16/9', background:BG[category]||'var(--c-cream)', overflow:'hidden', position:'relative', flexShrink:0 }}>
+    <div style={{ width:'100%', aspectRatio:'16/9', background:BG[category]||'var(--c-cream)', overflow:'hidden', position:'relative', flexShrink:0, transition:'transform 0.3s ease' }}>
       {url && !error ? (
         <>
           {!loaded && <div className="skeleton" style={{ position:'absolute', inset:0 }}/>}
           <img src={url} alt={alt||''} onLoad={()=>setLoaded(true)} onError={()=>setError(true)}
-            style={{ width:'100%', height:'100%', objectFit:'cover', opacity:loaded?1:0, transition:'opacity 0.3s ease' }}/>
+            style={{ width:'100%', height:'100%', objectFit:'cover', opacity:loaded?1:0, transition:'opacity 0.3s ease, transform 0.3s ease' }}/>
         </>
       ) : (
         <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'36px' }}>

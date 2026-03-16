@@ -157,6 +157,17 @@ export default function AboutPage() {
           </button>
         </div>
       </div>
+
+      <style>{`
+        @media (max-width: 768px) {
+          div[style*="gridTemplateColumns: repeat(3"] { grid-template-columns: 1fr !important; }
+          div[style*="gridTemplateColumns: repeat(2"] { grid-template-columns: 1fr !important; }
+          div[style*="gridTemplateColumns: 2fr 1fr"] { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 480px) {
+          div[style*="gridTemplateColumns: repeat(2"] { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   )
 }

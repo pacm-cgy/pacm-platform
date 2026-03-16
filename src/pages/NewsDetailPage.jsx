@@ -90,7 +90,7 @@ export default function NewsDetailPage() {
         </div>
       </div>
 
-      <div className="container" style={{ maxWidth: '760px', margin: '0 auto', padding: '48px var(--pad-x) 0' }}>
+      <div className="container" style={{ maxWidth: 'min(760px, 100%)', margin: '0 auto', padding: '48px var(--pad-x) 0' }}>
         {/* 태그 */}
         <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', flexWrap: 'wrap' }}>
           {article.tags?.filter(t => t !== '뉴스').map(t => (

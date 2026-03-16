@@ -24,6 +24,17 @@ function EmptyState({ icon = '📊', title, desc }) {
       <span style={{ fontSize: '36px' }}>{icon}</span>
       <div style={{ fontFamily: 'var(--f-serif)', fontSize: '16px', color: 'var(--c-paper)' }}>{title}</div>
       {desc && <div style={{ fontSize: '13px', textAlign: 'center', maxWidth: '320px', lineHeight: 1.7 }}>{desc}</div>}
+
+      <style>{`
+        @media (max-width: 768px) {
+          section > div[style*="repeat(4"] { grid-template-columns: repeat(2, 1fr) !important; }
+          section > div[style*="repeat(3"] { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 480px) {
+          section > div[style*="repeat(4"],
+          section > div[style*="repeat(2"] { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   )
 }
