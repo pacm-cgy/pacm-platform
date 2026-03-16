@@ -9,8 +9,7 @@ export function useArticle(slug) {
         .from('articles')
         .select(`
           *,
-          profiles!author_id(id, display_name, avatar_url, startup_name, bio, school),
-          article_images(id, url, alt_text, order_index)
+          profiles!author_id(id, display_name, avatar_url, startup_name, bio, school, region)
         `)
         .eq('slug', slug)
         .eq('status', 'published')

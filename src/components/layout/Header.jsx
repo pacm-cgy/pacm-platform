@@ -291,7 +291,7 @@ export default function Header() {
 
             {user && profile ? (
               <>
-                <button style={{ background: 'none', border: 'none', color: '#777', padding: '8px' }}><Bookmark size={17} /></button>
+                <button style={{ background: 'none', border: 'none', color: 'var(--c-muted)', padding: '8px' }}><Bookmark size={17} /></button>
                 <UserMenu profile={profile} onSignOut={signOut} />
               </>
             ) : (
@@ -312,7 +312,7 @@ export default function Header() {
         </div>
 
         {mobileMenuOpen && (
-          <div style={{ background: '#0a0a08', borderTop: '1px solid #222', animation: 'fadeUp 0.2s ease' }}>
+          <div style={{ background: 'var(--c-ink)', borderTop: '1px solid var(--c-gray-3)', animation: 'fadeUp 0.2s ease' }}>
             {NAV_ITEMS.map(item => (
               <button key={item.id} onClick={() => navigate(item.path)}
                 style={{

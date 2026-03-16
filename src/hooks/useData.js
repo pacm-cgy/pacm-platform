@@ -126,15 +126,16 @@ export function useLikeArticle() {
 
 // ── COMMUNITY POSTS ───────────────────────────────────────────────
 
-export function usePosts({ postType, limit = 20, page = 0 } = {}) {
+export function usePosts({ postType, post_type, limit = 20, page = 0 } = {}) {
+  const filterType = postType || post_type
   return useQuery({
-    queryKey: ['posts', { postType, limit, page }],
+    queryKey: ['posts', { filterType, limit, page }],
     queryFn: async () => {
       let q = supabase
         .from('community_posts')
         .select(`
-          id, title, body, post_type, tags,
-          view_count, like_count, reply_count, is_pinned,
+          id, title, body, content, post_type, tags,
+          view_count, like_count, reply_count, comment_count, is_pinned,
           created_at,
           profiles!author_id (id, display_name, avatar_url, startup_name, school)
         `)
