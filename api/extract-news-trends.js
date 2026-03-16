@@ -67,7 +67,7 @@ export default async function handler(req) {
   // 최근 7일 뉴스
   const since = new Date(Date.now() - 7 * 86400000).toISOString()
   const newsRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/articles?source_name=not.is.null&status=eq.published&published_at=gte.${since}&select=title,ai_summary,ai_category,tags&order=published_at.desc&limit=80`,
+    `${SUPABASE_URL}/rest/v1/articles?status=eq.published&published_at=gte.${since}&select=title,ai_summary,ai_category,tags&order=published_at.desc&limit=80`,
     { headers: H }
   )
   const news = await newsRes.json()
@@ -129,7 +129,7 @@ ${exampleJson}`
   for (const t of extracted.slice(0, 5)) {
     try {
       const existing = await fetch(
-        `${SUPABASE_URL}/rest/v1/trend_snapshots?metric_name=eq.${encodeURIComponent(t.metric_name)}&source_name=eq.뉴스 트렌드 분석&recorded_at=gte.${today}`,
+        `${SUPABASE_URL}/rest/v1/trend_snapshots?metric_name=eq.${encodeURIComponent(t.metric_name)}&source=eq.뉴스 트렌드 분석&snapshot_date=gte.${today}`,
         { headers: H }
       )
       const ex = await existing.json()
@@ -144,10 +144,9 @@ ${exampleJson}`
           metric_unit: t.metric_unit || '건/주',
           change_pct: t.change_pct || 0,
           category: t.category || 'general',
-          source_name: '뉴스 트렌드 분석',
+          source: '뉴스 트렌드 분석',
           source_url: null,
-          description: t.description || '',
-          recorded_at: new Date().toISOString(),
+          snapshot_date: new Date().toISOString().slice(0, 10),
         }),
       })
       if (saveRes.ok || saveRes.status === 201) saved++

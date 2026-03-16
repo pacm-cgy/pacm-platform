@@ -40,7 +40,7 @@ async function callGemini(prompt) {
 async function getRecentNews() {
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/articles?source_name=not.is.null&published_at=gte.${encodeURIComponent(since)}&select=title,excerpt,ai_summary,ai_category&order=published_at.desc&limit=40`,
+    `${SUPABASE_URL}/rest/v1/articles?ai_summary=not.is.null&published_at=gte.${encodeURIComponent(since)}&select=title,excerpt,ai_summary,ai_category&order=published_at.desc&limit=40`,
     { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
   )
   if (!res.ok) throw new Error(`뉴스 조회 실패: ${res.status}`)
@@ -135,7 +135,15 @@ ${newsText}
     const body = await callGemini(prompt)
     if (body && body.length > 100) {
       const title = `[AI 정리본] ${dateStr} ${weekNum}주차 한국 스타트업 투자 동향`
-      const slug = `ai-funding-report-${Date.now()}`
+      const todayStr = new Date().toISOString().slice(0, 10)
+      const slug = `ai-funding-report-${todayStr}`
+      // 오늘 이미 생성됐으면 skip
+      const checkR = await fetch(
+        `${SUPABASE_URL}/rest/v1/articles?slug=eq.${slug}&select=id&limit=1`,
+        { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + SUPABASE_SERVICE_KEY } }
+      )
+      const existing = await checkR.json()
+      if (existing?.length > 0) { results.skipped = (results.skipped||0)+1; continue }
       const inserted = await insertArticle(title, body, ['AI정리본', '투자동향', '스타트업'], slug)
       results.generated.push({ type: 'funding', title, id: inserted?.id })
     }
@@ -172,7 +180,14 @@ ${newsText}
     const body = await callGemini(prompt)
     if (body && body.length > 100) {
       const title = `[AI 정리본] ${dateStr} ${weekNum}주차 스타트업 시장 분석`
-      const slug = `ai-market-report-${Date.now()}`
+      const todayStr2 = new Date().toISOString().slice(0, 10)
+      const slug = `ai-market-report-${todayStr2}`
+      const checkR2 = await fetch(
+        `${SUPABASE_URL}/rest/v1/articles?slug=eq.${slug}&select=id&limit=1`,
+        { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + SUPABASE_SERVICE_KEY } }
+      )
+      const existing2 = await checkR2.json()
+      if (existing2?.length > 0) { results.skipped = (results.skipped||0)+1; continue }
       const inserted = await insertArticle(title, body, ['AI정리본', '시장분석', '트렌드'], slug)
       results.generated.push({ type: 'market', title, id: inserted?.id })
     }
