@@ -156,13 +156,16 @@ export function useCreatePost() {
   const qc = useQueryClient()
   const { user } = useAuthStore()
   return useMutation({
-    mutationFn: async ({ title, body, postType, tags }) => {
+    mutationFn: async ({ title, body, content, postType, post_type, tags }) => {
       if (!user) throw new Error('로그인이 필요합니다')
-      checkRateLimit('create_post', 3, 60000) // 분당 3개 제한
+      checkRateLimit('create_post', 3, 60000)
+      const bodyText = (body || content || '').trim()
+      if (!bodyText) throw new Error('내용을 입력해주세요')
       const { data, error } = await supabase.from('community_posts').insert({
         title: title.trim().slice(0, 200),
-        body: body.trim().slice(0, 10000),
-        post_type: postType || 'free',
+        body: bodyText.slice(0, 10000),
+        content: bodyText.slice(0, 10000),
+        post_type: postType || post_type || 'free',
         tags: (tags || []).slice(0, 10),
         author_id: user.id,
       }).select().single()
@@ -280,8 +283,9 @@ export function useSubscribeNewsletter() {
       if (!emailRegex.test(email)) throw new Error('올바른 이메일 주소를 입력해주세요')
       const { error } = await supabase
         .from('newsletter_subscribers')
-        .upsert({ email: email.toLowerCase().trim() }, { onConflict: 'email' })
+        .upsert({ email: email.toLowerCase().trim(), is_active: true }, { onConflict: 'email' })
       if (error) throw error
+      return { success: true }
     },
   })
 }
