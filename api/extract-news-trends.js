@@ -78,21 +78,10 @@ ${topTagStr}
 [주요 기사 제목 (상위 15건)]
 ${sampleTitles}
 
-위 데이터를 바탕으로 현재 가장 주목받는 트렌드 지표 3~5개를 추출해주세요.
-각 트렌드는 JSON 배열로만 출력하세요 (다른 텍스트 없이):
+위 데이터를 바탕으로 현재 가장 주목받는 트렌드 지표 3개만 추출해주세요.
+반드시 아래 형식의 JSON 배열만 출력하세요. 다른 텍스트 없이 JSON만:
 
-[
-  {
-    "metric_name": "지표명 (10자 이하)",
-    "metric_value": 숫자 (언급 빈도나 추정 수치),
-    "metric_unit": "건/주 또는 %",
-    "change_pct": 변화율 숫자 (양수=상승, 음수=하락),
-    "category": "ai|funding|edutech|youth|entrepreneurship|climate|health|fintech|general",
-    "source_name": "뉴스 트렌드 분석",
-    "description": "이 트렌드가 주목받는 이유 한 문장",
-    "is_news_trend": true
-  }
-]`
+[{"metric_name":"지표명(8자이하)","metric_value":숫자,"metric_unit":"건/주","change_pct":숫자,"category":"ai","source_name":"뉴스 트렌드 분석","description":"이 트렌드가 주목받는 이유 한 문장"},{"metric_name":"...","metric_value":숫자,"metric_unit":"건/주","change_pct":숫자,"category":"funding","source_name":"뉴스 트렌드 분석","description":"..."},{"metric_name":"...","metric_value":숫자,"metric_unit":"건/주","change_pct":숫자,"category":"general","source_name":"뉴스 트렌드 분석","description":"..."}]`
 
   let extracted = []
   try {
