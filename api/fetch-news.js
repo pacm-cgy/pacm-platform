@@ -26,27 +26,53 @@ const KEYWORDS = [
 ]
 
 // OG 메타데이터 추출 (이미지, 설명)
-async function fetchOgMeta(url) {
+async function fetchArticleContent(url) {
   try {
     const res = await fetch(url, {
       headers: { 
         'User-Agent': 'Mozilla/5.0 (compatible; InsightshipBot/1.0)',
         'Accept': 'text/html',
       },
-      signal: AbortSignal.timeout(1500),
+      signal: AbortSignal.timeout(4000),
     })
     if (!res.ok) return {}
     const html = await res.text()
     
     const getMeta = (prop) => {
-      const m = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, 'i'))
-        || html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${prop}["']`, 'i'))
+      const m = html.match(new RegExp(`<meta[^>]+(?:property|name)=[\"']${prop}[\"'][^>]+content=[\"']([^\"']{1,500})[\"']`, 'i'))
+        || html.match(new RegExp(`<meta[^>]+content=[\"']([^\"']{1,500})[\"'][^>]+(?:property|name)=[\"']${prop}[\"']`, 'i'))
       return m ? m[1].trim() : null
+    }
+
+    // 본문 텍스트 추출 (주요 기사 본문 selector들)
+    let bodyText = ''
+    const bodyPatterns = [
+      // article, .article-content, .article_body 등
+      /<article[^>]*>([\s\S]*?)<\/article>/i,
+      /<div[^>]+class=["'][^"']*(?:article[-_]?(?:body|content|text)|news[-_]?(?:body|content|text)|cont[-_]?(?:art|text)|story[-_]?body)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+      // 네이버 뉴스
+      /<div[^>]+id=["']newsct_article["'][^>]*>([\s\S]*?)<\/div>/i,
+      /<div[^>]+class=["'][^"']*newsct[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+    ]
+    
+    for (const pat of bodyPatterns) {
+      const m = html.match(pat)
+      if (m) {
+        const raw = (m[1] || m[2] || '')
+          .replace(/<script[\s\S]*?<\/script>/gi, '')
+          .replace(/<style[\s\S]*?<\/style>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&[a-z]+;/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+        if (raw.length > 200) { bodyText = raw.slice(0, 3000); break }
+      }
     }
 
     return {
       image: getMeta('og:image') || getMeta('twitter:image'),
       description: getMeta('og:description') || getMeta('description') || getMeta('twitter:description'),
+      bodyText,
     }
   } catch {
     return {}
@@ -129,8 +155,14 @@ export default async function handler(req) {
         const title = stripHtml(item.title).slice(0, 200)
         const description = stripHtml(item.description).slice(0, 400)
 
-        // OG 이미지는 타임아웃 방지를 위해 비활성화
-        const image = null
+        // 원문 크롤링 (본문 + 이미지)
+        let image = null
+        let crawledBody = ''
+        try {
+          const meta = await fetchArticleContent(link)
+          image = meta.image || null
+          crawledBody = meta.bodyText || ''
+        } catch {}
         const excerpt = description || title
 
         // 발행일
@@ -141,8 +173,8 @@ export default async function handler(req) {
         const article = {
           title,
           slug: makeSlug(),
-          excerpt: excerpt.slice(0, 400),
-          body: `${excerpt}\n\n원문 보기: ${link}`,
+          excerpt: (crawledBody.slice(0, 300) || description || title).slice(0, 400),
+          body: crawledBody.length > 200 ? crawledBody : `${description}\n\n원문 보기: ${link}`,
           cover_image: image || null,
           category: 'news',
           status: 'published',

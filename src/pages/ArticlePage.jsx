@@ -146,7 +146,39 @@ export default function ArticlePage() {
         )}
 
         {/* Body */}
-        <div className="article-body" dangerouslySetInnerHTML={{ __html: article.body || article.excerpt || '' }}/>
+        {article.source_name ? (
+          /* 뉴스 기사: ai_summary를 메인 본문으로, 원문 링크 제공 */
+          <div>
+            {article.ai_summary ? (
+              <div style={{ fontSize: '16px', lineHeight: 1.9, color: 'var(--c-gray-7)', letterSpacing: '-0.01em' }}>
+                {article.ai_summary.split('\n').map((para, i) =>
+                  para.trim() ? (
+                    <p key={i} style={{ marginBottom: '18px' }}>{para}</p>
+                  ) : null
+                )}
+              </div>
+            ) : (
+              <div className="article-body" dangerouslySetInnerHTML={{ __html: article.body || article.excerpt || '' }}/>
+            )}
+            {/* 원문 보기 링크 */}
+            {article.source_url && (
+              <div style={{ marginTop: '32px', padding: '16px 20px', background: 'var(--c-gray-1)', border: '1px solid var(--c-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                <div>
+                  <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gold)', letterSpacing: '1px', marginBottom: '4px' }}>출처</div>
+                  <div style={{ fontSize: '13px', color: 'var(--c-muted)' }}>{article.source_name}</div>
+                </div>
+                <a href={article.source_url} target="_blank" rel="noopener noreferrer"
+                  className="btn btn-outline"
+                  style={{ fontSize: '12px', gap: '6px', flexShrink: 0, textDecoration: 'none' }}>
+                  원문 보기 →
+                </a>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* 일반 아티클: body 그대로 */
+          <div className="article-body" dangerouslySetInnerHTML={{ __html: article.body || article.excerpt || '' }}/>
+        )}
 
         {/* Tags */}
         {article.tags?.length > 0 && (
