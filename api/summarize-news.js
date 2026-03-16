@@ -20,7 +20,7 @@ const SUMMARIZE_SYSTEM = `당신은 청소년 창업 플랫폼 'Insightship'의 
 7. 요약문만 출력 (제목, 설명 없이)`
 
 async function summarizeOne(title, content) {
-  const prompt = `다음 뉴스 기사를 청소년 창업가가 이해하기 쉽게 정리해주세요.\n\n제목: ${title}\n\n내용:\n${content?.slice(0, 3000) || ''}`
+  const prompt = `다음 뉴스 기사를 청소년 창업가가 이해하기 쉽게 정리해주세요.\n\n제목: ${title}\n\n내용:\n${body?.slice(0, 3000) || ''}`
   const r = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
     {
@@ -48,7 +48,7 @@ export default async function handler(req) {
 
   // 요약 안 된 최근 뉴스 가져오기
   const r = await fetch(
-    `${SB_URL}/rest/v1/articles?ai_summary=is.null&status=eq.published&select=id,title,content,source_name&order=published_at.desc&limit=40`,
+    `${SB_URL}/rest/v1/articles?ai_summary=is.null&status=eq.published&select=id,title,body,source_name&order=published_at.desc&limit=40`,
     { headers: H }
   )
   const articles = await r.json()
@@ -58,7 +58,7 @@ export default async function handler(req) {
 
   for (const a of articles) {
     try {
-      const summary = await summarizeOne(a.title, a.content)
+      const summary = await summarizeOne(a.title, a.body)
       if (!summary) { failed++; continue }
 
       const upR = await fetch(`${SB_URL}/rest/v1/articles?id=eq.${a.id}`, {
