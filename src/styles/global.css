@@ -19,7 +19,7 @@ input, textarea, select { font-family: inherit; }
 :root, [data-theme="dark"] {
   --c-bg:       #0A0A09;
   --c-ink:      #0A0A09;
-  --c-paper:    #F2EFE8;
+  --c-paper:    #F0EDE6;
   --c-cream:    #161614;
   --c-card:     #111110;
   --c-border:   #2A2A27;
@@ -69,39 +69,7 @@ input, textarea, select { font-family: inherit; }
 }
 
 /* ── LIGHT THEME ─────────────────────────────────────────────── */
-[data-theme="light"] {
-  --c-bg:       #F5F3EE;
-  --c-ink:      #0F0E0A;
-  --c-paper:    #0F0E0A;
-  --c-cream:    #EAE7DF;
-  --c-card:     #FDFCF9;
-  --c-border:   #D4CFC5;
-  --c-muted:    #7A7368;
-  --c-gold:     #C45E00;
-  --c-gold-lt:  #FB923C;
-  --c-gold-dim: #C45E0018;
-  --c-red:      #C0392B;
-  --c-red-dim:  #C0392B18;
-  --c-green:    #1E8449;
-  --c-green-dim:#27AE6018;
-  --c-blue:     #2980B9;
-  --c-blue-dim: #2980B918;
-  --c-sidebar:  #16150F;
 
-  --c-white:    #0F0E0A;
-  --c-black:    #F5F3EE;
-  --c-gray-1:   #FDFCF9;
-  --c-gray-2:   #F0EDE5;
-  --c-gray-3:   #D4CFC5;
-  --c-gray-4:   #AAAAAA;
-  --c-gray-5:   #888882;
-  --c-gray-6:   #666660;
-  --c-gray-7:   #444440;
-
-  --shadow-sm: 0 1px 3px rgba(15,14,10,0.08);
-  --shadow-md: 0 4px 16px rgba(15,14,10,0.12);
-  --shadow-lg: 0 8px 40px rgba(15,14,10,0.18);
-}
 
 /* ── BASE ────────────────────────────────────────────────────── */
 body {
@@ -541,3 +509,198 @@ a:hover { color: var(--c-gold-lt); }
 
 .card p { color: var(--c-muted); line-height: 1.8; }
 .card h3 { color: var(--c-paper); }
+
+
+/* ════════════════════════════════════════════════════════════════
+   모바일 전면 개선 (max-width: 768px)
+════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* ── 기본 타이포 ─────────────────────────────────────── */
+  html { font-size: 15px; }
+  h1 { font-size: clamp(22px, 6vw, 32px) !important; }
+  h2 { font-size: clamp(18px, 5vw, 24px) !important; }
+  h3 { font-size: clamp(15px, 4vw, 18px) !important; }
+
+  /* ── 컨테이너 패딩 ───────────────────────────────────── */
+  .container { padding-left: 16px !important; padding-right: 16px !important; }
+  :root { --pad-x: 16px; }
+
+  /* ── 그리드 모바일 1~2열 ─────────────────────────────── */
+  .grid-2 { grid-template-columns: 1fr !important; }
+  .grid-3 { grid-template-columns: 1fr !important; }
+  .grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+  .news-grid { grid-template-columns: 1fr !important; }
+
+  /* ── 버튼 터치 최적화 ────────────────────────────────── */
+  .btn { min-height: 44px; padding: 10px 20px; font-size: 14px; }
+  .btn-sm { min-height: 36px; padding: 7px 14px; }
+  button { touch-action: manipulation; }
+
+  /* ── 카드 ────────────────────────────────────────────── */
+  .card { border-radius: 0; }
+
+  /* ── topbar 숨김 ─────────────────────────────────────── */
+  .topbar { display: none !important; }
+
+  /* ── 헤더 컴팩트 ─────────────────────────────────────── */
+  header .no-mobile { display: none !important; }
+  header .mobile-only { display: flex !important; }
+
+  /* ── 아티클 본문 ─────────────────────────────────────── */
+  .article-body { font-size: 15px; line-height: 1.9; }
+  .article-body p { margin-bottom: 18px; }
+
+  /* ── 폼 요소 ─────────────────────────────────────────── */
+  .input, input, textarea, select {
+    font-size: 16px !important; /* iOS 줌 방지 */
+    min-height: 44px;
+  }
+
+  /* ── prose ───────────────────────────────────────────── */
+  .prose { font-size: 15px; line-height: 1.9; }
+  .prose h2 { font-size: 20px; margin-top: 32px; }
+  .prose h3 { font-size: 17px; margin-top: 24px; }
+
+  /* ── 페이지 상단 패딩 ────────────────────────────────── */
+  .page-top { padding-top: 24px !important; }
+}
+
+/* ────────────────────────────────────────────────────────────── */
+/* 초소형 모바일 (max-width: 390px)                              */
+/* ────────────────────────────────────────────────────────────── */
+@media (max-width: 390px) {
+  html { font-size: 14px; }
+  .container { padding-left: 12px !important; padding-right: 12px !important; }
+  :root { --pad-x: 12px; }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   전체 UI/UX 개선
+════════════════════════════════════════════════════════════════ */
+
+/* ── 스크롤바 개선 ────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2a25; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--c-gold); }
+
+/* ── 선택 텍스트 ──────────────────────────────────────────── */
+::selection { background: var(--c-gold); color: #0A0A09; }
+
+/* ── 포커스 아웃라인 접근성 ──────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--c-gold);
+  outline-offset: 2px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* ── 카드 hover 트랜지션 ─────────────────────────────────── */
+.card-clickable {
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.card-clickable:hover {
+  border-color: var(--c-gold) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+
+/* ── 버튼 hover 개선 ─────────────────────────────────────── */
+.btn-gold:hover { background: var(--c-gold-lt); transform: translateY(-1px); }
+.btn-outline:hover { border-color: var(--c-gold); color: var(--c-gold); }
+
+/* ── 이미지 부드러운 로딩 ────────────────────────────────── */
+img { transition: opacity 0.3s; }
+img[loading="lazy"] { opacity: 0; }
+img[loading="lazy"].loaded { opacity: 1; }
+
+/* ── 뉴스카드 이미지 aspect-ratio ───────────────────────── */
+.news-img-wrap {
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  background: var(--c-gray-2);
+}
+.news-img-wrap img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+
+/* ── 섹션 헤더 ───────────────────────────────────────────── */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--c-gray-3);
+}
+
+/* ── t-eyebrow 개선 ──────────────────────────────────────── */
+.t-eyebrow {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--c-gold);
+}
+
+/* ── 태그/배지 ───────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  border: 1px solid currentColor;
+}
+.badge-gold { background: var(--c-gold-dim); color: var(--c-gold); }
+
+/* ── 스켈레톤 개선 ───────────────────────────────────────── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--c-gray-2) 25%, var(--c-gray-3) 50%, var(--c-gray-2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* ── 페이지 진입 애니메이션 ──────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up { animation: fadeInUp 0.3s ease forwards; }
+
+/* ── 구분선 ───────────────────────────────────────────────── */
+hr { border: none; border-top: 1px solid var(--c-gray-3); margin: 32px 0; }
+
+/* ── 탭 메뉴 개선 ────────────────────────────────────────── */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--c-gray-3);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.tab-bar::-webkit-scrollbar { display: none; }
+.tab-item {
+  padding: 10px 18px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--c-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab-item:hover { color: var(--c-paper); }
+.tab-item.active { color: var(--c-paper); border-color: var(--c-gold); font-weight: 700; }

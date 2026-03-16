@@ -24,7 +24,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Suspense, lazy, useEffect } from 'react'
 import { HelmetProvider } from 'react-helmet-async'
@@ -82,11 +82,22 @@ function AppInit({ children }) {
   return children
 }
 
+// 페이지 이동 시 항상 상단으로 스크롤
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+  }, [pathname])
+  return null
+}
+
+
 export default function App() {
   return (
     <HelmetProvider>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
+          <ScrollToTop />
           <AppInit>
             <style>{`@keyframes ticker { from{transform:translateX(0)} to{transform:translateX(-50%)} }
               @keyframes fadeIn { from{opacity:0} to{opacity:1} }

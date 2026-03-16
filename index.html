@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -17,6 +17,12 @@
   <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
 
+  
+  <script>
+    // 다크모드 고정 (깜빡임 방지)
+    document.documentElement.setAttribute('data-theme', 'dark')
+    localStorage.removeItem('theme')
+  </script>
   <script>
     // 이전 서비스워커 캐시 자동 정리
     if ('serviceWorker' in navigator) {
