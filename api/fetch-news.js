@@ -185,6 +185,12 @@ export default async function handler(req) {
     }
   }
 
+  // 새 기사가 있으면 비동기로 AI 요약 트리거 (응답 지연 없이)
+  if (results.inserted > 0) {
+    const host = new URL(req.url).origin
+    fetch(host + '/api/summarize-news', { headers: { 'x-vercel-cron': '1' } }).catch(() => {})
+  }
+
   return new Response(JSON.stringify({ ...results, timestamp: new Date().toISOString() }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },

@@ -160,11 +160,14 @@ export default function NewsDetailPage() {
               <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gold)', letterSpacing: '2px', marginBottom: '4px' }}>ORIGINAL SOURCE</div>
               <div style={{ fontSize: '13px', color: 'var(--c-muted)' }}>{article.source_name || '원문 기사'}</div>
             </div>
-            <a href={article.source_url} target="_blank" rel="noopener noreferrer"
-              className="btn btn-gold"
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none' }}>
-              원문 전체 읽기 <ExternalLink size={14} />
-            </a>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <NewsBookmarkBtn articleId={article?.id} />
+              <a href={article.source_url} target="_blank" rel="noopener noreferrer"
+                className="btn btn-gold"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none' }}>
+                원문 전체 읽기 <ExternalLink size={14} />
+              </a>
+            </div>
           </div>
         )}
 
