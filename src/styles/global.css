@@ -185,7 +185,8 @@ body {
 }
 .btn-gold {
   background: var(--c-gold);
-  color: var(--c-black);
+  color: #fff;
+  font-weight: 600;
 }
 .btn-gold:hover { background: var(--c-gold-lt); }
 .btn-outline {
