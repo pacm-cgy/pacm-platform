@@ -4,7 +4,7 @@ import { Heart, Bookmark, Share2, ArrowLeft, Clock, Eye } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { useArticle } from '../hooks/useArticle'
-import { useLikeArticle } from '../hooks/useData'
+import { useLikeArticle, useToggleBookmark, useIsBookmarked } from '../hooks/useData'
 import { useAuthStore } from '../store'
 
 function useArticleFull(slug) {
@@ -16,11 +16,32 @@ function useArticleFull(slug) {
         .select(`*, profiles!author_id(*), article_images(*)`)
         .eq('slug', slug).eq('status','published').single()
       if (error) throw error
-      supabase.rpc('increment_view', { article_id: data.id }).then(()=>{})
+      try { await supabase.rpc('increment_view', { article_id: data.id }) } catch {}
       return data
     },
     enabled: !!slug,
   })
+}
+
+function BookmarkButton({ articleId }) {
+  const { data: isBookmarked = false } = useIsBookmarked(articleId)
+  const toggle = useToggleBookmark()
+  const { user } = useAuthStore()
+
+  return (
+    <button
+      className="btn btn-outline"
+      style={{ gap: '6px', color: isBookmarked ? 'var(--c-gold)' : undefined, borderColor: isBookmarked ? 'var(--c-gold)' : undefined }}
+      onClick={() => {
+        if (!user) { alert('로그인이 필요합니다'); return }
+        toggle.mutate({ articleId, isBookmarked })
+      }}
+      disabled={toggle.isPending}
+    >
+      <Bookmark size={14} fill={isBookmarked ? 'currentColor' : 'none'} />
+      {isBookmarked ? '저장됨' : '북마크'}
+    </button>
+  )
 }
 
 export default function ArticlePage() {
@@ -156,7 +177,7 @@ export default function ArticlePage() {
           >
             <Heart size={14} fill={liked?'currentColor':'none'}/> {likeCount}
           </button>
-          <button className="btn btn-outline" style={{ gap:'6px' }}><Bookmark size={14}/> 북마크</button>
+          <BookmarkButton articleId={article?.id} />
           <button onClick={handleShare} className="btn btn-outline" style={{ gap:'6px', marginLeft:'auto' }}><Share2 size={14}/> 공유</button>
         </div>
       </div>

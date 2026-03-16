@@ -4,6 +4,8 @@ import { ArrowLeft, ExternalLink, Clock, Calendar, AlertCircle } from 'lucide-re
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { supabase } from '../lib/supabase'
+import { useToggleBookmark, useIsBookmarked } from '../hooks/useData'
+import { useAuthStore } from '../store'
 
 function useNewsArticle(slug) {
   return useQuery({
@@ -24,6 +26,21 @@ function useNewsArticle(slug) {
     enabled: !!slug,
     retry: 1,
   })
+}
+
+function NewsBookmarkBtn({ articleId }) {
+  const { data: saved = false } = useIsBookmarked(articleId)
+  const toggle = useToggleBookmark()
+  const { user } = useAuthStore()
+  return (
+    <button className="btn btn-outline"
+      style={{ gap:'6px', color: saved?'var(--c-gold)':undefined, borderColor: saved?'var(--c-gold)':undefined }}
+      onClick={() => { if(!user){alert('로그인이 필요합니다');return}; toggle.mutate({articleId,isBookmarked:saved}) }}
+      disabled={toggle.isPending}>
+      <Bookmark size={14} fill={saved?'currentColor':'none'} />
+      {saved ? '저장됨' : '저장'}
+    </button>
+  )
 }
 
 export default function NewsDetailPage() {
