@@ -30,7 +30,7 @@ function detectCategory(text) {
   return best
 }
 
-// ── 스마트 규칙 기반 요약 (TextRank 경량화) ────────────────
+// ── 규칙 기반 폴백 요약 ────────────────────────────────────────
 function smartSummarize(title, excerpt) {
   const clean = (s) => (s || '')
     .replace(/<[^>]+>/g, ' ')
@@ -40,21 +40,18 @@ function smartSummarize(title, excerpt) {
     .replace(/\s+/g, ' ').trim()
 
   const text = clean(excerpt || '')
-  if (!text) return clean(title).slice(0, 300)
+  if (!text) return clean(title).slice(0, 400)
 
-  // 문장 분리
   const sentences = text.split(/(?<=[.!?])\s+|(?<=다[.。])\s+|(?<=요[.。])\s+/)
     .map(s => s.trim()).filter(s => s.length > 15 && s.length < 300)
 
-  if (!sentences.length) return text.slice(0, 300)
+  if (!sentences.length) return text.slice(0, 400)
 
-  // 제목 키워드 추출
   const titleWords = (title || '').replace(/[^\w가-힣]/g, ' ')
     .split(/\s+/).filter(w => w.length > 2)
 
-  // 문장 점수 계산
   const importantKws = ['창업', '스타트업', '투자', '청소년', '청년', 'ai', '인공지능',
-    '성장', '지원', '개발', '서비스', '플랫폼', '기업', '억원', '지원금']
+    '성장', '지원', '개발', '서비스', '플랫폼', '기업', '억원']
   const badPatterns = ['기자', '취재', '편집', '구독', '클릭', '더보기', '관련기사']
 
   const scored = sentences.map((s, i) => {
@@ -62,22 +59,20 @@ function smartSummarize(title, excerpt) {
     let score = 0
     titleWords.forEach(w => { if (sl.includes(w.toLowerCase())) score += 3 })
     importantKws.forEach(k => { if (sl.includes(k)) score += 1 })
-    if (/\d+/.test(s)) score += 1  // 수치 포함
+    if (/\d+/.test(s)) score += 1
     if (s.length < 20) score -= 2
     badPatterns.forEach(p => { if (s.includes(p)) score -= 3 })
     return { score, i, s }
   })
 
-  // 상위 3문장을 원래 순서로
   const top = scored.sort((a, b) => b.score - a.score)
-    .slice(0, 3).sort((a, b) => a.i - b.i)
+    .slice(0, 4).sort((a, b) => a.i - b.i)
     .map(x => x.s)
 
-  const result = top.join(' ').slice(0, 400)
-  return result || text.slice(0, 300)
+  return top.join(' ').slice(0, 450) || text.slice(0, 400)
 }
 
-// ── Gemini API (무료) ────────────────────────────────────────
+// ── Gemini API ────────────────────────────────────────────────
 async function callGemini(prompt) {
   if (!GEMINI_KEY) return null
   try {
@@ -88,7 +83,7 @@ async function callGemini(prompt) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 400, temperature: 0.3 },
+          generationConfig: { maxOutputTokens: 500, temperature: 0.35 },
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -105,26 +100,36 @@ async function callGemini(prompt) {
 
 async function summarizeArticle(article) {
   const { title = '', excerpt = '' } = article
+  const cleanExcerpt = (excerpt || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\[단독\]|\[속보\]|\[긴급\]|\[종합\]/g, '')
+    .replace(/기자\s*[:=]\s*\S+/g, '')
+    .replace(/\s+/g, ' ').trim()
+    .slice(0, 600)
 
-  // Gemini가 있으면 AI 요약
   if (GEMINI_KEY) {
     const prompt = `당신은 청소년 창업 플랫폼 'Insightship'의 뉴스 에디터입니다.
-아래 뉴스를 청소년이 이해하기 쉽게 3문장으로 요약하세요.
+아래 뉴스 기사를 창업에 관심 있는 청소년(중·고등학생)을 위해 정리해주세요.
 
-규칙:
-- 어려운 용어는 괄호로 쉽게 설명 (예: IPO(기업공개))
-- 사실만 기재, 추측 금지
-- '[단독]', '기자 =' 등 불필요한 표현 제거
-- 요약문만 출력 (다른 말 없이)
+[정리 방식]
+- 단순 요약이 아니라 "기사 내용 정리" 느낌으로 써주세요
+- 4~5문장 분량 (너무 짧게 줄이지 말 것)
+- 핵심 내용을 빠뜨리지 않되 쉽게 풀어서 설명
+- 어려운 경제·금융·창업 용어는 반드시 괄호로 설명
+  예) 시리즈B(성장 단계 투자), IPO(주식시장 상장), VC(벤처캐피탈, 스타트업 투자 전문 회사)
+- 수치(금액, 퍼센트, 인원 등)는 반드시 포함
+- "~입니다", "~했습니다" 체 (신뢰감 있는 친절한 문체)
+- 뉴스 기자 이름, 구독 유도 문구, '[단독]' 등 불필요한 표현 제거
+- 정리된 내용만 출력 (앞뒤 설명 없이)
 
 제목: ${title}
-내용: ${(excerpt || '').slice(0, 500)}`
+기사 내용: ${cleanExcerpt}`
 
     const result = await callGemini(prompt)
-    if (result && result.length > 30) return result
+    if (result && result.length > 50) return result
   }
 
-  // 폴백: 스마트 규칙 기반
+  // 폴백: 규칙 기반
   return smartSummarize(title, excerpt)
 }
 
@@ -142,7 +147,7 @@ export default async function handler(req) {
     || req.headers.get('authorization') === 'Bearer ' + CRON_SECRET
   if (!isAuthed) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
 
-  // 미처리 뉴스
+  // 미처리 뉴스 (최대 20개)
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/articles?source_name=not.is.null&ai_summary=is.null&select=id,title,excerpt,source_name&order=published_at.desc&limit=20`,
     { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + SUPABASE_SERVICE_KEY } }
@@ -165,7 +170,12 @@ export default async function handler(req) {
       if (doneTitles.some(t => isSimilar(article.title, t))) {
         await fetch(`${SUPABASE_URL}/rest/v1/articles?id=eq.${article.id}`, {
           method: 'PATCH',
-          headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + SUPABASE_SERVICE_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          headers: {
+            apikey: SUPABASE_SERVICE_KEY,
+            Authorization: 'Bearer ' + SUPABASE_SERVICE_KEY,
+            'Content-Type': 'application/json',
+            Prefer: 'return=minimal'
+          },
           body: JSON.stringify({ ai_summary: '(중복)' }),
         })
         results.duplicates++
@@ -177,8 +187,17 @@ export default async function handler(req) {
 
       await fetch(`${SUPABASE_URL}/rest/v1/articles?id=eq.${article.id}`, {
         method: 'PATCH',
-        headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + SUPABASE_SERVICE_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-        body: JSON.stringify({ ai_summary: summary, ai_category: category, excerpt: summary.slice(0, 400) }),
+        headers: {
+          apikey: SUPABASE_SERVICE_KEY,
+          Authorization: 'Bearer ' + SUPABASE_SERVICE_KEY,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal'
+        },
+        body: JSON.stringify({
+          ai_summary: summary,
+          ai_category: category,
+          excerpt: summary.slice(0, 450),
+        }),
       })
 
       results.summarized++
