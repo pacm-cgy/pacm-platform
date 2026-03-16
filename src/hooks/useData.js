@@ -50,7 +50,6 @@ export function useNewsArticles({ limit = 20, page = 0 } = {}) {
         `)
         .eq('status', 'published')
         .not('source_name', 'is', null)
-        .eq('is_duplicate', false)
         .order('published_at', { ascending: false })
         .range(page * limit, (page + 1) * limit - 1)
       if (error) throw error
@@ -311,15 +310,18 @@ export function useBookmarks() {
     queryKey: ['bookmarks', user?.id],
     queryFn: async () => {
       if (!user) return []
-      const { data, error } = await supabase
-        .from('article_bookmarks')
-        .select('article_id, articles(id,title,slug,excerpt,cover_image,category,published_at,source_name)')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      return data?.map(b => b.articles).filter(Boolean) || []
+      try {
+        const { data, error } = await supabase
+          .from('article_bookmarks')
+          .select('article_id, articles(id,title,slug,excerpt,cover_image,category,published_at,source_name)')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+        if (error) return []
+        return data?.map(b => b.articles).filter(Boolean) || []
+      } catch { return [] }
     },
     enabled: !!user,
+    retry: false,
   })
 }
 
@@ -349,10 +351,14 @@ export function useIsBookmarked(articleId) {
     queryKey: ['bookmark', articleId, user?.id],
     queryFn: async () => {
       if (!user || !articleId) return false
-      const { data } = await supabase.from('article_bookmarks')
-        .select('id').eq('user_id', user.id).eq('article_id', articleId).maybeSingle()
-      return !!data
+      try {
+        const { data, error } = await supabase.from('article_bookmarks')
+          .select('id').eq('user_id', user.id).eq('article_id', articleId).maybeSingle()
+        if (error) return false
+        return !!data
+      } catch { return false }
     },
+    retry: false,
     enabled: !!user && !!articleId,
   })
 }

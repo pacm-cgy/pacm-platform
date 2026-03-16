@@ -46,7 +46,7 @@ async function callClaude(prompt, maxTokens = 1000) {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-3-5-haiku-20241022',
       max_tokens: maxTokens,
       messages: [{ role: 'user', content: prompt }],
     }),
@@ -99,7 +99,7 @@ export default async function handler(req) {
 
   // 미처리 뉴스 가져오기 (ai_summary 없는 것)
   const fetchRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/articles?source_name=not.is.null&ai_summary=is.null&is_duplicate=eq.false&select=id,title,excerpt,body,source_name,published_at&order=published_at.desc&limit=20`,
+    `${SUPABASE_URL}/rest/v1/articles?source_name=not.is.null&ai_summary=is.null&select=id,title,excerpt,body,source_name,published_at&order=published_at.desc&limit=20`,
     { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
   )
   const articles = await fetchRes.json()
