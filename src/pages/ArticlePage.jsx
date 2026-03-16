@@ -70,7 +70,7 @@ export default function ArticlePage() {
   }
 
   if (isLoading) return (
-    <div style={{ maxWidth:'720px', margin:'0 auto', padding:'40px 0 80px' }}>
+    <div style={{ maxWidth:'720px', margin:'0 auto', padding:'40px var(--pad-x) 80px' }}>
       {[...Array(8)].map((_,i)=>(
         <div key={i} className="skeleton skeleton-text" style={{ width:['60%','100%','90%','100%','70%','100%','85%','50%'][i], height:i===0?'32px':i===2?'22px':'16px', marginBottom:'14px' }}/>
       ))}
@@ -94,7 +94,7 @@ export default function ArticlePage() {
         <div style={{ height:'100%', width:`${progress}%`, background:'var(--c-gold)', transition:'width 0.1s linear' }}/>
       </div>
 
-      <div style={{ maxWidth:'720px', margin:'0 auto', padding:'40px 0 80px' }}>
+      <div style={{ maxWidth:'720px', margin:'0 auto', padding:'40px var(--pad-x) 80px' }}>
         {/* Back */}
         <button onClick={()=>navigate(-1)} className="btn btn-ghost" style={{ marginBottom:'24px', paddingLeft:0, gap:'6px' }}>
           <ArrowLeft size={14}/> 뒤로
@@ -102,7 +102,7 @@ export default function ArticlePage() {
 
         {/* Category + Title */}
         <div className="t-eyebrow" style={{ marginBottom:'14px' }}>{CATEGORY_LABELS[article.category]||article.category}</div>
-        <h1 style={{ fontFamily:'var(--f-serif)', fontSize:'34px', fontWeight:700, lineHeight:1.2, marginBottom:'16px' }}>
+        <h1 style={{ fontFamily:'var(--f-serif)', fontSize:'clamp(22px,4vw,34px)', fontWeight:700, lineHeight:1.25, marginBottom:'16px' }}>
           {article.title}
         </h1>
         {article.excerpt && (
