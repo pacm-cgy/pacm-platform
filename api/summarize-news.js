@@ -1,173 +1,177 @@
-// AI 뉴스 요약 + 분류 + 중복 제거 Edge Function
-// Claude API 활용
+// AI 뉴스 요약 + 분류 + 중복 제거
+// 1순위: Groq API (무료, Llama3) / 2순위: Anthropic / 3순위: 규칙 기반
 export const config = { runtime: 'edge' }
 
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
+const GROQ_KEY = process.env.GROQ_API_KEY
 const CRON_SECRET = process.env.CRON_SECRET
 
-const CATEGORY_MAP = {
-  '투자': 'funding',
-  'VC': 'funding',
-  '시리즈': 'funding',
-  '펀딩': 'funding',
-  'IPO': 'funding',
-  '상장': 'funding',
-  '유니콘': 'unicorn',
-  '스타트업': 'startup',
-  'AI': 'ai',
-  '인공지능': 'ai',
-  '에듀테크': 'edutech',
-  '교육': 'edutech',
-  '청소년': 'youth',
-  '학생': 'youth',
-  '창업': 'entrepreneurship',
-  '기후': 'climate',
-  '그린': 'climate',
-  '헬스': 'health',
-  '바이오': 'health',
+// ── 카테고리 키워드 맵 ────────────────────────────────────────
+const CAT_KEYWORDS = {
+  funding:          ['투자', 'vc', '펀딩', '시리즈', 'ipo', '상장', '유치', '라운드'],
+  unicorn:          ['유니콘', '데카콘', '기업가치'],
+  ai:               ['ai', '인공지능', '머신러닝', '딥러닝', 'llm', '생성형'],
+  edutech:          ['에듀테크', '교육', '학습', '강의', '튜터'],
+  youth:            ['청소년', '청년', '학생', '고등학생', '중학생', '대학생'],
+  entrepreneurship: ['창업', '스타트업', '창업자', '대표', '사업'],
+  climate:          ['기후', '친환경', '그린', 'esg', '탄소', '재생에너지'],
+  health:           ['헬스케어', '의료', '바이오', '디지털헬스', '원격진료'],
+  fintech:          ['핀테크', '금융', '페이', '블록체인', '암호화폐'],
 }
 
-function detectCategory(title, excerpt) {
-  const text = (title + ' ' + excerpt).toLowerCase()
-  for (const [keyword, cat] of Object.entries(CATEGORY_MAP)) {
-    if (text.includes(keyword.toLowerCase())) return cat
+function detectCategory(text) {
+  const lower = text.toLowerCase()
+  let best = 'general', bestScore = 0
+  for (const [cat, keywords] of Object.entries(CAT_KEYWORDS)) {
+    const score = keywords.filter(k => lower.includes(k)).length
+    if (score > bestScore) { bestScore = score; best = cat }
   }
-  return 'general'
+  return best
 }
 
-async function callClaude(prompt, maxTokens = 1000) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+// ── 규칙 기반 요약 (AI 없을 때 폴백) ─────────────────────────
+function ruleBasedSummary(title, excerpt) {
+  const text = excerpt || title || ''
+  // 불필요한 패턴 제거
+  const cleaned = text
+    .replace(/\[단독\]|\[속보\]|\[긴급\]|\[종합\]/g, '')
+    .replace(/기자\s*=\s*/g, '')
+    .replace(/\.\s*\.\s*\./g, '.')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .trim()
+
+  // 문장 분리 후 핵심 3문장
+  const sentences = cleaned.split(/(?<=[.!?])\s+/).filter(s => s.length > 10)
+  return sentences.slice(0, 3).join(' ').slice(0, 400)
+}
+
+// ── Groq API (무료 Llama3) ────────────────────────────────────
+async function callGroq(prompt) {
+  if (!GROQ_KEY) return null
+  const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + GROQ_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'llama-3.1-8b-instant',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 400,
+      temperature: 0.3,
+    }),
+    signal: AbortSignal.timeout(15000),
+  })
+  if (!r.ok) return null
+  const d = await r.json()
+  return d.choices?.[0]?.message?.content?.trim() || null
+}
+
+// ── Anthropic API ──────────────────────────────────────────────
+async function callAnthropic(prompt) {
+  if (!ANTHROPIC_KEY) return null
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
+      'x-api-key': ANTHROPIC_KEY,
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-3-5-haiku-20241022',
-      max_tokens: maxTokens,
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 400,
       messages: [{ role: 'user', content: prompt }],
     }),
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(20000),
   })
-  if (!res.ok) throw new Error(`Claude API 오류: ${res.status}`)
-  const data = await res.json()
-  return data.content?.[0]?.text || ''
+  if (!r.ok) return null
+  const d = await r.json()
+  return d.content?.[0]?.text?.trim() || null
 }
 
+// ── 뉴스 요약 ────────────────────────────────────────────────
 async function summarizeArticle(article) {
-  const prompt = `당신은 청소년 창업 플랫폼 'Insightship'의 전문 에디터입니다.
-아래 뉴스 기사를 청소년 독자가 이해하기 쉽도록 요약해주세요.
+  const prompt = `청소년 창업 플랫폼 에디터로서 아래 뉴스를 청소년이 이해하기 쉽게 3~4문장으로 요약하세요.
+어려운 용어는 괄호로 설명을 추가하고, 사실만 기재하며, '단독/속보' 등 자극적 표현은 제거하세요.
+요약문만 출력하세요.
 
 제목: ${article.title}
-원문 내용: ${article.excerpt || article.body?.slice(0, 500) || ''}
-출처: ${article.source_name || ''}
+내용: ${article.excerpt || ''}`.slice(0, 1000)
 
-요약 규칙:
-1. 3~5문장으로 핵심 내용만 정리
-2. 어려운 용어는 괄호 안에 쉬운 설명 추가 (예: IPO(기업공개))
-3. 청소년도 이해할 수 있는 평이한 문체 사용
-4. 사실만 기재, 추측 금지
-5. '단독', '속보' 등 자극적 표현 제거
-6. 반드시 한국어로 작성
+  // Groq → Anthropic → 규칙 기반 순서로 시도
+  const result = await callGroq(prompt)
+    || await callAnthropic(prompt)
+    || ruleBasedSummary(article.title, article.excerpt)
 
-요약문만 출력하세요 (다른 설명 없이):` 
-
-  return callClaude(prompt, 400)
+  return result || article.excerpt || article.title
 }
 
-function isSimilar(title1, title2) {
-  // 제목 유사도 간단 체크 (토큰 겹침)
-  const words1 = new Set(title1.replace(/[^\w가-힣]/g, ' ').split(/\s+/).filter(w => w.length > 2))
-  const words2 = new Set(title2.replace(/[^\w가-힣]/g, ' ').split(/\s+/).filter(w => w.length > 2))
-  const intersection = [...words1].filter(w => words2.has(w)).length
-  const union = new Set([...words1, ...words2]).size
-  return intersection / union > 0.5 // 50% 이상 겹치면 중복
+// ── 중복 감지 ─────────────────────────────────────────────────
+function isSimilar(t1, t2) {
+  const w1 = new Set(t1.replace(/[^\w가-힣]/g, ' ').split(/\s+/).filter(w => w.length > 2))
+  const w2 = new Set(t2.replace(/[^\w가-힣]/g, ' ').split(/\s+/).filter(w => w.length > 2))
+  const common = [...w1].filter(w => w2.has(w)).length
+  return w1.size > 0 && common / Math.max(w1.size, w2.size) > 0.55
 }
 
 export default async function handler(req) {
   const authHeader = req.headers.get('authorization')
   const isVercelCron = req.headers.get('x-vercel-cron') === '1'
-  if (!isVercelCron && authHeader !== `Bearer ${CRON_SECRET}`) {
+  if (!isVercelCron && authHeader !== 'Bearer ' + CRON_SECRET) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
-  if (!ANTHROPIC_API_KEY) {
-    return new Response(JSON.stringify({ error: 'ANTHROPIC_API_KEY 없음' }), { status: 500 })
-  }
 
-  // 미처리 뉴스 가져오기 (ai_summary 없는 것)
+  const mode = new URL(req.url).searchParams.get('mode') || 'normal' // normal | debug
+
+  // 미처리 뉴스 (ai_summary 없는 것)
   const fetchRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/articles?source_name=not.is.null&ai_summary=is.null&select=id,title,excerpt,body,source_name,published_at&order=published_at.desc&limit=20`,
-    { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+    `${SUPABASE_URL}/rest/v1/articles?source_name=not.is.null&ai_summary=is.null&select=id,title,excerpt,source_name,published_at&order=published_at.desc&limit=20`,
+    { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + SUPABASE_SERVICE_KEY } }
   )
   const articles = await fetchRes.json()
-  if (!articles?.length) {
-    return new Response(JSON.stringify({ message: '처리할 기사 없음' }), { status: 200 })
-  }
+  if (!articles?.length) return new Response(JSON.stringify({ message: '처리할 기사 없음' }), { status: 200 })
 
-  // 중복 감지 - 처리된 기사 제목 가져오기
-  const recentRes = await fetch(
+  // 이미 처리된 제목들 (중복 비교용)
+  const doneRes = await fetch(
     `${SUPABASE_URL}/rest/v1/articles?source_name=not.is.null&ai_summary=not.is.null&select=title&order=published_at.desc&limit=100`,
-    { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+    { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + SUPABASE_SERVICE_KEY } }
   )
-  const recentArticles = await recentRes.json()
-  const processedTitles = recentArticles.map(a => a.title)
+  const doneTitles = (await doneRes.json()).map(a => a.title)
 
-  const results = { summarized: 0, duplicates: 0, errors: [] }
+  const results = { summarized: 0, duplicates: 0, rule_based: 0, errors: [], mode }
 
   for (const article of articles) {
     try {
       // 중복 체크
-      const isDuplicate = processedTitles.some(t => isSimilar(article.title, t))
-      if (isDuplicate) {
-        // 중복으로 표시
+      if (doneTitles.some(t => isSimilar(article.title, t))) {
         await fetch(`${SUPABASE_URL}/rest/v1/articles?id=eq.${article.id}`, {
           method: 'PATCH',
-          headers: {
-            apikey: SUPABASE_SERVICE_KEY,
-            Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-            'Content-Type': 'application/json',
-            Prefer: 'return=minimal',
-          },
-          body: JSON.stringify({ is_duplicate: true }),
+          headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + SUPABASE_SERVICE_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          body: JSON.stringify({ ai_summary: '[중복]' + (article.excerpt || '').slice(0, 50) }),
         })
         results.duplicates++
         continue
       }
 
-      // AI 요약
       const summary = await summarizeArticle(article)
-      const category = detectCategory(article.title, article.excerpt)
+      const isRuleBased = !GROQ_KEY && !ANTHROPIC_KEY
+      if (isRuleBased) results.rule_based++
 
-      // DB 업데이트
-      const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/articles?id=eq.${article.id}`, {
+      const category = detectCategory(article.title + ' ' + article.excerpt)
+
+      await fetch(`${SUPABASE_URL}/rest/v1/articles?id=eq.${article.id}`, {
         method: 'PATCH',
-        headers: {
-          apikey: SUPABASE_SERVICE_KEY,
-          Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-          'Content-Type': 'application/json',
-          Prefer: 'return=minimal',
-        },
-        body: JSON.stringify({
-          ai_summary: summary.trim(),
-          ai_category: category,
-          excerpt: summary.trim().slice(0, 400), // excerpt도 AI 요약으로 교체
-        }),
+        headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + SUPABASE_SERVICE_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ ai_summary: summary.slice(0, 400), ai_category: category, excerpt: summary.slice(0, 400) }),
       })
 
-      if (updateRes.status === 204) {
-        results.summarized++
-        processedTitles.push(article.title) // 처리됨으로 추가
-      }
+      results.summarized++
+      doneTitles.push(article.title)
     } catch (e) {
-      results.errors.push(`${article.id}: ${e.message?.slice(0, 60)}`)
+      results.errors.push(article.id.slice(0, 8) + ': ' + (e.message || '').slice(0, 50))
     }
   }
 
   return new Response(JSON.stringify({ ...results, timestamp: new Date().toISOString() }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
+    status: 200, headers: { 'Content-Type': 'application/json' },
   })
 }
