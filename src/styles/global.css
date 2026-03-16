@@ -19,7 +19,7 @@ input, textarea, select { font-family: inherit; }
 :root, [data-theme="dark"] {
   --c-bg:       #0A0A09;
   --c-ink:      #0A0A09;
-  --c-paper:    #EDEAE3;
+  --c-paper:    #F2EFE8;
   --c-cream:    #161614;
   --c-card:     #111110;
   --c-border:   #2A2A27;
@@ -106,9 +106,10 @@ input, textarea, select { font-family: inherit; }
 /* ── BASE ────────────────────────────────────────────────────── */
 body {
   font-family: var(--f-sans);
+  font-optical-sizing: auto;
   background: var(--c-bg);
   color: var(--c-paper);
-  line-height: 1.75;
+  line-height: 1.8;
   letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -537,3 +538,6 @@ a:hover { color: var(--c-gold-lt); }
 @media (max-width: 600px) {
   .news-grid { grid-template-columns: 1fr !important; }
 }
+
+.card p { color: var(--c-muted); line-height: 1.8; }
+.card h3 { color: var(--c-paper); }

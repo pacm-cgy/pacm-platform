@@ -139,7 +139,7 @@ export function usePosts({ postType, post_type, limit = 20, page = 0 } = {}) {
           profiles!author_id (id, display_name, avatar_url, startup_name, school)
         `)
         .eq('is_deleted', false)
-        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
         .order('created_at', { ascending: false })
         .range(page * limit, (page + 1) * limit - 1)
 
@@ -160,8 +160,7 @@ export function useCreatePost() {
     mutationFn: async ({ title, body, content, postType, post_type, tags }) => {
       if (!user) throw new Error('로그인이 필요합니다')
       checkRateLimit('create_post', 3, 60000)
-      const bodyText = (body || content || '').trim()
-      if (!bodyText) throw new Error('내용을 입력해주세요')
+      const bodyText = (body || content || '').trim() || ' '  // NOT NULL 방지
       const { data, error } = await supabase.from('community_posts').insert({
         title: title.trim().slice(0, 200),
         body: bodyText.slice(0, 10000),
@@ -282,10 +281,21 @@ export function useSubscribeNewsletter() {
       checkRateLimit('newsletter', 3, 60000)
       const emailRegex = /^[^@]+@[^@]+\.[^@]+$/
       if (!emailRegex.test(email)) throw new Error('올바른 이메일 주소를 입력해주세요')
+      const emailLower = email.toLowerCase().trim()
+      // 이미 있으면 업데이트, 없으면 삽입
       const { error } = await supabase
         .from('newsletter_subscribers')
-        .upsert({ email: email.toLowerCase().trim(), is_active: true }, { onConflict: 'email' })
-      if (error) throw error
+        .upsert(
+          { email: emailLower, is_active: true },
+          { onConflict: 'email', ignoreDuplicates: false }
+        )
+      if (error) {
+        // upsert 실패 시 insert 시도
+        const { error: e2 } = await supabase
+          .from('newsletter_subscribers')
+          .insert({ email: emailLower, is_active: true })
+        if (e2 && e2.code !== '23505') throw e2 // 중복 외 에러만 throw
+      }
       return { success: true }
     },
   })

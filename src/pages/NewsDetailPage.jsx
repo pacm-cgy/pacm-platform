@@ -35,7 +35,7 @@ function NewsBookmarkBtn({ articleId }) {
   return (
     <button className="btn btn-outline"
       style={{ gap:'6px', color: saved?'var(--c-gold)':undefined, borderColor: saved?'var(--c-gold)':undefined }}
-      onClick={() => { if(!user){alert('로그인이 필요합니다');return}; toggle.mutate({articleId,isBookmarked:saved}) }}
+      onClick={() => { if(!user){ const confirmed = window.confirm('로그인 후 북마크를 사용할 수 있습니다.\n로그인 페이지로 이동할까요?'); if(confirmed) { const auth = document.querySelector('[data-testid="login-btn"]'); auth?.click(); } return }; toggle.mutate({articleId,isBookmarked:saved}) }}
       disabled={toggle.isPending}>
       <Bookmark size={14} fill={saved?'currentColor':'none'} />
       {saved ? '저장됨' : '저장'}
