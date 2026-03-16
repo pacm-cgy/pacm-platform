@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, ExternalLink, Clock, Calendar, AlertCircle } from 'lucide-react'
+import { ArrowLeft, ExternalLink, Clock, Calendar, AlertCircle, Bookmark } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { supabase } from '../lib/supabase'
