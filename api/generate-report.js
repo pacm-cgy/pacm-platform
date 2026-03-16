@@ -35,9 +35,9 @@ async function callGemini(prompt, maxTokens = 2000) {
 
 async function getRecentNews(category_keywords) {
   // 최근 7일 뉴스 가져오기
-  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/articles?source_name=not.is.null&published_at=gte.${since}&select=title,ai_summary,ai_category,source_name&order=published_at.desc&limit=30`,
+    `${SUPABASE_URL}/rest/v1/articles?source_name=not.is.null&published_at=gte.${since}&select=title,excerpt,ai_summary,ai_category,source_name&order=published_at.desc&limit=40`,
     { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + SUPABASE_SERVICE_KEY } }
   )
   const all = await res.json()
@@ -49,7 +49,7 @@ async function getRecentNews(category_keywords) {
 
 async function generateFundingReport(news) {
   const newsText = news.map((n, i) =>
-    `${i+1}. ${n.title}\n   ${n.ai_summary || ''}`
+    `${i+1}. ${n.title}\n   ${n.ai_summary || n.excerpt || ''}`
   ).join('\n\n')
 
   const prompt = `당신은 청소년 창업 플랫폼 Insightship의 전문 투자 분석가입니다.
@@ -75,7 +75,7 @@ ${newsText}
 
 async function generateMarketReport(news) {
   const newsText = news.map((n, i) =>
-    `${i+1}. ${n.title}\n   ${n.ai_summary || ''}`
+    `${i+1}. ${n.title}\n   ${n.ai_summary || n.excerpt || ''}`
   ).join('\n\n')
 
   const prompt = `당신은 청소년 창업 플랫폼 Insightship의 전문 시장 분석가입니다.
@@ -113,7 +113,7 @@ export default async function handler(req) {
   // 1. 투자/자금 리포트
   try {
     const fundingNews = await getRecentNews(['투자', 'vc', '펀딩', '시리즈', '유치', '억원'])
-    if (fundingNews.length >= 3) {
+    if (fundingNews.length >= 1) {
       const content = await generateFundingReport(fundingNews)
       if (content) {
         const title = `[AI 정리본] ${dateStr} ${weekNum}주차 한국 스타트업 투자 동향 분석`
@@ -150,7 +150,7 @@ export default async function handler(req) {
   // 2. 시장 분석 리포트
   try {
     const marketNews = await getRecentNews(['스타트업', 'ai', '시장', '성장', '플랫폼', '서비스'])
-    if (marketNews.length >= 3) {
+    if (marketNews.length >= 1) {
       const content = await generateMarketReport(marketNews)
       if (content) {
         const title = `[AI 정리본] ${dateStr} ${weekNum}주차 스타트업 생태계 시장 분석`
