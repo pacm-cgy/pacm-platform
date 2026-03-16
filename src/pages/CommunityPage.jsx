@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { MessageCircle, Heart, Eye, PenSquare, AlertCircle } from 'lucide-react'
 import { format } from 'date-fns'
@@ -18,10 +19,11 @@ const TYPE_LABELS = { question:'질문', feedback:'피드백', recruit:'팀원 �
 const TYPE_COLORS = { question:'var(--c-blue)', feedback:'var(--c-gold)', recruit:'var(--c-green)', free:'var(--c-muted)', notice:'var(--c-red)' }
 
 function PostCard({ post }) {
+  const navigate = useNavigate()
   const author = post.profiles
   const date = post.created_at ? format(new Date(post.created_at), 'M월 d일', { locale: ko }) : ''
   return (
-    <div className="card card-clickable" style={{ padding: '20px 24px', borderBottom: '1px solid var(--c-border)' }}>
+    <div className="card card-clickable" onClick={() => navigate(`/community/${post.id}`)} style={{ padding: '20px 24px', borderBottom: '1px solid var(--c-border)' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           {post.is_pinned && <span style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: 'var(--c-red)', border: '1px solid var(--c-red)', padding: '1px 6px' }}>PINNED</span>}
