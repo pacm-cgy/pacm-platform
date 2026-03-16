@@ -179,13 +179,13 @@ export default async function handler(req) {
 
   // 3. Gemini 2.5 Pro Experimental (무료 최강)
   try {
-    analysis = await callGemini(prompt, 'gemini-2.5-pro-exp-03-25', 30000)
-    modelUsed = 'gemini-2.5-pro-exp'
+    analysis = await callGemini(prompt, 'gemini-2.5-pro', 30000)
+    modelUsed = 'gemini-2.5-pro'
   } catch (e1) {
     // 4. Gemini 2.0 Flash 폴백
     try {
-      analysis = await callGemini(prompt, 'gemini-2.0-flash-001', 20000)
-      modelUsed = 'gemini-2.0-flash-001'
+      analysis = await callGemini(prompt, 'gemini-2.5-flash', 20000)
+      modelUsed = 'gemini-2.5-flash'
     } catch (e2) {
       error = e2.message
     }

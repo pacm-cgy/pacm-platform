@@ -22,7 +22,7 @@ const SUMMARIZE_SYSTEM = `당신은 청소년 창업 플랫폼 'Insightship'의 
 async function summarizeOne(title, content) {
   const prompt = `다음 뉴스를 요약해주세요.\n\n제목: ${title}\n\n내용:\n${content?.slice(0, 2000) || ''}`
   const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent?key=${GEMINI_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -75,7 +75,7 @@ export default async function handler(req) {
 
   return new Response(JSON.stringify({
     total: articles.length, done, failed,
-    model: 'gemini-2.0-flash-001',
+    model: 'gemini-2.5-flash',
     timestamp: new Date().toISOString(),
   }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 }

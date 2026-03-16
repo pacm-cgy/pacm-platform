@@ -194,14 +194,14 @@ export default async function handler(req) {
 
   // Gemini 2.5 Pro (무료 최강) → 2.0 Flash 폴백
   try {
-    const r = await callGemini(systemPrompt, fullPrompt, 'gemini-2.5-pro-exp-03-25', 35000)
+    const r = await callGemini(systemPrompt, fullPrompt, 'gemini-2.5-pro', 35000)
     result = r.text
-    modelUsed = 'gemini-2.5-pro-exp'
+    modelUsed = 'gemini-2.5-pro'
   } catch {
     try {
-      const r = await callGemini(systemPrompt, fullPrompt, 'gemini-2.0-flash-001', 25000)
+      const r = await callGemini(systemPrompt, fullPrompt, 'gemini-2.5-flash', 25000)
       result = r.text
-      modelUsed = 'gemini-2.0-flash-001'
+      modelUsed = 'gemini-2.5-flash'
     } catch (e) {
       return new Response(JSON.stringify({ error: 'AI 응답 실패. 잠시 후 다시 시도해주세요.', detail: e.message }), {
         status: 500, headers: corsHeaders()
