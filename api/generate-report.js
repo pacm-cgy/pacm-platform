@@ -39,12 +39,28 @@ function getThisWeekRange() {
 
 // 특정 날짜가 속한 주의 N번째 주차 문자열
 function weekLabel(date) {
+  // ISO 주차 기반: 월요일 시작, 해당 월 기준 상대 주차
   const kst = new Date(date.getTime() + 9 * 3600000)
   const year  = kst.getFullYear()
   const month = kst.getMonth() + 1
-  const firstDayOfMonth = new Date(year, kst.getMonth(), 1)
-  const firstDayOffset  = (firstDayOfMonth.getDay() || 7) - 1
-  const week = Math.ceil((kst.getDate() + firstDayOffset) / 7)
+
+  // ISO 주차 계산 (월요일 기준)
+  const getISOWeek = (d) => {
+    const tmp = new Date(d)
+    tmp.setHours(0, 0, 0, 0)
+    tmp.setDate(tmp.getDate() + 3 - (tmp.getDay() + 6) % 7)
+    const week1 = new Date(tmp.getFullYear(), 0, 4)
+    return 1 + Math.round(((tmp - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7)
+  }
+
+  // 해당 월의 첫 월요일이 속한 ISO 주차를 1주차 기준으로
+  // 3월 1일(일요일)이면 → 첫 월요일은 3/2 → ISO 주차 기준 1주차
+  const firstMonday = new Date(year, kst.getMonth(), 1)
+  while (firstMonday.getDay() !== 1) firstMonday.setDate(firstMonday.getDate() + 1)
+  const baseISO = getISOWeek(firstMonday)
+  const curISO  = getISOWeek(kst)
+  const week = curISO - baseISO + 1
+
   return `${year}년 ${month}월 ${week}주차`
 }
 
@@ -130,7 +146,7 @@ async function upsertArticle(title, body, tags, slug) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/articles`, {
     method: 'POST',
     headers: { ...H(), 'Content-Type': 'application/json', Prefer: 'return=representation' },
-    body: JSON.stringify({ ...payload, author_id: adminId }),
+    body: JSON.stringify({ ...payload, author_id: adminId, is_duplicate: false }),
   })
   if (r.status !== 201) throw new Error(`INSERT ${r.status}: ${await r.text().then(t => t.slice(0,100))}`)
   return { inserted: true }
