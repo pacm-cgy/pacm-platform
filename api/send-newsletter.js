@@ -1,6 +1,6 @@
 // AI 뉴스레터 자동 발송 - 매주 월요일 KST 09:00 (UTC 00:00)
 // nodejs runtime - 120초 제한
-export const config = { runtime: 'nodejs', maxDuration: 120 }
+export const config = { runtime: 'edge' }
 
 const SUPABASE_URL      = process.env.SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -29,7 +29,7 @@ async function callGemini(prompt) {
           thinkingConfig: { thinkingBudget: 0 },
         },
       }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(20000),
     }
   )
   if (!res.ok) throw new Error(`Gemini ${res.status}`)
@@ -110,32 +110,32 @@ export default async function handler(req) {
   }
   if (!subscribers?.length) return json({ message: isTest ? '구독자 없음' : '활성 구독자 없음' }, 200)
 
-  // AI 뉴스레터 생성
-  const articleList = articles.slice(0, 15).map((a, i) =>
-    `${i + 1}. ${a.title}\n   ${(a.ai_summary || '').slice(0, 100)}\n   출처: ${a.source_name || ''}`
-  ).join('\n\n')
-
-  const prompt = `청소년 창업 플랫폼 Insightship 주간 뉴스레터를 작성하세요.
-
-[이번 주 뉴스]
-${articleList}
-
-[작성 규칙]
-- 청소년(중고등학생)이 이해하는 언어
-- 어려운 용어는 괄호로 설명
-- 이번 주 핵심 트렌드 3가지를 각 2~3문장으로 정리
-- 마지막에 '이번 주 창업 인사이트' 1개 (청소년에게 도움이 되는 실천 팁)
-- HTML 이메일 본문 형식 (간단한 인라인 스타일, <h2>, <p>, <ul>, <li> 태그 사용)
-- 전체 800~1200자`
-
   const kstDate = getKSTDate()
   let newsletterHtml = ''
-  try {
-    newsletterHtml = await callGemini(prompt)
-  } catch(e) {
-    // AI 실패 시 기본 템플릿
-    newsletterHtml = `<h2>이번 주 주요 뉴스</h2>
-${articles.slice(0,5).map(a => `<div style="margin-bottom:16px"><h3 style="font-size:15px;margin:0 0 6px">${a.title}</h3><p style="margin:0;color:#555;font-size:13px">${(a.ai_summary||'').slice(0,150)}</p></div>`).join('')}`
+
+  // 테스트 모드: AI 없이 즉시 HTML 생성 (25초 제한)
+  // 실제 발송: AI 생성
+  if (isTest) {
+    newsletterHtml = `<h2 style="font-size:18px;border-bottom:2px solid #D4AF37;padding-bottom:8px">이번 주 주요 창업 뉴스</h2>
+${articles.slice(0,8).map(a => `<div style="margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #eee">
+  <h3 style="font-size:14px;margin:0 0 6px;color:#1a1a18">${a.title}</h3>
+  <p style="margin:0 0 6px;color:#555;font-size:13px;line-height:1.6">${(a.ai_summary||'').slice(0,200)}</p>
+  ${a.source_name ? `<span style="font-size:11px;color:#D4AF37">출처: ${a.source_name}</span>` : ''}
+</div>`).join('')}
+<div style="background:#f5f3ee;padding:16px;margin-top:20px;border-left:3px solid #D4AF37">
+  <strong style="font-size:13px">이번 주 창업 인사이트</strong>
+  <p style="margin:8px 0 0;font-size:13px;color:#444">창업은 아이디어보다 실행이 중요합니다. 이번 주 뉴스에서 본 스타트업들처럼, 작은 것부터 시작해 빠르게 테스트해보세요.</p>
+</div>`
+  } else {
+    // 실제 발송: AI로 생성
+    const articleList = articles.slice(0, 15).map((a, i) =>
+      `${i + 1}. ${a.title}\n   ${(a.ai_summary || '').slice(0, 100)}`
+    ).join('\n')
+    const prompt = `Insightship 주간 뉴스레터. 청소년(중고생) 독자. 이번 주 뉴스:\n${articleList}\n\n핵심 트렌드 3가지(각 2문장), 마지막에 창업 인사이트 1개. HTML 형식(<h2><p><ul><li>). 어려운 용어 괄호 설명. 800자 이내.`
+    try { newsletterHtml = await callGemini(prompt) } catch {}
+    if (!newsletterHtml) {
+      newsletterHtml = `<h2>이번 주 창업 뉴스</h2>${articles.slice(0,6).map(a => `<div style="margin-bottom:16px"><h3 style="font-size:14px">${a.title}</h3><p style="font-size:13px;color:#555">${(a.ai_summary||'').slice(0,150)}</p></div>`).join('')}`
+    }
   }
 
   const subject = `📰 Insightship 주간 창업 뉴스 (${kstDate})`
@@ -170,7 +170,7 @@ ${articles.slice(0,5).map(a => `<div style="margin-bottom:16px"><h3 style="font-
   </div>
 </body></html>`,
         }))),
-        signal: AbortSignal.timeout(15000),
+
       })
       if (sendRes.ok) sent += batch.length
       else {
