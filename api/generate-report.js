@@ -1,7 +1,7 @@
 // AI 트렌드 리포트 자동 생성
 // 매주 토요일 그 주(월~토) 뉴스를 정리
 // 수동 실행 시 ?week=2 파라미터로 몇 주차인지 지정 가능
-export const config = { runtime: 'edge' }
+export const config = { runtime: 'nodejs', maxDuration: 300 }
 
 const GEMINI_KEY           = process.env.GEMINI_API_KEY
 const SUPABASE_URL         = process.env.SUPABASE_URL
@@ -154,13 +154,18 @@ async function upsertArticle(title, body, tags, slug) {
 
 // ── 메인 ─────────────────────────────────────────────────────────
 export default async function handler(req) {
-  const isAuthed = req.headers.get('x-vercel-cron') === '1'
-    || req.headers.get('authorization') === 'Bearer ' + CRON_SECRET
+  // nodejs: req.headers는 객체 (get() 메서드 없음)
+  // Edge:   req.headers는 Headers 인스턴스 (get() 있음)
+  const getHeader = (name) => {
+    if (typeof req.headers.get === 'function') return req.headers.get(name)
+    return req.headers[name] || req.headers[name.toLowerCase()] || null
+  }
+
+  const isAuthed = getHeader('x-vercel-cron') === '1'
+    || getHeader('authorization') === 'Bearer ' + CRON_SECRET
   if (!isAuthed) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
 
-  // 쿼리 파라미터로 날짜 범위 오버라이드 가능
-  // ?from=2026-03-09&to=2026-03-15 (특정 주 재생성 시)
-  // nodejs에서 req.url은 '/api/generate-report?from=...' 형태 (path만)
+  // req.url: nodejs에서는 path만 ('/api/generate-report?from=...')
   const urlObj = new URL(req.url, 'https://placeholder.com')
   let from, to, label
 
