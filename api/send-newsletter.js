@@ -2,6 +2,12 @@
 // nodejs runtime - 120초 제한
 export const config = { runtime: 'edge' }
 
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
 const SUPABASE_URL      = process.env.SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const RESEND_API_KEY    = process.env.RESEND_API_KEY
@@ -11,7 +17,7 @@ const GEMINI_KEY        = process.env.GEMINI_API_KEY
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json', ...CORS }
   })
 }
 
@@ -55,6 +61,7 @@ function getLastWeekRange() {
 }
 
 export default async function handler(req) {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
   // 인증
   const authHeader = req.headers.get('authorization')
   const isCron = req.headers.get('x-vercel-cron') === '1'
