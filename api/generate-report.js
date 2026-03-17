@@ -1,7 +1,7 @@
 // AI 트렌드 리포트 자동 생성
 // 매주 토요일 그 주(월~토) 뉴스를 정리
 // 수동 실행 시 ?week=2 파라미터로 몇 주차인지 지정 가능
-export const config = { runtime: 'edge' }
+export const config = { runtime: 'nodejs', maxDuration: 300 }
 
 const GEMINI_KEY           = process.env.GEMINI_API_KEY
 const SUPABASE_URL         = process.env.SUPABASE_URL
@@ -76,7 +76,7 @@ async function callGemini(prompt) {
           thinkingConfig: { thinkingBudget: 0 },
         },
       }),
-      signal: AbortSignal.timeout(55000),
+      signal: AbortSignal.timeout(45000),
     }
   )
   if (!r.ok) throw new Error(`Gemini ${r.status}`)
