@@ -172,10 +172,12 @@ ${articles.slice(0,8).map(a => `<div style="margin-bottom:20px;padding-bottom:16
         }))),
 
       })
-      if (sendRes.ok) sent += batch.length
-      else {
-        const errText = await sendRes.text()
-        console.error('Resend 오류:', sendRes.status, errText.slice(0, 200))
+      const resendBody = await sendRes.text()
+      if (sendRes.ok) {
+        sent += batch.length
+      } else {
+        // 오류 내용을 응답에 포함
+        return json({ sent: 0, total: emails.length, subject, is_test: isTest, resend_error: resendBody.slice(0, 300), resend_status: sendRes.status }, 200)
       }
     } catch(e) { console.error('발송 실패:', e.message) }
   }
