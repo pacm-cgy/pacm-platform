@@ -107,32 +107,38 @@ async function upsertArticle(title, body, tags, slug, adminId) {
   return { inserted: true }
 }
 
-// ── 5개 섹션 순차 생성 → 합치기 ─────────────────────────────────
-async function buildReport(label, dateRange, newsSummary, type) {
-  const isType1 = type === 'funding'
-  const sections = isType1 ? [
-    { h: '## 이번 주 핵심 요약',       desc: '이번 주 투자·자금 동향 3가지 핵심 변화. 수치와 기업명 포함. 300~400자로 완전한 문장 마무리.' },
-    { h: '## 주요 투자·펀딩 현황',    desc: '주목할 투자 유치 사례와 VC 동향. 300~400자로 완전한 문장 마무리.' },
-    { h: '## 섹터별 투자 트렌드',      desc: 'AI, 바이오, 에듀테크, 핀테크 등 섹터별 투자 흐름. 300~400자로 완전한 문장 마무리.' },
-    { h: '## 정부 지원 & 정책 동향',  desc: '창업 지원 프로그램, 지자체·정부 정책 동향. 300~400자로 완전한 문장 마무리.' },
-    { h: '## 청소년 창업가를 위한 인사이트', desc: '이번 주 트렌드에서 중고등학생 창업가가 얻을 교훈과 지금 할 수 있는 행동 2~3가지. 300~400자로 완전한 문장 마무리.' },
-  ] : [
-    { h: '## 이번 주 시장 핵심 변화', desc: '이번 주 스타트업 시장 3가지 핵심 변화. 수치와 사례 포함. 300~400자로 완전한 문장 마무리.' },
-    { h: '## 주목할 스타트업 동향',   desc: '이번 주 뉴스에 등장한 주목할 스타트업·기업들. 300~400자로 완전한 문장 마무리.' },
-    { h: '## 기술 트렌드 분석',       desc: 'AI, 에듀테크, 헬스케어 등 기술 트렌드 분석. 300~400자로 완전한 문장 마무리.' },
-    { h: '## 창업 생태계 지원 현황',  desc: '지자체·대학·기관의 창업 지원 프로그램과 교육 기회. 300~400자로 완전한 문장 마무리.' },
-    { h: '## 청소년 창업가 주목 포인트', desc: '중고등학생 창업가가 특히 주목해야 할 내용과 지금 시작할 수 있는 행동 2~3가지. 300~400자로 완전한 문장 마무리.' },
-  ]
+// ── Gemini 1회 호출로 2~3개 섹션 동시 생성 (토큰 절약) ──────────
+async function callGeminiMulti(prompt) {
+  const r = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text:
+`청소년 창업 플랫폼 에디터. 규칙: 각 ## 섹션을 지시된 글자수로 완전한 문장 마무리. 인사말 없이 ## 헤더로 시작. ~입니다 체. 수치·기업명 포함. **굵게** 강조.` }] },
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          maxOutputTokens: 1200,
+          temperature: 0.45,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      }),
+      signal: AbortSignal.timeout(22000),
+    }
+  )
+  if (!r.ok) throw new Error(`Gemini ${r.status}`)
+  const d = await r.json()
+  const text = d.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
+  if (!text || text.length < 100) throw new Error(`너무 짧음: ${text?.length}자`)
+  return text
+}
 
+// ── 리포트 파트 생성 (2~3섹션 한 번에) ──────────────────────────
+async function buildReportPart(label, dateRange, newsSummary, sections) {
   const ctx = `[${label} (${dateRange}) 뉴스]\n${newsSummary}\n\n`
-  const parts = []
-  for (const s of sections) {
-    const text = await callGemini(ctx + s.h + '\n' + s.desc)
-    parts.push(text)
-    // 섹션 간 짧은 대기 (rate limit 방지)
-    await new Promise(res => setTimeout(res, 300))
-  }
-  return parts.filter(Boolean).join('\n\n')
+  const prompt = ctx + sections.map(s => s.h + '\n' + s.desc).join('\n\n')
+  return callGeminiMulti(prompt)
 }
 
 // ── 메인 ─────────────────────────────────────────────────────────
@@ -178,7 +184,19 @@ export default async function handler(req) {
   // 리포트 1: 투자·자금 동향 (섹션 순차 생성)
   try {
     const slug1 = `ai-funding-report-${code}`
-    const body1 = await buildReport(label, dateRange, newsSummary, 'funding')
+    // 앞 2섹션 (핵심요약 + 투자현황)
+    const p1a = await buildReportPart(label, dateRange, newsSummary, [
+      { h: '## 이번 주 핵심 요약',    desc: '이번 주 투자·자금 동향 3가지 핵심 변화. 수치·기업명 포함. 각 200자로 완전한 문장 마무리.' },
+      { h: '## 주요 투자·펀딩 현황', desc: '주목할 투자 유치 사례와 VC 동향. 200자로 완전한 문장 마무리.' },
+    ])
+    await new Promise(res => setTimeout(res, 200))
+    // 뒤 3섹션 (섹터 + 정책 + 인사이트)
+    const p1b = await buildReportPart(label, dateRange, newsSummary, [
+      { h: '## 섹터별 투자 트렌드',          desc: 'AI, 바이오, 에듀테크, 핀테크 섹터별 투자 흐름. 각 150자로 완전한 문장 마무리.' },
+      { h: '## 정부 지원 & 정책 동향',       desc: '창업 지원 프로그램, 지자체 정책 동향. 150자로 완전한 문장 마무리.' },
+      { h: '## 청소년 창업가를 위한 인사이트', desc: '교훈과 지금 할 수 있는 행동 2~3가지. 200자로 완전한 문장 마무리.' },
+    ])
+    const body1 = p1a + '\n\n' + p1b
     if (body1.length < 500) throw new Error(`너무 짧음: ${body1.length}자`)
     const r1 = await upsertArticle(`[AI 리포트] ${label} 스타트업 투자·자금 동향`, body1, ['AI리포트','투자동향','스타트업',label], slug1, adminId)
     results.generated.push({ type: 'funding', slug: slug1, len: body1.length, ...r1 })
@@ -187,7 +205,17 @@ export default async function handler(req) {
   // 리포트 2: 시장·생태계 동향 (섹션 순차 생성)
   try {
     const slug2 = `ai-market-report-${code}`
-    const body2 = await buildReport(label, dateRange, newsSummary, 'market')
+    const p2a = await buildReportPart(label, dateRange, newsSummary, [
+      { h: '## 이번 주 시장 핵심 변화', desc: '이번 주 스타트업 시장 3가지 핵심 변화. 수치·사례 포함. 각 200자로 완전한 문장 마무리.' },
+      { h: '## 주목할 스타트업 동향',   desc: '주목할 스타트업·기업들 움직임. 200자로 완전한 문장 마무리.' },
+    ])
+    await new Promise(res => setTimeout(res, 200))
+    const p2b = await buildReportPart(label, dateRange, newsSummary, [
+      { h: '## 기술 트렌드 분석',         desc: 'AI, 에듀테크, 헬스케어 기술 트렌드. 각 150자로 완전한 문장 마무리.' },
+      { h: '## 창업 생태계 지원 현황',    desc: '창업 지원 프로그램·교육 기회. 150자로 완전한 문장 마무리.' },
+      { h: '## 청소년 창업가 주목 포인트', desc: '중고등학생 창업가 주목 내용과 지금 할 수 있는 행동 2~3가지. 200자로 완전한 문장 마무리.' },
+    ])
+    const body2 = p2a + '\n\n' + p2b
     if (body2.length < 500) throw new Error(`너무 짧음: ${body2.length}자`)
     const r2 = await upsertArticle(`[AI 리포트] ${label} 스타트업 생태계 시장 동향`, body2, ['AI리포트','시장분석','트렌드',label], slug2, adminId)
     results.generated.push({ type: 'market', slug: slug2, len: body2.length, ...r2 })
