@@ -38,9 +38,10 @@ export default async function handler(req) {
 
   const H = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
 
-  // body가 짧은 뉴스 (200자 미만) + source_url 있는 것 10개씩
+  // body에 "원문 보기:" 텍스트가 있는 것 = snippet만 있는 기사
+  // OR body가 없는 것
   const r = await fetch(
-    `${SB_URL}/rest/v1/articles?status=eq.published&source_url=not.is.null&select=id,title,source_url,body&order=published_at.desc&limit=10`,
+    `${SB_URL}/rest/v1/articles?status=eq.published&source_url=not.is.null&or=(body.like.*원문 보기*,body.is.null)&select=id,title,source_url,body&order=published_at.desc&limit=10`,
     { headers: H }
   )
   const articles = await r.json()
