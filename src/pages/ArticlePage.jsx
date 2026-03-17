@@ -177,20 +177,23 @@ export default function ArticlePage() {
 
         {/* Body */}
         {article.source_name ? (
-          /* 뉴스 기사: ai_summary를 메인 본문으로, 원문 링크 제공 */
+          /* 뉴스 기사: ai_summary(500~800자)를 본문으로, 원문 링크 카드 */
           <div>
-            {article.ai_summary ? (
+            {/* AI 요약이 충분히 있으면 표시, 없으면 본문 */}
+            {article.ai_summary && article.ai_summary.length >= 100 ? (
               <div style={{ fontSize: '16px', lineHeight: 1.9, color: 'var(--c-gray-7)', letterSpacing: '-0.01em' }}>
                 {article.ai_summary.split('\n').map((para, i) =>
-                  para.trim() ? (
-                    <p key={i} style={{ marginBottom: '18px' }}>{para}</p>
-                  ) : null
+                  para.trim() ? <p key={i} style={{ marginBottom: '18px' }}>{para}</p> : null
                 )}
               </div>
             ) : (
-              <div className="article-body" dangerouslySetInnerHTML={{ __html: renderMarkdown(article.body || article.excerpt || '') }}/>
+              <div style={{ fontSize: '15px', lineHeight: 1.85, color: 'var(--c-gray-7)' }}>
+                {(article.body || article.excerpt || '').split('\n').map((para, i) =>
+                  para.trim() && !para.includes('원문 보기:') ? <p key={i} style={{ marginBottom: '14px' }}>{para}</p> : null
+                )}
+              </div>
             )}
-            {/* 원문 보기 링크 */}
+            {/* 원문 보기 링크 카드 */}
             {article.source_url && (
               <div style={{ marginTop: '32px', padding: '16px 20px', background: 'var(--c-gray-1)', border: '1px solid var(--c-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
                 <div>

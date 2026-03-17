@@ -189,8 +189,8 @@ export default async function handler(req) {
         const article = {
           title,
           slug: makeSlug(),
-          excerpt: (crawledBody.slice(0, 300) || description || title).slice(0, 400),
-          body: crawledBody.length > 200 ? crawledBody : `${description}\n\n원문 보기: ${link}`,
+          excerpt: (crawledBody.length > 200 ? crawledBody.slice(0, 400) : description || title).slice(0, 400),
+          body: crawledBody.length > 200 ? crawledBody : (description || excerpt || title),
           cover_image: image || null,
           category: 'news',
           status: 'published',
