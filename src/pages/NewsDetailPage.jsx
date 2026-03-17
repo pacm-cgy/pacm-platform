@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, ExternalLink, Clock, Calendar, AlertCircle, Bookmark } from 'lucide-react'
@@ -16,10 +17,9 @@ function useNewsArticle(slug) {
         .from('articles')
         .select('*')
         .eq('slug', slug)
-        .maybeSingle()  // single() → maybeSingle() (0 rows 에러 방지)
+        .maybeSingle()
       if (error) throw error
       if (!data) throw new Error('기사를 찾을 수 없습니다')
-      // 조회수 증가 (에러 무시)
       try { await supabase.rpc('increment_view', { article_id: data.id }) } catch {}
       return data
     },
@@ -35,7 +35,14 @@ function NewsBookmarkBtn({ articleId }) {
   return (
     <button className="btn btn-outline"
       style={{ gap:'6px', color: saved?'var(--c-gold)':undefined, borderColor: saved?'var(--c-gold)':undefined }}
-      onClick={() => { if(!user){ const confirmed = window.confirm('로그인 후 북마크를 사용할 수 있습니다.\n로그인 페이지로 이동할까요?'); if(confirmed) { const auth = document.querySelector('[data-testid="login-btn"]'); auth?.click(); } return }; toggle.mutate({articleId,isBookmarked:saved}) }}
+      onClick={() => {
+        if (!user) {
+          const confirmed = window.confirm('로그인 후 북마크를 사용할 수 있습니다.\n로그인 페이지로 이동할까요?')
+          if (confirmed) { const auth = document.querySelector('[data-testid="login-btn"]'); auth?.click() }
+          return
+        }
+        toggle.mutate({ articleId, isBookmarked: saved })
+      }}
       disabled={toggle.isPending}>
       <Bookmark size={14} fill={saved?'currentColor':'none'} />
       {saved ? '저장됨' : '저장'}
@@ -46,7 +53,15 @@ function NewsBookmarkBtn({ articleId }) {
 export default function NewsDetailPage() {
   const { slug } = useParams()
   const navigate = useNavigate()
-  const { data: article, isLoading, isError, error } = useNewsArticle(slug)
+  const { data: article, isLoading, isError } = useNewsArticle(slug)
+
+  // 페이지 타이틀 설정
+  useEffect(() => {
+    if (article?.title) {
+      document.title = `${article.title} — Insightship`
+    }
+    return () => { document.title = 'Insightship — 청소년 창업 플랫폼' }
+  }, [article?.title])
 
   if (isLoading) return (
     <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -58,7 +73,6 @@ export default function NewsDetailPage() {
     <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px', padding: '40px 20px' }}>
       <AlertCircle size={40} color="var(--c-gray-4)" />
       <div style={{ fontFamily: 'var(--f-serif)', fontSize: '18px', color: 'var(--c-paper)' }}>기사를 찾을 수 없습니다</div>
-      <div style={{ fontFamily: 'var(--f-mono)', fontSize: '12px', color: 'var(--c-muted)' }}>{slug}</div>
       <button onClick={() => navigate('/news')} className="btn btn-outline btn-sm">← 뉴스 목록으로</button>
     </div>
   )
@@ -67,13 +81,17 @@ export default function NewsDetailPage() {
     ? format(new Date(article.published_at), 'yyyy년 M월 d일 HH:mm', { locale: ko })
     : ''
 
-  // body에서 "원문 보기: URL" 부분 제거
-  const cleanBody = (article.body || article.excerpt || '')
-    ? (article.body || article.excerpt || '')
-        .replace(`\n\n원문 보기: ${article.source_url}`, '')
-        .replace(article.excerpt || '', '')
+  // ai_summary가 있으면 사용, 없으면 본문에서 불필요한 내용 제거 후 표시
+  const mainContent = article.ai_summary && article.ai_summary.length >= 100
+    ? article.ai_summary
+    : (article.body || article.excerpt || '')
+        .replace(/\n?원문 보기:.*$/m, '')
+        .replace(/ⓒ.*?재배포\s*금지/g, '')
+        .replace(/저작권자.*?금지/g, '')
+        .replace(/무단\s*전재.*?금지/g, '')
+        .replace(/\[사진\]/g, '').replace(/\[영상\]/g, '').replace(/\[표\]/g, '')
+        .replace(/https?:\/\/\S+/g, '')
         .trim()
-    : ''
 
   return (
     <div style={{ paddingBottom: '80px' }}>
@@ -81,10 +99,9 @@ export default function NewsDetailPage() {
       <div style={{ borderBottom: '1px solid var(--c-gray-3)', padding: '14px 0' }}>
         <div className="container">
           <button onClick={() => navigate('/news')}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', color: 'var(--c-muted)', fontSize: '13px', fontFamily: 'var(--f-mono)', cursor: 'pointer', transition: 'var(--t-fast)' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', color: 'var(--c-muted)', fontSize: '13px', fontFamily: 'var(--f-mono)', cursor: 'pointer' }}
             onMouseEnter={e => e.currentTarget.style.color = 'var(--c-gold)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--c-muted)'}
-          >
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--c-muted)'}>
             <ArrowLeft size={14} /> 뉴스 목록
           </button>
         </div>
@@ -132,32 +149,34 @@ export default function NewsDetailPage() {
           </div>
         )}
 
-        {/* 본문 */}
-        <div style={{ fontFamily: 'var(--f-serif)', fontSize: '17px', lineHeight: 1.9, color: 'var(--c-paper)', marginBottom: '48px' }}>
-          {/* excerpt (요약) */}
-          {article.excerpt && (
-            <p style={{ fontSize: '18px', lineHeight: 1.8, marginBottom: '24px', color: 'var(--c-paper)' }}>
-              {article.excerpt}
-            </p>
-          )}
-          {/* 추가 본문 */}
-          {cleanBody && cleanBody !== article.excerpt && cleanBody.length > 20 && (
-            <div style={{ color: 'var(--c-muted)', fontSize: '15px', lineHeight: 1.85, marginTop: '16px' }}>
-              {cleanBody.split('\n').filter(l => l.trim()).map((line, i) => (
-                <p key={i} style={{ marginBottom: '1em' }}>{line}</p>
+        {/* 본문 — ai_summary 우선 표시 */}
+        <div style={{ marginBottom: '48px' }}>
+          {/* AI 요약 표시 (구분선 없이 자연스럽게) */}
+          {article.ai_summary && article.ai_summary.length >= 100 ? (
+            <div style={{ fontSize: '16px', lineHeight: 1.9, color: 'var(--c-paper)' }}>
+              {article.ai_summary.split('\n').filter(p => p.trim()).map((para, i) => (
+                <p key={i} style={{ marginBottom: '18px' }}>{para}</p>
+              ))}
+            </div>
+          ) : (
+            // ai_summary 없으면 원문 본문 (클렌징된)
+            <div style={{ fontSize: '15px', lineHeight: 1.85, color: 'var(--c-paper)' }}>
+              {mainContent.split('\n').filter(p => p.trim() && p.length > 10).slice(0, 20).map((para, i) => (
+                <p key={i} style={{ marginBottom: '14px' }}>{para}</p>
               ))}
             </div>
           )}
         </div>
 
-        {/* 원문 보기 */}
+        {/* 원문 보기 카드 */}
         {article.source_url?.startsWith('http') && (
           <div style={{
-            padding: '24px 28px', background: 'var(--c-gray-2)', border: '1px solid var(--c-gray-3)',
+            padding: '20px 24px', background: 'var(--c-gray-2)', border: '1px solid var(--c-gray-3)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap',
+            marginBottom: '48px',
           }}>
             <div>
-              <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gold)', letterSpacing: '2px', marginBottom: '4px' }}>ORIGINAL SOURCE</div>
+              <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gold)', letterSpacing: '2px', marginBottom: '4px' }}>출처</div>
               <div style={{ fontSize: '13px', color: 'var(--c-muted)' }}>{article.source_name || '원문 기사'}</div>
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -165,14 +184,14 @@ export default function NewsDetailPage() {
               <a href={article.source_url} target="_blank" rel="noopener noreferrer"
                 className="btn btn-gold"
                 style={{ display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none' }}>
-                원문 전체 읽기 <ExternalLink size={14} />
+                원문 읽기 <ExternalLink size={14} />
               </a>
             </div>
           </div>
         )}
 
         {/* 돌아가기 */}
-        <div style={{ marginTop: '48px', paddingTop: '32px', borderTop: '1px solid var(--c-gray-3)' }}>
+        <div style={{ paddingTop: '32px', borderTop: '1px solid var(--c-gray-3)' }}>
           <button onClick={() => navigate('/news')} className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <ArrowLeft size={14} /> 뉴스 목록으로 돌아가기
           </button>

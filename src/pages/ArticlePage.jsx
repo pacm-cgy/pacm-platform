@@ -62,6 +62,12 @@ function BookmarkButton({ articleId }) {
 export default function ArticlePage() {
   const { slug } = useParams()
   const navigate = useNavigate()
+
+  // 페이지 타이틀
+  React.useEffect(() => {
+    if (article?.title) document.title = `${article.title} — Insightship`
+    return () => { document.title = 'Insightship — 청소년 창업 플랫폼' }
+  }, [article?.title])
   const { data: article, isLoading, isError } = useArticle(slug)
   const [progress, setProgress] = useState(0)
   const [liked, setLiked] = useState(false)
