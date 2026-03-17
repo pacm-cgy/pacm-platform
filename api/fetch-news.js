@@ -58,20 +58,36 @@ async function fetchArticleContent(url) {
     for (const pat of bodyPatterns) {
       const m = html.match(pat)
       if (m) {
-        const raw = (m[1] || m[2] || '')
+        let raw = (m[1] || m[2] || '')
           .replace(/<script[\s\S]*?<\/script>/gi, '')
           .replace(/<style[\s\S]*?<\/style>/gi, '')
           .replace(/<[^>]+>/g, ' ')
-          .replace(/&[a-z]+;/g, ' ')
+          .replace(/&[a-z#0-9]+;/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+        // 노이즈 텍스트 제거: 공유버튼, SNS, URL, 네비게이션 등
+        raw = raw
+          .replace(/공유하기[^가-힣]{0,30}/g, '')
+          .replace(/페이스북|트위터|카카오톡|네이버 밴드|URL 복사|링크복사/g, '')
+          .replace(/폰트크기[^가-힣]{0,30}/g, '')
+          .replace(/https?:\/\/[^\s]{5,80}/g, '')
+          .replace(/구독|레이어 닫기|더보기|목록보기|이전기사|다음기사/g, '')
+          .replace(/입력\s*\d{4}\.\d{2}\.\d{2}/g, '')
+          .replace(/수정\s*\d{4}\.\d{2}\.\d{2}/g, '')
+          .replace(/기자\s*[가-힣]{2,4}\s*기자/g, '')
           .replace(/\s+/g, ' ')
           .trim()
         if (raw.length > 200) { bodyText = raw.slice(0, 3000); break }
       }
     }
 
+    const rawDesc = getMeta('og:description') || getMeta('description') || getMeta('twitter:description') || ''
+    const cleanDesc = rawDesc
+      .replace(/공유하기|페이스북|트위터|카카오|https?:\/\/\S+/g, '')
+      .replace(/\s+/g, ' ').trim()
     return {
       image: getMeta('og:image') || getMeta('twitter:image'),
-      description: getMeta('og:description') || getMeta('description') || getMeta('twitter:description'),
+      description: cleanDesc,
       bodyText,
     }
   } catch {

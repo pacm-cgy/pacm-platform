@@ -146,7 +146,7 @@ async function upsertArticle(title, body, tags, slug) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/articles`, {
     method: 'POST',
     headers: { ...H(), 'Content-Type': 'application/json', Prefer: 'return=representation' },
-    body: JSON.stringify({ ...payload, author_id: adminId, is_duplicate: false }),
+    body: JSON.stringify({ ...payload, author_id: adminId, is_duplicate: false, featured: false }),
   })
   if (r.status !== 201) throw new Error(`INSERT ${r.status}: ${await r.text().then(t => t.slice(0,100))}`)
   return { inserted: true }
