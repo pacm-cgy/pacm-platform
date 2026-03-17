@@ -1,30 +1,33 @@
 // AI 뉴스레터 자동 발송 - 매주 월요일 KST 09:00 (UTC 00:00)
-export const config = { runtime: 'edge' }
+export const config = { runtime: 'nodejs', maxDuration: 120 }
 
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const RESEND_API_KEY = process.env.RESEND_API_KEY
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
 const CRON_SECRET = process.env.CRON_SECRET
 
+const GEMINI_KEY = process.env.GEMINI_API_KEY
+
 async function callGemini(prompt, maxTokens = 2000) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-    signal: AbortSignal.timeout(45000),
-  })
-  if (!res.ok) throw new Error(`Claude API 오류: ${res.status}`)
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          maxOutputTokens: maxTokens,
+          temperature: 0.4,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      }),
+      signal: AbortSignal.timeout(30000),
+    }
+  )
+  if (!res.ok) throw new Error(`Gemini API 오류: ${res.status}`)
   const data = await res.json()
-  return data.content?.[0]?.text || ''
+  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
 }
 
 function getKSTDate() {
@@ -62,7 +65,7 @@ export default async function handler(req) {
   // 지난주 뉴스 가져오기
   const { from, to } = getLastWeekRange()
   const newsRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/articles?source_name=not.is.null&is_duplicate=eq.false&published_at=gte.${from}&published_at=lte.${to}&select=title,ai_summary,excerpt,source_name,source_url,ai_category&order=published_at.desc&limit=30`,
+    `${SUPABASE_URL}/rest/v1/articles?source_name=not.is.null&is_duplicate=neq.true&published_at=gte.${from}&published_at=lte.${to}&select=title,ai_summary,excerpt,source_name,source_url,ai_category&order=published_at.desc&limit=30`,
     { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
   )
   const articles = await newsRes.json()
