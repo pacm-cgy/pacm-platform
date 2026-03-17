@@ -144,11 +144,12 @@ export default async function handler(req) {
 
   // 쿼리 파라미터로 날짜 범위 오버라이드 가능
   // ?from=2026-03-09&to=2026-03-15 (특정 주 재생성 시)
-  const url = new URL(req.url)
+  // nodejs에서 req.url은 '/api/generate-report?from=...' 형태 (path만)
+  const urlObj = new URL(req.url, 'https://placeholder.com')
   let from, to, label
 
-  const fromParam = url.searchParams.get('from')
-  const toParam   = url.searchParams.get('to')
+  const fromParam = urlObj.searchParams.get('from')
+  const toParam   = urlObj.searchParams.get('to')
 
   if (fromParam && toParam) {
     from  = new Date(fromParam + 'T00:00:00+09:00')
