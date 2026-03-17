@@ -151,7 +151,7 @@ ${articles.slice(0,8).map(a => `<div style="margin-bottom:20px;padding-bottom:16
         method: 'POST',
         headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(batch.map(to => ({
-          from: isTest ? 'Insightship <onboarding@resend.dev>' : 'Insightship <newsletter@pacm.kr>',
+          from: 'Insightship <insightship_nl@pacm.kr>',
           to,
           subject,
           html: `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"></head>
