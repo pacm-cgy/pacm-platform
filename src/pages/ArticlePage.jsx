@@ -135,7 +135,7 @@ export default function ArticlePage() {
         <h1 style={{ fontFamily:'var(--f-serif)', fontSize:'clamp(22px,4vw,34px)', fontWeight:700, lineHeight:1.25, marginBottom:'16px' }}>
           {article.title}
         </h1>
-        {article.excerpt && (
+        {article.excerpt && !article.source_name && (
           <p style={{ color:'var(--c-muted)', fontSize:'16px', lineHeight:1.7, marginBottom:'20px', fontFamily:'var(--f-serif)', fontStyle:'italic' }}>
             {article.excerpt}
           </p>
