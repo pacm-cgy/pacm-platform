@@ -6,12 +6,19 @@ const SB_URL = process.env.SUPABASE_URL
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY  // service_role: RLS 우회
 const CRON_SECRET = process.env.CRON_SECRET
 
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
 export default async function handler(req) {
-  if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 })
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
+  if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405, headers: CORS })
 
   const auth = req.headers.get('authorization')
   if (auth !== `Bearer ${CRON_SECRET}`) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS })
   }
 
   const H = {
@@ -22,7 +29,7 @@ export default async function handler(req) {
   }
 
   let body
-  try { body = await req.json() } catch { return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 }) }
+  try { body = await req.json() } catch { return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: CORS }) }
 
   const { action, id, data } = body
 
@@ -71,15 +78,15 @@ export default async function handler(req) {
       }
 
       default:
-        return new Response(JSON.stringify({ error: `알 수 없는 action: ${action}` }), { status: 400 })
+        return new Response(JSON.stringify({ error: `알 수 없는 action: ${action}` }), { status: 400, headers: CORS })
     }
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), { status: 500 })
+    return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: CORS })
   }
 }
 
 function ok(data) {
   return new Response(JSON.stringify({ ok: true, ...data }), {
-    status: 200, headers: { 'Content-Type': 'application/json' }
+    status: 200, headers: { 'Content-Type': 'application/json', ...CORS }
   })
 }
