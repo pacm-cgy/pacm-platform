@@ -51,6 +51,14 @@ export default async function handler(req) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
+  // 테스트 발송 모드: ?test=true&email=xxx 파라미터
+  const url = new URL(req.url)
+  const isTest = url.searchParams.get('test') === 'true'
+  const testEmail = url.searchParams.get('email') || ''
+  if (isTest && !testEmail) {
+    return new Response(JSON.stringify({ error: '테스트 이메일 주소를 ?email= 파라미터로 지정하세요' }), { status: 400 })
+  }
+
   // 지난주 뉴스 가져오기
   const { from, to } = getLastWeekRange()
   const newsRes = await fetch(
@@ -64,11 +72,16 @@ export default async function handler(req) {
   }
 
   // 구독자 목록
-  const subRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/newsletter_subscribers?is_active=eq.true&select=email`,
-    { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
-  )
-  const subscribers = await subRes.json()
+  let subscribers = []
+  if (isTest) {
+    subscribers = [{ email: testEmail }]
+  } else {
+    const subRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/newsletter_subscribers?is_active=eq.true&select=email`,
+      { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+    )
+    subscribers = await subRes.json() || []
+  }
   if (!subscribers?.length) {
     return new Response(JSON.stringify({ message: '구독자 없음' }), { status: 200 })
   }

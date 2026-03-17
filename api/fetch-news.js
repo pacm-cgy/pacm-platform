@@ -104,14 +104,27 @@ function stripHtml(s) {
   return s.replace(/<[^>]+>/g, '').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-async function articleExists(url) {
+async function articleExists(url, title) {
   try {
-    const res = await fetch(
+    const H = { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
+    // URL 중복 체크
+    const r1 = await fetch(
       `${SUPABASE_URL}/rest/v1/articles?source_url=eq.${encodeURIComponent(url)}&select=id&limit=1`,
-      { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+      { headers: H }
     )
-    const data = await res.json()
-    return Array.isArray(data) && data.length > 0
+    const d1 = await r1.json()
+    if (Array.isArray(d1) && d1.length > 0) return true
+    // 제목 중복 체크 (같은 날 동일 제목)
+    if (title) {
+      const today = new Date().toISOString().slice(0, 10)
+      const r2 = await fetch(
+        `${SUPABASE_URL}/rest/v1/articles?title=eq.${encodeURIComponent(title)}&published_at=gte.${today}&select=id&limit=1`,
+        { headers: H }
+      )
+      const d2 = await r2.json()
+      if (Array.isArray(d2) && d2.length > 0) return true
+    }
+    return false
   } catch { return false }
 }
 
@@ -166,7 +179,7 @@ export default async function handler(req) {
       for (const item of items.slice(0, 5)) {
         const link = (item.originallink && item.originallink.startsWith('http')) ? item.originallink : item.link
         if (!link) continue
-        if (await articleExists(link)) { results.skipped++; continue }
+        if (await articleExists(link, title)) { results.skipped++; continue }
 
         const title = stripHtml(item.title).slice(0, 200)
         const description = stripHtml(item.description).slice(0, 400)
@@ -214,6 +227,7 @@ export default async function handler(req) {
           published_at: pubIso,
           tags: ['뉴스', tag],
           featured: false,
+          is_duplicate: false,
         }
 
         const saveRes = await fetch(`${SUPABASE_URL}/rest/v1/articles`, {
