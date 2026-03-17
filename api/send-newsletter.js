@@ -198,3 +198,64 @@ ${articles.slice(0,8).map(a => `<div style="margin-bottom:20px;padding-bottom:16
 
   return json({ sent, total: emails.length, subject, is_test: isTest })
 }
+  <!-- 섹션 4: 사회 변화 & 창업 기회 -->
+  ${section('💡', '사회 변화 & 창업 기회', sec[3], '#161614')}
+
+  <!-- 뉴스 출처 목록 -->
+  <div style="margin-bottom:32px;background:#111110;border:1px solid #2a2a28;padding:20px 24px">
+    <div style="color:#6a6a60;font-size:11px;letter-spacing:2px;font-family:'Courier New',monospace;margin-bottom:12px">이번 주 참고 뉴스</div>
+    ${articles.slice(0,10).map(a => `<div style="font-size:12px;color:#6a6a60;padding:4px 0;border-bottom:1px solid #1e1e1c">
+      <span style="color:#a8a89e">${a.title}</span>
+      ${a.source_name ? `<span style="color:#D4AF3788;margin-left:8px">[${a.source_name}]</span>` : ''}
+    </div>`).join('')}
+  </div>
+
+  <!-- 푸터 -->
+  <div style="text-align:center;padding:24px;border-top:1px solid #1e1e1c">
+    <a href="https://www.insightship.pacm.kr" style="color:#D4AF37;text-decoration:none;font-size:13px;font-weight:700;letter-spacing:1px">INSIGHTSHIP</a>
+    <p style="color:#4a4a48;font-size:11px;margin:12px 0 8px;line-height:1.7">
+      © ${new Date().getFullYear()} INSIGHTSHIP by PACM (피에이씨엠)<br>
+      사업자등록번호: 891-45-01385 | contact@pacm.kr
+    </p>
+    <p style="margin:0">
+      <a href="${unsubLink}" style="color:#4a4a48;font-size:11px;text-decoration:underline">수신 거부하기</a>
+    </p>
+  </div>
+
+</div>
+</body>
+</html>`
+
+    try {
+      const r = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: 'Insightship <insightship_nl@pacm.kr>',
+          to: sub.email,
+          subject,
+          html,
+        }),
+      })
+      if (r.ok) sent++
+      else {
+        const err = await r.text()
+        console.error(`발송 실패 ${sub.email}:`, err.slice(0, 100))
+      }
+    } catch(e) {
+      console.error(`발송 오류 ${sub.email}:`, e.message)
+    }
+
+    // rate limit 방지 (Resend: 2req/s)
+    await new Promise(res => setTimeout(res, 600))
+  }
+
+  // 발송 기록
+  fetch(`${SB_URL}/rest/v1/newsletter_logs`, {
+    method: 'POST',
+    headers: { ...SH(), 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ sent_count: sent, subject, sent_at: new Date().toISOString() }),
+  }).catch(() => {})
+
+  return json({ sent, total: subscribers.length, subject, label, is_test: isTest })
+}

@@ -7,16 +7,16 @@ const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
 const CRON_SECRET = process.env.CRON_SECRET
 
 const SYSTEM = `당신은 청소년 창업 플랫폼 'Insightship'의 뉴스 에디터입니다.
-전문성: 경제·비즈니스 기자 출신, VC 심사역, 청소년 창업 교육 전문가
 
-뉴스 정리 규칙:
-1. 청소년(중·고등학생) 창업가가 이해할 수 있게 충분히 풀어서 설명
-2. 글자수: 반드시 500~800자 (짧은 원문이어도 배경·의미를 추가해 풍부하게)
-3. 어려운 용어는 괄호로 설명: VC(벤처캐피탈, 스타트업 전문 투자회사)
-4. 이 뉴스가 창업·스타트업 생태계에 어떤 의미인지 반드시 포함
-5. ~입니다/~했습니다/~합니다 체
-6. 반드시 완전한 문장으로 마무리 (끊기지 않게)
-7. 제목·인사말·번호 없이 바로 내용 시작`
+뉴스 요약 규칙:
+1. 정확히 800~1,000자로 작성 (반드시 이 범위 안에서 완전한 문장으로 마무리)
+2. 청소년(중·고등학생)이 이해할 수 있게 풀어서 설명
+3. 어려운 용어는 괄호로 설명: VC(벤처캐피탈, 스타트업 투자사)
+4. 이 뉴스가 창업·스타트업 생태계에 어떤 의미인지 한 문장 포함
+5. ~입니다/~했습니다 체
+6. 반드시 완전한 문장으로 마무리 (절대 끊기지 않게)
+7. 제목·인사말·번호 없이 바로 본문 시작
+8. 광고성 문구, 기자 이름, 무관한 링크, 이미지 설명 등 불필요한 내용 제외`
 
 async function summarizeOne(article) {
   // body가 충분히 길면(크롤링된 원문) 우선 사용, 짧으면 excerpt/title 사용
@@ -27,7 +27,7 @@ async function summarizeOne(article) {
     : article.title
 
   const userMsg = `다음 뉴스를 청소년 창업가를 위해 정리하세요.
-반드시 500~800자로 완전한 문장으로 마무리하세요.
+800~1,000자로 완전한 문장으로 반드시 마무리하세요. 절대 끊기지 않게 작성하세요.
 
 제목: ${article.title}
 내용: ${text}`
@@ -42,7 +42,7 @@ async function summarizeOne(article) {
           system_instruction: { parts: [{ text: SYSTEM }] },
           contents: [{ role: 'user', parts: [{ text: userMsg }] }],
           generationConfig: {
-            maxOutputTokens: 1024,
+            maxOutputTokens: 1500,
             thinkingConfig: { thinkingBudget: 0 },
             temperature: 0.4
           },
