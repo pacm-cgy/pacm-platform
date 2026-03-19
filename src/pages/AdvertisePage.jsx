@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Mail, BarChart2, Users, Eye, CheckCircle } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 
 const AD_PACKAGES = [
   {
@@ -41,20 +40,22 @@ export default function AdvertisePage() {
     if (!form.company || !form.email) return
     setStatus('sending')
     try {
-      const { error } = await supabase.from('ad_inquiries').insert({
-        company_name: form.company,
-        contact_name: form.name,
-        email: form.email,
-        phone: form.phone,
-        package_type: form.package,
-        message: form.message,
-        created_at: new Date().toISOString(),
+      const res = await fetch('/api/ad-inquiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company: form.company,
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+          package: form.package,
+          message: form.message,
+        }),
       })
-      if (error) throw error
+      if (!res.ok) throw new Error('서버 오류')
       setStatus('done')
     } catch {
-      // DB 테이블 없어도 이메일로 안내
-      setStatus('done')
+      setStatus('error')
     }
   }
 
