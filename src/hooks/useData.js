@@ -159,6 +159,11 @@ export function useCreatePost() {
   return useMutation({
     mutationFn: async ({ title, body, content, postType, post_type, tags }) => {
       if (!user) throw new Error('로그인이 필요합니다')
+      const prof = useAuthStore.getState().profile
+      if (prof?.is_suspended) {
+        const until = prof.suspended_until ? new Date(prof.suspended_until) : null
+        if (!until || until > new Date()) throw new Error('계정이 정지되어 게시글을 작성할 수 없습니다')
+      }
       checkRateLimit('create_post', 3, 60000)
       const bodyText = (body || content || '').trim() || ' '  // NOT NULL 방지
       const { data, error } = await supabase.from('community_posts').insert({
@@ -203,6 +208,11 @@ export function useCreateComment() {
   return useMutation({
     mutationFn: async ({ postId, body, parentId }) => {
       if (!user) throw new Error('로그인이 필요합니다')
+      const profC = useAuthStore.getState().profile
+      if (profC?.is_suspended) {
+        const untilC = profC.suspended_until ? new Date(profC.suspended_until) : null
+        if (!untilC || untilC > new Date()) throw new Error('계정이 정지되어 댓글을 작성할 수 없습니다')
+      }
       checkRateLimit('comment', 10, 60000)
       const { data, error } = await supabase.from('comments').insert({
         post_id: postId,

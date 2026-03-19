@@ -54,7 +54,7 @@ function useComments(postId) {
 const TYPE_LABELS = { free:'자유', question:'질문', recruit:'팀원모집', feedback:'피드백', notice:'공지' }
 const TYPE_COLORS = { free:'var(--c-muted)', question:'#60A5FA', recruit:'var(--c-gold)', feedback:'#34D399', notice:'var(--c-red)' }
 
-function CommentItem({ comment, onReply, onLike, onDelete, currentUserId, depth=0 }) {
+function CommentItem({ comment, onReply, onLike, onDelete, onReport, currentUserId, depth=0 }) {
   const [showReply, setShowReply] = useState(false)
   const [replyText, setReplyText] = useState('')
   const [liked, setLiked] = useState(false)
@@ -95,10 +95,15 @@ function CommentItem({ comment, onReply, onLike, onDelete, currentUserId, depth=
                   <CornerDownRight size={12}/> 답글
                 </button>
               )}
-              {isAuthor && (
+              {isAuthor ? (
                 <button onClick={() => onDelete(comment.id)}
                   style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'4px', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--c-red)', padding:0, marginLeft:'auto' }}>
                   <Trash2 size={11}/> 삭제
+                </button>
+              ) : currentUserId && (
+                <button onClick={() => onReport && onReport(comment.id)}
+                  style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'4px', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--c-gray-5)', padding:0, marginLeft:'auto' }}>
+                  <Flag size={11}/> 신고
                 </button>
               )}
             </div>
@@ -132,6 +137,9 @@ export default function PostDetailPage() {
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [liked, setLiked] = useState(false)
+  const [showReport, setShowReport] = useState(null) // 'post' | commentId | null
+  const [reportReason, setReportReason] = useState('')
+  const [reportSending, setReportSending] = useState(false)
 
   // 댓글 트리 구성
   const topComments = allComments.filter(c => !c.parent_id)
@@ -223,10 +231,59 @@ export default function PostDetailPage() {
   )
 
   const isAuthor = user?.id === post.author_id
+  const handleReport = async () => {
+    if (!reportReason.trim() || reportReason.length < 10) { alert('신고 사유를 10자 이상 입력해주세요'); return }
+    setReportSending(true)
+    try {
+      const targetId = showReport === 'post' ? id : showReport
+      const targetType = showReport === 'post' ? 'post' : 'comment'
+      const { error } = await supabase.from('reports').insert({
+        reporter_id: user.id, target_type: targetType, target_id: targetId,
+        reason: reportReason.trim().slice(0, 500), status: 'pending'
+      })
+      if (error) throw error
+      alert('신고가 접수됐습니다. 관리자가 검토 후 처리합니다.')
+      setShowReport(null); setReportReason('')
+    } catch(e) {
+      alert('신고 실패: ' + (e.message?.slice(0,50)||'오류'))
+    } finally { setReportSending(false) }
+  }
+
   const date = format(new Date(post.created_at), 'yyyy년 M월 d일 HH:mm', { locale: ko })
 
   return (
     <div style={{ paddingBottom:'80px' }}>
+      {/* 신고 모달 */}
+      {showReport && (
+        <div className="modal-overlay" onClick={e => e.target===e.currentTarget && setShowReport(null)}>
+          <div className="modal">
+            <div className="modal-header">
+              <div className="modal-title">신고하기</div>
+              <button onClick={() => setShowReport(null)} style={{ background:'none', border:'none', fontSize:'18px', cursor:'pointer', color:'var(--c-muted)' }}>✕</button>
+            </div>
+            <div className="modal-body" style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
+              <p style={{ fontSize:'13px', color:'var(--c-muted)', lineHeight:1.6 }}>
+                부적절한 내용을 신고해주세요. 관리자가 검토 후 처리합니다.
+              </p>
+              <div>
+                <label className="label">신고 사유 (10자 이상)</label>
+                <textarea value={reportReason} onChange={e=>setReportReason(e.target.value)}
+                  placeholder="신고 사유를 구체적으로 입력해주세요 (스팸, 욕설, 불법 정보 등)"
+                  rows={4} maxLength={500} className="input" style={{ resize:'vertical', minHeight:'100px' }}/>
+                <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-gray-5)', marginTop:'4px', textAlign:'right' }}>
+                  {reportReason.length}/500
+                </div>
+              </div>
+              <div style={{ display:'flex', gap:'8px', justifyContent:'flex-end' }}>
+                <button onClick={() => setShowReport(null)} className="btn btn-outline btn-sm">취소</button>
+                <button onClick={handleReport} disabled={reportSending||reportReason.length<10} className="btn btn-gold btn-sm">
+                  {reportSending ? '접수 중...' : '신고 접수'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{ borderBottom:'1px solid var(--c-gray-3)', padding:'14px 0' }}>
         <div className="container">
           <button onClick={() => navigate('/community')} style={{ display:'flex', alignItems:'center', gap:'8px', background:'none', border:'none', color:'var(--c-muted)', fontSize:'13px', fontFamily:'var(--f-mono)', cursor:'pointer' }}>
@@ -286,13 +343,19 @@ export default function PostDetailPage() {
           </div>
         )}
 
-        {/* 좋아요 */}
-        <div style={{ display:'flex', gap:'10px', marginBottom:'36px', paddingTop:'16px', borderTop:'1px solid var(--c-border)' }}>
+        {/* 좋아요 + 신고 */}
+        <div style={{ display:'flex', gap:'10px', marginBottom:'36px', paddingTop:'16px', borderTop:'1px solid var(--c-border)', flexWrap:'wrap' }}>
           <button onClick={handleLikePost} className="btn btn-outline"
             style={{ gap:'6px', color:liked?'var(--c-red)':undefined, borderColor:liked?'var(--c-red)44':undefined }}>
             <Heart size={14} fill={liked?'currentColor':'none'}/>
             {(post.like_count||0)+(liked?1:0)} 좋아요
           </button>
+          {user && !isAuthor && (
+            <button onClick={() => setShowReport('post')} className="btn btn-ghost btn-sm"
+              style={{ marginLeft:'auto', gap:'5px', color:'var(--c-gray-5)', fontSize:'12px' }}>
+              <Flag size={12}/> 신고
+            </button>
+          )}
         </div>
 
         {/* 댓글 섹션 */}
@@ -304,10 +367,10 @@ export default function PostDetailPage() {
           {/* 댓글 목록 */}
           {topComments.map(c => (
             <div key={c.id}>
-              <CommentItem comment={c} onReply={handleReply} onLike={handleCommentLike} onDelete={handleCommentDelete} currentUserId={user?.id} depth={0}/>
+              <CommentItem comment={c} onReply={handleReply} onLike={handleCommentLike} onDelete={handleCommentDelete} onReport={(cid)=>setShowReport(cid)} currentUserId={user?.id} depth={0}/>
               {/* 대댓글 */}
               {getReплies(c.id).map(r => (
-                <CommentItem key={r.id} comment={r} onReply={handleReply} onLike={handleCommentLike} onDelete={handleCommentDelete} currentUserId={user?.id} depth={1}/>
+                <CommentItem key={r.id} comment={r} onReply={handleReply} onLike={handleCommentLike} onDelete={handleCommentDelete} onReport={(cid)=>setShowReport(cid)} currentUserId={user?.id} depth={1}/>
               ))}
             </div>
           ))}

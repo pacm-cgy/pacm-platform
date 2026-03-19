@@ -40,7 +40,32 @@ export const useAuthStore = create(
           .select('*')
           .eq('id', userId)
           .maybeSingle()
-        if (data) set({ profile: data })
+        if (data) {
+          set({ profile: data })
+          // 정지된 회원 체크
+          if (data.is_suspended) {
+            const until = data.suspended_until
+              ? new Date(data.suspended_until)
+              : null
+            // 정지 기간 만료 확인
+            if (!until || until > new Date()) {
+              const msg = until
+                ? `계정이 정지됐습니다.\n사유: ${data.suspend_reason||'운영 정책 위반'}\n해제일: ${until.toLocaleDateString('ko-KR')}`
+                : `계정이 영구 정지됐습니다.\n사유: ${data.suspend_reason||'운영 정책 위반'}\n문의: contact@pacm.kr`
+              // 즉시 로그아웃
+              await supabase.auth.signOut()
+              set({ user: null, profile: null, session: null })
+              alert(msg)
+              return
+            } else {
+              // 정지 기간 만료 → 자동 해제
+              await supabase.from('profiles')
+                .update({ is_suspended: false, suspended_until: null })
+                .eq('id', userId)
+              data.is_suspended = false
+            }
+          }
+        }
       },
 
       signOut: async () => {
@@ -49,6 +74,12 @@ export const useAuthStore = create(
       },
 
       isAdmin: () => get().profile?.role === 'admin',
+      isSuspended: () => {
+        const p = get().profile
+        if (!p?.is_suspended) return false
+        if (p.suspended_until && new Date(p.suspended_until) < new Date()) return false
+        return true
+      },
       isWriter: () => ['admin', 'writer'].includes(get().profile?.role),
       isAuthenticated: () => !!get().user,
     }),
