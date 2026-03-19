@@ -126,7 +126,7 @@ export default async function handler(req) {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'Insightship <no-reply@insightship.pacm.kr>',
+          from: 'Insightship <contact@pacm.kr>',
           to: ['contact@pacm.kr'],
           subject: `[광고 문의] ${company} — ${pkg || '패키지 미선택'}`,
           html: adminEmailHtml,
@@ -137,7 +137,7 @@ export default async function handler(req) {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'Insightship <no-reply@insightship.pacm.kr>',
+          from: 'Insightship <contact@pacm.kr>',
           to: [email],
           subject: '[Insightship] 광고 문의가 접수됐습니다',
           html: confirmHtml,
@@ -145,13 +145,21 @@ export default async function handler(req) {
       }),
     ])
 
-    const adminOk = adminRes.status === 'fulfilled' && (await adminRes.value.json()).id
-    const confirmOk = confirmRes.status === 'fulfilled'
+    let adminOk = false, adminErr = ''
+    if (adminRes.status === 'fulfilled') {
+      const adminJson = await adminRes.value.json()
+      adminOk = !!adminJson.id
+      if (!adminOk) adminErr = adminJson.message || adminJson.statusCode || JSON.stringify(adminJson).slice(0,100)
+    } else {
+      adminErr = String(adminRes.reason).slice(0,100)
+    }
+    const confirmOk = confirmRes.status === 'fulfilled' && confirmRes.value.ok
 
     return new Response(JSON.stringify({
       ok: true,
       db_saved: dbSaved,
       admin_email: adminOk ? 'sent' : 'failed',
+      admin_error: adminErr || undefined,
       confirm_email: confirmOk ? 'sent' : 'failed',
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 
