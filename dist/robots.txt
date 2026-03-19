@@ -1,7 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /profile
-Disallow: /bookmarks
-Disallow: /my-posts
-
-Sitemap: https://pacm.kr/sitemap.xml
