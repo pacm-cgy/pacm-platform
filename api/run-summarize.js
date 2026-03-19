@@ -6,17 +6,11 @@ const SB_URL      = process.env.SUPABASE_URL
 const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
 const CRON_SECRET = process.env.CRON_SECRET
 
-const SYSTEM = `Insightship 뉴스 에디터. 규칙:
-- 800~1,000자, 완전한 문장으로 마무리
-- 인사말 절대 금지 (안녕하세요/여러분 등)
-- 첫 팩트로 바로 시작 ("[기업명]이 ~했습니다" 형식)
-- ~입니다/~했습니다 체
-- 어려운 용어 괄호 설명
-- 창업·스타트업 생태계 의미 한 문장 포함`
+const SYSTEM = `Insightship 뉴스 에디터. 800~1000자 요약. 핵심 팩트로 시작. ~입니다/했습니다 체. 어려운 용어 괄호 설명. 마지막 문장은 마침표로 끝낼 것. 인사말 절대 금지.`
 
 async function summarizeOne(article) {
   const text = article.body?.length > 200
-    ? article.body.slice(0, 2000)
+    ? article.body.slice(0, 1500)
     : article.excerpt?.length > 30
     ? article.excerpt
     : article.title
@@ -30,12 +24,12 @@ async function summarizeOne(article) {
         body: JSON.stringify({
           system_instruction: { parts: [{ text: SYSTEM }] },
           contents: [{ role: 'user', parts: [{ text:
-            `제목: ${article.title}\n내용: ${text}\n\n위 뉴스를 800~1,000자로 요약하세요. 인사말 없이 첫 팩트로 바로 시작.`
+            `제목: ${article.title}\n본문: ${text}\n\n800~1000자로 요약. 핵심 팩트로 바로 시작.`
           }] }],
           generationConfig: {
-            maxOutputTokens: 1200,
+            maxOutputTokens: 1024,
+            temperature: 0.2,
             thinkingConfig: { thinkingBudget: 0 },
-            temperature: 0.3,
           },
         }),
         signal: AbortSignal.timeout(8000),
@@ -43,10 +37,21 @@ async function summarizeOne(article) {
     )
     if (!r.ok) return null
     const d = await r.json()
-    const text_out = d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
-    // 인사말 포함 시 재처리 없이 그냥 반환 (인사말은 DB에서 나중에 정리)
-    if (!text_out || text_out.length < 100) return null
-    return text_out
+    let txt = d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
+    if (!txt || txt.length < 100) return null
+    // 인사말 제거
+    const greets = ['안녕하세요', '반갑습니다', '여러분,', '여러분!']
+    if (greets.some(g => txt.startsWith(g))) {
+      const dotIdx = txt.indexOf('. ')
+      if (dotIdx > 0 && dotIdx < 80) txt = txt.slice(dotIdx + 2).trim()
+    }
+    // 끊김 처리 - 마침표로 끝나지 않으면 마지막 마침표까지 자르기
+    if (!txt.endsWith('.')) {
+      const lastDot = txt.lastIndexOf('.')
+      if (lastDot > txt.length * 0.6) txt = txt.slice(0, lastDot + 1).trim()
+      else return null
+    }
+    return txt
   } catch { return null }
 }
 
@@ -57,7 +62,7 @@ export default async function handler(req) {
 
   const H = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }
 
-  // null 요약 뉴스 50개 가져오기
+  // null 요약 50개 가져오기
   const r = await fetch(
     `${SB_URL}/rest/v1/articles?status=eq.published&category=eq.news&ai_summary=is.null&select=id,title,body,excerpt&order=published_at.desc&limit=50`,
     { headers: H }
@@ -71,7 +76,9 @@ export default async function handler(req) {
       { headers: H }
     )
     const all = await r2.json()
-    articles = (Array.isArray(all) ? all : []).filter(a => (a.ai_summary?.length||0) < 200).slice(0, 50)
+    articles = (Array.isArray(all) ? all : [])
+      .filter(a => (a.ai_summary?.length || 0) < 200)
+      .slice(0, 50)
   }
 
   if (!Array.isArray(articles) || !articles.length) {
@@ -81,11 +88,10 @@ export default async function handler(req) {
   // 50개 완전 병렬 요약
   const summaries = await Promise.allSettled(articles.map(a => summarizeOne(a)))
 
-  // DB 업데이트도 병렬
   let done = 0, failed = 0
   await Promise.allSettled(articles.map(async (a, i) => {
     const s = summaries[i].status === 'fulfilled' ? summaries[i].value : null
-    if (!s || s.length < 100) { failed++; return }
+    if (!s) { failed++; return }
     const u = await fetch(`${SB_URL}/rest/v1/articles?id=eq.${a.id}`, {
       method: 'PATCH',
       headers: { ...H, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
@@ -102,8 +108,7 @@ export default async function handler(req) {
   const remaining = parseInt(cr.headers.get('content-range')?.split('/')[1] || '0')
 
   return new Response(JSON.stringify({
-    done, failed, processed: articles.length,
-    remaining, model: 'gemini-2.5-flash',
-    timestamp: new Date().toISOString(),
+    done, failed, processed: articles.length, remaining,
+    model: 'gemini-2.5-flash', timestamp: new Date().toISOString(),
   }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 }

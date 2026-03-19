@@ -8,19 +8,19 @@ on:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 28
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: 뉴스 수집 (피드 30개 + 오래된 뉴스 정리)
+      - name: 뉴스 수집 (피드 30개, 스마트 중복제거)
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
           ADMIN_PROFILE_ID: ${{ vars.ADMIN_PROFILE_ID }}
         run: python3 scripts/collect_news.py
 
-      - name: AI 요약 처리 (최대 800개/사이클)
+      - name: AI 요약 처리 (최대 800개/사이클, 조기종료)
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
@@ -34,7 +34,7 @@ jobs:
             REMAINING=$(python3 scripts/check_remaining.py 2>/dev/null || echo "0")
             echo "남은 null: $REMAINING"
             if [ "$REMAINING" = "0" ]; then
-              echo "모든 요약 완료"
+              echo "✅ 모든 요약 완료 (라운드 $i에서 조기 종료)"
               break
             fi
             sleep 1
