@@ -17,23 +17,83 @@
   <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
 
-  
   <script>
-    // 다크모드 고정 (깜빡임 방지)
+    // ── 다크모드 고정 ─────────────────────────────────────────────
     document.documentElement.setAttribute('data-theme', 'dark')
     localStorage.removeItem('theme')
   </script>
+
   <script>
-    // 이전 서비스워커 캐시 자동 정리
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(regs => {
-        regs.forEach(reg => {
-          reg.update() // 최신 SW 강제 체크
+    // ── 보안: DevTools / F12 방지 ────────────────────────────────
+    (function() {
+      // 1) 우클릭 방지
+      document.addEventListener('contextmenu', function(e) { e.preventDefault() }, true)
+
+      // 2) F12, Ctrl+Shift+I/J/C/U, Ctrl+U 단축키 차단
+      document.addEventListener('keydown', function(e) {
+        var k = e.key || e.keyCode
+        // F12
+        if (k === 'F12' || k === 123) { e.preventDefault(); e.stopPropagation(); return false }
+        // Ctrl+Shift+I/J/C
+        if (e.ctrlKey && e.shiftKey && (k==='I'||k==='J'||k==='C'||k==='i'||k==='j'||k==='c')) { e.preventDefault(); e.stopPropagation(); return false }
+        // Ctrl+U (소스보기)
+        if (e.ctrlKey && (k==='U'||k==='u')) { e.preventDefault(); e.stopPropagation(); return false }
+        // Ctrl+S (저장)
+        if (e.ctrlKey && (k==='S'||k==='s')) { e.preventDefault(); e.stopPropagation(); return false }
+      }, true)
+
+      // 3) DevTools 열림 감지 → 콘솔 초기화
+      var devtoolsOpen = false
+      var threshold = 160
+      setInterval(function() {
+        var widthDiff = window.outerWidth - window.innerWidth
+        var heightDiff = window.outerHeight - window.innerHeight
+        if (widthDiff > threshold || heightDiff > threshold) {
+          if (!devtoolsOpen) {
+            devtoolsOpen = true
+            console.clear()
+            console.log('%c🔒 Insightship', 'font-size:30px;color:#D4AF37;font-weight:bold')
+            console.log('%c이 콘솔은 개발자 전용입니다. 악의적인 코드를 붙여넣지 마세요.', 'font-size:14px;color:#f87171')
+          }
+        } else {
+          devtoolsOpen = false
+        }
+      }, 1000)
+
+      // 4) console.log 오버라이드 (외부 스크립트 주입 감지)
+      var _log = console.log
+      console.log = function() {
+        _log.apply(console, arguments)
+      }
+    })()
+  </script>
+
+  <script>
+    // ── 보안: 소스 조작 방지 (DOM 무결성 감시) ──────────────────
+    (function() {
+      // script 태그 동적 주입 감지
+      var observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(m) {
+          m.addedNodes.forEach(function(node) {
+            if (node.tagName === 'SCRIPT' && !node.src?.includes(location.hostname) && node.src) {
+              console.warn('[Security] 외부 스크립트 주입 감지:', node.src)
+              node.remove()
+            }
+          })
         })
       })
-      caches.keys().then(keys => {
-        keys.forEach(key => {
-          // 이전 버전 캐시만 삭제 (v4 이전)
+      observer.observe(document.documentElement, { childList: true, subtree: true })
+    })()
+  </script>
+
+  <script>
+    // ── 서비스워커 캐시 정리 ─────────────────────────────────────
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        regs.forEach(function(reg) { reg.update() })
+      })
+      caches.keys().then(function(keys) {
+        keys.forEach(function(key) {
           if (!key.includes('insightship-v4') && !key.includes('workbox')) {
             caches.delete(key)
           }

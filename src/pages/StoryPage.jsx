@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useArticles } from '../hooks/useData'
 import { ArticleCard, ArticleCardSkeleton } from '../components/article/ArticleCard'
-import { AdSlot } from '../components/ads/AdBanner'
 import { Mic, Star, ArrowRight } from 'lucide-react'
 
 const FILTERS = [
@@ -52,8 +51,6 @@ export default function StoryPage() {
           >{f.label}</button>
         ))}
       </div>
-
-      <AdSlot slot="story-top" />
 
       {isLoading ? (
         <div className="grid-3 grid-bordered">
@@ -125,8 +122,6 @@ export default function StoryPage() {
           )}
         </>
       )}
-
-      <AdSlot slot="story-bottom" />
 
       <style>{`
         @media (max-width: 640px) {

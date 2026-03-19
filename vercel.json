@@ -83,5 +83,9 @@
       "path": "/api/generate-report",
       "schedule": "0 23 * * 5"
     }
-  ]
+  ],
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install",
+  "framework": "vite"
 }

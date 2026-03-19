@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { AdSlot } from '../components/ads/AdBanner'
 import { ArticleCard, ArticleCardSkeleton } from '../components/article/ArticleCard'
 import { useArticles } from '../hooks/useData'
 
@@ -43,8 +42,6 @@ export default function InsightPage() {
           >{c.label}</button>
         ))}
       </div>
-
-      <AdSlot slot="insight-top" />
 
       {/* 콘텐츠 */}
       {isLoading ? (
