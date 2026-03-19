@@ -12,16 +12,7 @@ function usePost(id) {
     queryKey: ['post', id],
     queryFn: async () => {
       if (!id) return null
-      // 조회수 증가 (fire & forget)
-      supabase.rpc('increment_post_view', { post_id: id }).catch(() => {})
-      // RPC 없으면 직접 update로 폴백
-      supabase.from('community_posts')
-        .select('view_count').eq('id', id).maybeSingle()
-        .then(({ data }) => {
-          if (data) supabase.from('community_posts')
-            .update({ view_count: (data.view_count || 0) + 1 })
-            .eq('id', id).then(() => {})
-        }).catch(() => {})
+      // 게시글 조회
       const { data, error } = await supabase
         .from('community_posts')
         .select(`*, profiles!author_id(id, display_name, avatar_url, startup_name, school)`)
@@ -30,9 +21,17 @@ function usePost(id) {
         .maybeSingle()
       if (error) throw error
       if (!data) throw new Error('게시글을 찾을 수 없습니다')
+      // 조회수 증가 (데이터 반환 후 fire & forget)
+      setTimeout(() => {
+        supabase.from('community_posts')
+          .update({ view_count: (data.view_count || 0) + 1 })
+          .eq('id', id)
+          .then(() => {}).catch(() => {})
+      }, 0)
       return data
     },
     enabled: !!id,
+    staleTime: 0,
   })
 }
 
