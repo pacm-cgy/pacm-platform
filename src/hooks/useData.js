@@ -111,15 +111,25 @@ export function useLikeArticle() {
       if (!user) throw new Error('로그인이 필요합니다')
       checkRateLimit('like', 20, 60000)
       if (liked) {
+        // 좋아요 취소
         await supabase.from('article_likes').delete()
           .match({ user_id: user.id, article_id: articleId })
+        // like_count 감소
+        const { data } = await supabase.from('articles').select('like_count').eq('id', articleId).maybeSingle()
+        if (data) await supabase.from('articles').update({ like_count: Math.max(0, (data.like_count||0)-1) }).eq('id', articleId)
       } else {
-        await supabase.from('article_likes').insert(
-          { user_id: user.id, article_id: articleId }
-        )
+        // 좋아요 추가
+        const { error } = await supabase.from('article_likes').insert({ user_id: user.id, article_id: articleId })
+        if (!error) {
+          const { data } = await supabase.from('articles').select('like_count').eq('id', articleId).maybeSingle()
+          if (data) await supabase.from('articles').update({ like_count: (data.like_count||0)+1 }).eq('id', articleId)
+        }
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['articles'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['articles'] })
+      qc.invalidateQueries({ queryKey: ['news'] })
+    },
   })
 }
 
@@ -396,7 +406,8 @@ export function useIsBookmarked(articleId) {
         return !!data
       } catch { return false }
     },
-    retry: false,
+    retry: 1,
+    retryDelay: 500,
     enabled: !!user && !!articleId,
   })
 }
