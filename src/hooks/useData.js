@@ -432,3 +432,25 @@ export function usePinnedNotices() {
     refetchInterval: 10 * 60 * 1000,
   })
 }
+
+// ── NEWS-BASED TRENDS (뉴스 카테고리별 자동 트렌드) ──────────────
+export function useNewsTrends() {
+  return useQuery({
+    queryKey: ['news_trends'],
+    queryFn: async () => {
+      const today = new Date().toISOString().slice(0, 10)
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+      const { data, error } = await supabase
+        .from('trend_snapshots')
+        .select('*')
+        .in('category', ['경제/창업','기술/IT','교육/창업','사회/창업','환경/에너지','헬스케어','AI분석'])
+        .gte('snapshot_date', yesterday)
+        .order('metric_value', { ascending: false })
+        .limit(20)
+      if (error) return []
+      return data || []
+    },
+    staleTime: 30 * 60 * 1000,
+    refetchInterval: 60 * 60 * 1000,
+  })
+}

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { TrendingUp, TrendingDown, Minus, BarChart2, ChevronDown, ChevronUp, ExternalLink, Zap } from 'lucide-react'
 import { ArticleCard, ArticleCardSkeleton } from '../components/article/ArticleCard'
-import { useArticles, useTrends } from '../hooks/useData'
+import { useArticles, useTrends, useNewsTrends } from '../hooks/useData'
 import { useNavigate } from 'react-router-dom'
 
 const SECTORS = [
@@ -186,7 +186,7 @@ function TrendCard({ snapshot }) {
 }
 
 // ── 섹터 카드 (HOT SECTORS) ──────────────────────────────────────
-function SectorCard({ sector }) {
+function SectorCard({ sector, newsCount }) {
   const [showWhy, setShowWhy] = useState(false)
 
   const whyPayload = {
@@ -210,6 +210,18 @@ function SectorCard({ sector }) {
           </div>
           <BarChart2 size={16} color="var(--c-gold)" style={{ flexShrink: 0 }} />
         </div>
+        {/* 뉴스 수치 */}
+        {newsCount && (
+          <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'8px 0', borderTop:'1px solid var(--c-border)' }}>
+            <span style={{ fontFamily:'var(--f-mono)', fontSize:'13px', fontWeight:700, color: newsCount.change_pct > 0 ? 'var(--c-green)' : newsCount.change_pct < 0 ? 'var(--c-red)' : 'var(--c-paper)' }}>
+              {newsCount.metric_value}건
+            </span>
+            <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color: newsCount.change_pct > 0 ? 'var(--c-green)' : newsCount.change_pct < 0 ? 'var(--c-red)' : 'var(--c-gray-5)' }}>
+              {newsCount.change_pct > 0 ? '▲' : newsCount.change_pct < 0 ? '▼' : '─'} {Math.abs(newsCount.change_pct || 0)}% 전일대비
+            </span>
+            <span style={{ fontFamily:'var(--f-mono)', fontSize:'9px', color:'var(--c-gray-5)', marginLeft:'auto' }}>오늘</span>
+          </div>
+        )}
         {/* 왜 그럴까? 버튼 */}
         <WhyButton
           active={showWhy}
@@ -252,8 +264,9 @@ export default function TrendPage() {
   const { data: trendArticles = [], isLoading } = useArticles({ category: 'trend', limit: 6 })
   const { data: snapshots = [] } = useTrends()
 
-  const officialSnaps = snapshots.filter(s => s.source_name !== '뉴스 트렌드 분석')
-  const newsSnaps     = snapshots.filter(s => s.source_name === '뉴스 트렌드 분석')
+  const { data: newsTrends = [] } = useNewsTrends()
+  const officialSnaps = snapshots  // 어드민이 수동 입력한 공식 지표
+  const newsSnaps     = newsTrends // 뉴스 기반 자동 업데이트 트렌드
 
   return (
     <div style={{ paddingBottom: '80px' }}>
@@ -292,8 +305,8 @@ export default function TrendPage() {
         {newsSnaps.length > 0 && (
           <section>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--c-border)' }}>
-              <div className="t-eyebrow">뉴스 트렌드 · AI 자동 분석</div>
-              <span style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: '#60a5fa', border: '1px solid #60a5fa', padding: '1px 6px' }}>AUTO</span>
+              <div className="t-eyebrow">뉴스 트렌드 · 실시간 자동 업데이트</div>
+              <span style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: '#60a5fa', border: '1px solid #60a5fa', padding: '1px 6px' }}>LIVE</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '2px', background: 'var(--c-border)', border: '1px solid var(--c-border)' }}>
               {newsSnaps.map((s, i) => (
@@ -324,11 +337,17 @@ export default function TrendPage() {
             <span style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gray-5)' }}>출처: 중소벤처기업부, 벤처캐피탈협회</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '2px', background: 'var(--c-border)', border: '1px solid var(--c-border)' }}>
-            {SECTORS.map((s, i) => (
-              <div key={i} style={{ background: 'var(--c-card)' }}>
-                <SectorCard sector={s} />
-              </div>
-            ))}
+            {SECTORS.map((s, i) => {
+              const newsCount = newsTrends.find(t =>
+                t.category?.toLowerCase()?.includes(s.category) ||
+                t.metric_name?.toLowerCase()?.includes(s.category)
+              )
+              return (
+                <div key={i} style={{ background: 'var(--c-card)' }}>
+                  <SectorCard sector={s} newsCount={newsCount} />
+                </div>
+              )
+            })}
           </div>
         </section>
 

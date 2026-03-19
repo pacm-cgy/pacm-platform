@@ -1,164 +1,158 @@
-// 뉴스 기반 트렌드 자동 추출 - Claude API (primary) → Gemini (fallback)
+// 뉴스 기반 트렌드 자동 추출 - 매일 실행
+// 1) 뉴스 카테고리별 수집량 집계 → trend_snapshots 저장
+// 2) 전일 대비 change_pct 자동 계산
 export const config = { runtime: 'edge' }
 
-const SUPABASE_URL = process.env.SUPABASE_URL
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-const GEMINI_KEY = process.env.GEMINI_API_KEY
-const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
-const CRON_SECRET = process.env.CRON_SECRET
+const SB_URL  = process.env.SUPABASE_URL
+const SB_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY
+const GEMINI  = process.env.GEMINI_API_KEY
+const SECRET  = process.env.CRON_SECRET
 
-async function callAI(prompt) {
-  // Claude 우선
-  if (ANTHROPIC_KEY) {
-    try {
-      const r = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': ANTHROPIC_KEY,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 800,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-        signal: AbortSignal.timeout(20000),
-      })
-      if (r.ok) {
-        const d = await r.json()
-        return d.content?.[0]?.text?.trim() || null
-      }
-    } catch {}
-  }
-  // Gemini 폴백
-  if (GEMINI_KEY) {
-    try {
-      const r = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { maxOutputTokens: 800,
-          thinkingConfig: { thinkingBudget: 0 },
-          temperature: 0.2 },
-          }),
-          signal: AbortSignal.timeout(15000),
-        }
-      )
-      if (r.ok) {
-        const d = await r.json()
-        return d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
-      }
-    } catch {}
-  }
-  return null
+// 카테고리 → 한국어 메트릭명 매핑
+const CAT_MAP = {
+  funding:        { name: '스타트업 투자/펀딩', unit: '건', cat_display: '경제/창업' },
+  ai_startup:     { name: 'AI 스타트업',        unit: '건', cat_display: '기술/IT' },
+  ai:             { name: 'AI 기술',             unit: '건', cat_display: '기술/IT' },
+  edutech:        { name: '에듀테크',            unit: '건', cat_display: '교육/창업' },
+  youth:          { name: '청소년/청년 창업',    unit: '건', cat_display: '사회/창업' },
+  entrepreneurship:{ name: '창업 생태계',        unit: '건', cat_display: '경제/창업' },
+  unicorn:        { name: '유니콘/IPO',          unit: '건', cat_display: '경제/창업' },
+  climate:        { name: '기후테크/그린',       unit: '건', cat_display: '환경/에너지' },
+  health:         { name: '헬스케어 AI',         unit: '건', cat_display: '헬스케어' },
+  fintech:        { name: '핀테크',              unit: '건', cat_display: '경제/창업' },
+  general:        { name: '일반 스타트업',       unit: '건', cat_display: '경제/창업' },
 }
 
 export default async function handler(req) {
-  const isAuthed = req.headers.get('x-vercel-cron') === '1'
-    || req.headers.get('authorization') === 'Bearer ' + CRON_SECRET
-  if (!isAuthed) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+  const isAuth = req.headers.get('x-vercel-cron') === '1'
+    || req.headers.get('authorization') === `Bearer ${SECRET}`
+  if (!isAuth) return new Response('Unauthorized', { status: 401 })
 
-  const H = { apikey: SUPABASE_SERVICE_KEY, Authorization: 'Bearer ' + SUPABASE_SERVICE_KEY }
+  const H = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' }
+  const today = new Date().toISOString().slice(0, 10)
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
 
-  // 최근 7일 뉴스
-  const since = new Date(Date.now() - 7 * 86400000).toISOString()
-  const newsRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/articles?status=eq.published&published_at=gte.${since}&select=title,ai_summary,ai_category,tags&order=published_at.desc&limit=80`,
-    { headers: H }
-  )
-  const news = await newsRes.json()
-  if (!news?.length) return new Response(JSON.stringify({ message: '뉴스 없음' }), { status: 200 })
+  // 1) 오늘 + 어제 뉴스 카테고리별 수집량
+  const [todayNews, yNews] = await Promise.all([
+    fetch(`${SB_URL}/rest/v1/articles?status=eq.published&category=eq.news&published_at=gte.${today}&select=ai_category`, { headers: H }).then(r=>r.json()),
+    fetch(`${SB_URL}/rest/v1/articles?status=eq.published&category=eq.news&published_at=gte.${yesterday}&published_at=lt.${today}&select=ai_category`, { headers: H }).then(r=>r.json()),
+  ])
 
-  const catCounts = {}
-  const tagCounts = {}
-  news.forEach(a => {
-    const cat = a.ai_category || 'general'
-    catCounts[cat] = (catCounts[cat] || 0) + 1
-    ;(a.tags || []).forEach(t => { tagCounts[t] = (tagCounts[t] || 0) + 1 })
-  })
+  if (!Array.isArray(todayNews) || !todayNews.length) {
+    return new Response(JSON.stringify({ message: '오늘 뉴스 없음' }), { status: 200 })
+  }
 
-  const topTags = Object.entries(tagCounts)
-    .filter(([t]) => t !== '뉴스' && t.length > 1)
-    .sort((a, b) => b[1] - a[1]).slice(0, 10)
+  // 카테고리별 집계
+  const countToday = {}, countYest = {}
+  for (const a of todayNews)  countToday[a.ai_category||'general'] = (countToday[a.ai_category||'general']||0)+1
+  for (const a of (yNews||[])) countYest[a.ai_category||'general']  = (countYest[a.ai_category||'general']||0)+1
 
-  const catSummary = Object.entries(catCounts).sort((a, b) => b[1] - a[1])
-    .map(([cat, cnt]) => `${cat}: ${cnt}건`).join(', ')
-  const topTagStr = topTags.map(([t, c]) => `${t}(${c}건)`).join(', ')
-  const sampleTitles = news.slice(0, 10).map(a => a.title).join('\n')
-
-  const exampleJson = '[{"metric_name":"AI스타트업","metric_value":45,"metric_unit":"건/주","change_pct":25,"category":"ai","source_name":"뉴스 트렌드 분석","description":"AI 스타트업 관련 뉴스 증가"},{"metric_name":"에듀테크","metric_value":18,"metric_unit":"건/주","change_pct":12,"category":"edutech","source_name":"뉴스 트렌드 분석","description":"교육 기술 스타트업 관심 증가"}]'
-
-  const prompt = `아래 최근 뉴스 데이터를 분석해서 현재 가장 주목받는 트렌드 지표 3개를 추출하세요.
-
-카테고리별 기사 수: ${catSummary}
-많이 언급된 키워드: ${topTagStr}
-주요 기사 제목:
-${sampleTitles}
-
-반드시 JSON 배열 형식만 출력하세요 (코드블록이나 다른 텍스트 없이 순수 JSON만):
-${exampleJson}`
-
-  let extracted = []
+  // 2) AI로 핫 키워드 + 시장 분위기 추출
+  let aiInsight = null
   try {
-    const result = await callAI(prompt)
-    if (result) {
-      const clean = result.replace(/```json|```/g, '').trim()
-      const arrMatch = clean.match(/\[\s*\{[\s\S]*?\}\s*\]/)
-      if (arrMatch) {
-        try { extracted = JSON.parse(arrMatch[0]) } catch {}
+    const recentTitles = await fetch(
+      `${SB_URL}/rest/v1/articles?status=eq.published&category=eq.news&published_at=gte.${weekAgo}&select=title,ai_category&order=published_at.desc&limit=50`,
+      { headers: H }
+    ).then(r=>r.json())
+
+    const titles = (Array.isArray(recentTitles) ? recentTitles : []).map(a=>a.title).join('\n')
+    const prompt = `다음 최근 1주일 스타트업/창업 뉴스 제목들을 분석하세요.
+가장 뜨거운 트렌드 키워드 TOP 5를 JSON으로만 반환하세요:
+{"hot_keywords":["키워드1","키워드2","키워드3","키워드4","키워드5"],"market_mood":"bullish|bearish|neutral","summary":"20자 이내 시장 요약"}
+
+뉴스 제목:
+${titles.slice(0, 2000)}
+
+JSON만 출력:`
+
+    const gr = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI}`,
+      {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 256, temperature: 0.1, thinkingConfig: { thinkingBudget: 0 } },
+        }),
+        signal: AbortSignal.timeout(10000),
       }
-      if (!extracted.length) {
-        try {
-          const parsed = JSON.parse(clean)
-          extracted = Array.isArray(parsed) ? parsed : []
-        } catch {}
-      }
+    )
+    if (gr.ok) {
+      const gd = await gr.json()
+      const txt = gd.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
+      const clean = txt.replace(/```json|```/g, '').trim()
+      try { aiInsight = JSON.parse(clean) } catch { aiInsight = null }
     }
   } catch {}
 
-  if (!extracted.length) return new Response(JSON.stringify({ message: '추출 실패', catSummary }), { status: 200 })
+  // 3) trend_snapshots 저장/업데이트
+  const saved = [], errors = []
 
-  const today = new Date().toISOString().slice(0, 10)
-  let saved = 0
-  const errors = []
+  for (const [aiCat, count] of Object.entries(countToday)) {
+    const meta = CAT_MAP[aiCat] || { name: aiCat, unit: '건', cat_display: '기타' }
+    const prevCount = countYest[aiCat] || 0
+    const changePct = prevCount > 0
+      ? Math.round(((count - prevCount) / prevCount) * 100)
+      : count > 0 ? 100 : 0
 
-  for (const t of extracted.slice(0, 5)) {
-    try {
-      const existing = await fetch(
-        `${SUPABASE_URL}/rest/v1/trend_snapshots?metric_name=eq.${encodeURIComponent(t.metric_name)}&source=eq.뉴스 트렌드 분석&snapshot_date=gte.${today}`,
-        { headers: H }
-      )
-      const ex = await existing.json()
-      if (ex?.length > 0) continue
+    // 오늘 이미 있으면 UPDATE, 없으면 INSERT (upsert)
+    const upsertBody = {
+      snapshot_date: today,
+      category: meta.cat_display,
+      metric_name: meta.name,
+      metric_value: count,
+      metric_unit: meta.unit,
+      change_pct: changePct,
+    }
 
-      const saveRes = await fetch(`${SUPABASE_URL}/rest/v1/trend_snapshots`, {
-        method: 'POST',
-        headers: { ...H, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-        body: JSON.stringify({
-          metric_name: t.metric_name,
-          metric_value: t.metric_value || 0,
-          metric_unit: t.metric_unit || '건/주',
-          change_pct: t.change_pct || 0,
-          category: t.category || 'general',
-          source: '뉴스 트렌드 분석',
-          source_url: null,
-          snapshot_date: new Date().toISOString().slice(0, 10),
-        }),
-      })
-      if (saveRes.ok || saveRes.status === 201) saved++
-      else errors.push(t.metric_name + ':' + saveRes.status)
-    } catch (e) {
-      errors.push(t.metric_name + ':' + (e.message || '').slice(0, 30))
+    const r = await fetch(`${SB_URL}/rest/v1/trend_snapshots`, {
+      method: 'POST',
+      headers: { ...H, Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(upsertBody),
+    })
+
+    if (r.ok || r.status === 201 || r.status === 204) saved.push(meta.name)
+    else {
+      const errTxt = await r.text()
+      errors.push(`${meta.name}:${r.status}:${errTxt.slice(0,50)}`)
     }
   }
 
+  // 4) AI 인사이트 트렌드도 저장
+  if (aiInsight?.hot_keywords?.length) {
+    const mood = aiInsight.market_mood || 'neutral'
+    const moodScore = mood === 'bullish' ? 1 : mood === 'bearish' ? -1 : 0
+
+    const hotR = await fetch(`${SB_URL}/rest/v1/trend_snapshots`, {
+      method: 'POST',
+      headers: { ...H, Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        snapshot_date: today,
+        category: 'AI분석',
+        metric_name: '시장분위기지수',
+        metric_value: moodScore,
+        metric_unit: 'score',
+        change_pct: 0,
+      }),
+    })
+    if (hotR.ok || hotR.status === 201 || hotR.status === 204) saved.push('시장분위기지수')
+  }
+
+  // 5) 30일 이상 된 뉴스 기반 트렌드 정리
+  const cutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+  await fetch(
+    `${SB_URL}/rest/v1/trend_snapshots?snapshot_date=lt.${cutoff}&category=in.(경제/창업,기술/IT,교육/창업,사회/창업,환경/에너지,헬스케어,AI분석)`,
+    { method: 'DELETE', headers: H }
+  ).catch(() => {})
+
   return new Response(JSON.stringify({
-    extracted: extracted.length, saved, errors,
-    topTags: topTags.slice(0, 5).map(([t]) => t),
+    ok: true,
+    today,
+    total_news: todayNews.length,
+    categories_updated: saved.length,
+    saved,
+    errors,
+    ai_insight: aiInsight,
     timestamp: new Date().toISOString(),
   }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 }
