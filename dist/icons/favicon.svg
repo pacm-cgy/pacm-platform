@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none">
+  <!-- 배경 -->
+  <rect width="40" height="40" rx="8" fill="#0F0E0A"/>
+  <!-- 돛대 -->
+  <line x1="20" y1="3" x2="20" y2="27" stroke="#F0EEE8" stroke-width="1.5"/>
+  <!-- 메인 돛 -->
+  <path d="M20 4 L20 26 L7 26 Z" fill="#C8982A" opacity="0.95"/>
+  <!-- 보조 돛 -->
+  <path d="M20 9 L20 26 L30 26 Z" fill="#C8982A" opacity="0.5"/>
+  <!-- 선체 -->
+  <path d="M5 27 Q20 33 35 27 L33 30 Q20 36 7 30 Z" fill="#F0EEE8"/>
+  <!-- 물결 -->
+  <path d="M3 33 Q9 31 15 33 Q21 35 27 33 Q33 31 38 33" stroke="#C8982A" stroke-width="1.4" fill="none" opacity="0.6"/>
+  <!-- 깃발 -->
+  <path d="M20 3 L26 7 L20 10 Z" fill="#C8982A"/>
+</svg>
