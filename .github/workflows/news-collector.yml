@@ -8,26 +8,34 @@ on:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: 뉴스 수집
+      - name: 뉴스 수집 (피드 30개 + 오래된 뉴스 정리)
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
           ADMIN_PROFILE_ID: ${{ vars.ADMIN_PROFILE_ID }}
         run: python3 scripts/collect_news.py
 
-      - name: AI 요약 대량 처리 (60개 x 5라운드)
+      - name: AI 요약 처리 (최대 800개/사이클)
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
           GEMINI_API_KEY: ${{ vars.GEMINI_API_KEY }}
-          BATCH_SIZE: "60"
+          BATCH_SIZE: "80"
+          MAX_WORKERS: "20"
         run: |
-          for i in 1 2 3 4 5; do
-            echo "=== 요약 라운드 $i ==="
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            echo "=== 요약 라운드 $i/10 ==="
             python3 scripts/bulk_summarize.py
-            sleep 2
+            REMAINING=$(python3 scripts/check_remaining.py 2>/dev/null || echo "0")
+            echo "남은 null: $REMAINING"
+            if [ "$REMAINING" = "0" ]; then
+              echo "모든 요약 완료"
+              break
+            fi
+            sleep 1
           done
