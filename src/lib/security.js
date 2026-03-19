@@ -41,12 +41,15 @@ export function initSecurityGuards() {
   window.addEventListener('resize', detectDevTools, { passive: true })
 
   // Prototype 오염 방지
-  if (Object.freeze) {
-    try {
-      // 중요 전역 객체 동결 (너무 넓게 하면 앱 깨지므로 최소한만)
-      Object.freeze(Object.prototype)
-    } catch {}
-  }
+  // Object.prototype freeze 제거 - React/Vite가 Object를 수정하므로 앱 전체 크래시 유발
+  // 대신 __proto__ 직접 변조 감지만 수행
+  try {
+    Object.defineProperty(Object.prototype, '__proto__', {
+      set(val) {
+        // 프로토타입 오염 시도 무시
+      }
+    })
+  } catch {}
 }
 
 // ── 2. 입력값 XSS 검증 ───────────────────────────────────────
