@@ -122,7 +122,7 @@ function WriteModal({ onClose }) {
             <label className="label">카테고리</label>
             <select value={postType} onChange={e => setPostType(e.target.value)} className="input"
               style={{ appearance: 'none', cursor: 'pointer' }}>
-              {POST_TYPES.filter(t => t.id !== 'all' && t.id !== 'notice').map(t =>
+              {POST_TYPES.filter(t => t.id !== 'all' && (t.id !== 'notice' || profile?.role === 'admin')).map(t =>
                 <option key={t.id} value={t.id}>{t.label}</option>
               )}
             </select>

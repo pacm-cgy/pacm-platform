@@ -126,6 +126,7 @@ export default function App() {
                       <Route path="/connect"    element={<ConnectPage />} />
                       <Route path="/article/:slug" element={<ArticlePage />} />
                       <Route path="/profile"    element={<ProfilePage />} />
+                      <Route path="/advertise"  element={<AdvertisePage />} />
                       <Route path="/404"        element={<NotFoundPage />} />
                       <Route path="*"           element={<Navigate to="/404" replace />} />
                     </Routes>
