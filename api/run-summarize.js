@@ -69,7 +69,7 @@ export default async function handler(req) {
 
   // ai_summary가 없거나 200자 미만인 뉴스 8개 처리
   const r = await fetch(
-    `${SB_URL}/rest/v1/articles?status=eq.published&category=eq.news&or=(ai_summary.is.null,ai_summary.lte.%22%22)&select=id,title,body,excerpt&order=published_at.desc&limit=8`,
+    `${SB_URL}/rest/v1/articles?status=eq.published&category=eq.news&or=(ai_summary.is.null,ai_summary.lte.%22%22)&select=id,title,body,excerpt&order=published_at.desc&limit=20`,
     { headers: H }
   )
   let articles = await r.json()
