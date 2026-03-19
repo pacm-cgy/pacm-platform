@@ -1,9 +1,8 @@
 import { useState, useCallback } from 'react'
-import { ExternalLink, RefreshCw, Search, Filter } from 'lucide-react'
+import { ExternalLink, RefreshCw, Search } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { useNewsArticles } from '../hooks/useData'
-import { AdSlot } from '../components/ads/AdBanner'
 
 const CATEGORY_COLORS = {
   funding: '#D4AF37', ai: '#38bdf8', ai_startup: '#38bdf8', edutech: '#f97316',
@@ -38,17 +37,14 @@ function NewsRow({ article }) {
         padding: '14px 0', borderBottom: '1px solid var(--c-border)',
         cursor: targetUrl ? 'pointer' : 'default',
         transition: 'background 0.12s',
-        borderRadius: '2px',
       }}
       onMouseEnter={e => { if (targetUrl) e.currentTarget.style.background = 'var(--c-gray-1)' }}
       onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
     >
-      {/* 카테고리 도트 */}
-      <div style={{ flexShrink: 0, paddingTop: '4px' }}>
+      <div style={{ flexShrink: 0, paddingTop: '6px' }}>
         <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: catColor }} />
       </div>
 
-      {/* 제목 + 메타 */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
           fontFamily: 'var(--f-serif)', fontSize: '15px', fontWeight: 600,
@@ -73,9 +69,8 @@ function NewsRow({ article }) {
         </div>
       </div>
 
-      {/* 외부 링크 아이콘 */}
       {targetUrl && (
-        <div style={{ flexShrink: 0, paddingTop: '3px' }}>
+        <div style={{ flexShrink: 0, paddingTop: '5px' }}>
           <ExternalLink size={13} color="var(--c-gray-5)" />
         </div>
       )}
@@ -99,7 +94,6 @@ export default function NewsPage() {
 
   return (
     <div style={{ paddingBottom: '80px' }}>
-      {/* 페이지 헤더 */}
       <div style={{ borderBottom: '1px solid var(--c-border)', padding: '40px 0 28px' }}>
         <div className="container">
           <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gold)', letterSpacing: '3px', marginBottom: '10px' }}>
@@ -114,13 +108,7 @@ export default function NewsPage() {
         </div>
       </div>
 
-      {/* 상단 광고 */}
-      <div className="container" style={{ paddingTop: '20px' }}>
-        <AdSlot position="content-top" />
-      </div>
-
       <div className="container" style={{ paddingTop: '24px' }}>
-        {/* 검색 + 새로고침 */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', alignItems: 'center' }}>
           <div style={{ flex: 1, position: 'relative' }}>
             <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--c-gray-5)' }} />
@@ -147,7 +135,6 @@ export default function NewsPage() {
           </button>
         </div>
 
-        {/* 카테고리 필터 */}
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '24px' }}>
           {FILTERS.map(f => (
             <button key={f} onClick={() => setActiveFilter(f)}
@@ -163,12 +150,10 @@ export default function NewsPage() {
           ))}
         </div>
 
-        {/* 뉴스 개수 */}
         <div style={{ fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--c-gray-5)', marginBottom: '8px' }}>
           {filtered.length}개 뉴스
         </div>
 
-        {/* 뉴스 목록 */}
         {isLoading ? (
           <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--c-muted)', fontFamily: 'var(--f-mono)', fontSize: '13px' }}>
             뉴스를 불러오는 중...
@@ -179,24 +164,11 @@ export default function NewsPage() {
           </div>
         ) : (
           <div>
-            {filtered.map((article, idx) => (
-              <div key={article.id}>
-                <NewsRow article={article} />
-                {/* 중간 광고 (30번째마다) */}
-                {(idx + 1) % 30 === 0 && idx < filtered.length - 1 && (
-                  <div style={{ padding: '16px 0' }}>
-                    <AdSlot position="news-between" />
-                  </div>
-                )}
-              </div>
+            {filtered.map(article => (
+              <NewsRow key={article.id} article={article} />
             ))}
           </div>
         )}
-
-        {/* 하단 광고 */}
-        <div style={{ marginTop: '40px' }}>
-          <AdSlot position="content-bottom" />
-        </div>
       </div>
     </div>
   )
