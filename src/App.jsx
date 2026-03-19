@@ -42,7 +42,8 @@ const ConnectPage   = lazy(() => import('./pages/ConnectPage'))
 const ArticlePage   = lazy(() => import('./pages/ArticlePage'))
 const ProfilePage   = lazy(() => import('./pages/ProfilePage'))
 const NotFoundPage  = lazy(() => import('./pages/NotFoundPage'))
-const AdvertisePage = lazy(() => import('./pages/AdvertisePage'))
+const AdvertisePage  = lazy(() => import('./pages/AdvertisePage'))
+const MessagesPage   = lazy(() => import('./pages/MessagesPage'))
 const NewsPage      = lazy(() => import('./pages/NewsPage'))
 const NewsDetailPage = lazy(() => import('./pages/NewsDetailPage'))
 const PostDetailPage = lazy(() => import('./pages/PostDetailPage'))
@@ -127,6 +128,8 @@ export default function App() {
                       <Route path="/connect"    element={<ConnectPage />} />
                       <Route path="/article/:slug" element={<ArticlePage />} />
                       <Route path="/profile"    element={<ProfilePage />} />
+                      <Route path="/profile/:id" element={<ProfilePage />} />
+                      <Route path="/messages"   element={<MessagesPage />} />
                       <Route path="/advertise"  element={<AdvertisePage />} />
                       <Route path="/404"        element={<NotFoundPage />} />
                       <Route path="*"           element={<Navigate to="/404" replace />} />

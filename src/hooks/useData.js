@@ -213,7 +213,20 @@ export function useCreateComment() {
       if (error) throw error
       return data
     },
-    onSuccess: (_, { postId }) => qc.invalidateQueries({ queryKey: ['comments', postId] }),
+    onSuccess: (_, { postId }) => {
+      qc.invalidateQueries({ queryKey: ['comments', postId] })
+      qc.invalidateQueries({ queryKey: ['post', postId] })
+      // reply_count 직접 증가 (트리거 없을 경우 폴백)
+      supabase.from('community_posts')
+        .select('reply_count').eq('id', postId).maybeSingle()
+        .then(({ data }) => {
+          if (data !== null) {
+            supabase.from('community_posts')
+              .update({ reply_count: (data?.reply_count || 0) + 1 })
+              .eq('id', postId).then(() => {})
+          }
+        }).catch(() => {})
+    },
   })
 }
 
