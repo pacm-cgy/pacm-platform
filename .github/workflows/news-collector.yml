@@ -8,7 +8,7 @@ on:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -19,21 +19,15 @@ jobs:
           ADMIN_PROFILE_ID: ${{ vars.ADMIN_PROFILE_ID }}
         run: python3 scripts/collect_news.py
 
-      - name: AI 요약 처리 (최대 3라운드)
+      - name: AI 요약 대량 처리 (60개 x 5라운드)
         env:
-          CRON_SECRET: ${{ vars.CRON_SECRET }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ vars.GEMINI_API_KEY }}
+          BATCH_SIZE: "60"
         run: |
-          for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+          for i in 1 2 3 4 5; do
             echo "=== 요약 라운드 $i ==="
-            RESULT=$(curl -sf -X GET "https://www.insightship.pacm.kr/api/run-summarize" \
-              -H "x-vercel-cron: 1" \
-              -H "Authorization: Bearer ${CRON_SECRET}" \
-              --max-time 28 || echo '{"remaining":0}')
-            echo "$RESULT"
-            REMAINING=$(echo "$RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('remaining',0))" 2>/dev/null || echo "0")
-            if [ "$REMAINING" = "0" ]; then
-              echo "요약 완료"
-              break
-            fi
-            sleep 3
+            python3 scripts/bulk_summarize.py
+            sleep 2
           done
