@@ -229,6 +229,15 @@ export default function HomePage() {
       </section>
 
       {/* ── TODAY'S INSIGHT */}
+      {/* 광고 배너 */}
+      <div style={{ marginTop: '32px' }}>
+        <a href="/advertise" style={{ display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:'4px', width:'100%', minHeight:'80px', background:'var(--c-gray-1)', border:'1px dashed var(--c-gray-4)', textDecoration:'none', padding:'16px', boxSizing:'border-box' }}>
+          <div style={{ fontFamily:'var(--f-mono)', fontSize:'9px', color:'var(--c-gray-5)', letterSpacing:'2px' }}>ADVERTISEMENT</div>
+          <div style={{ fontFamily:'var(--f-sans)', fontSize:'13px', color:'var(--c-muted)', textAlign:'center' }}>이 공간에 광고를 게재하세요 — 청소년 창업가들에게 브랜드를 알리세요</div>
+          <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-gold)' }}>광고 문의 →</div>
+        </a>
+      </div>
+
       <section style={{ paddingTop: '52px' }}>
         <div className="section-header">
           <div className="section-title">오늘의 인사이트</div>

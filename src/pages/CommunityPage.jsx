@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { MessageCircle, Heart, Eye, PenSquare, AlertCircle } from 'lucide-react'
+import { MessageCircle, Heart, Eye, PenSquare, AlertCircle, Pin } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { usePosts, useCreatePost } from '../hooks/useData'
@@ -9,11 +9,11 @@ import { validateInput, checkRateLimit } from '../lib/security'
 
 const POST_TYPES = [
   { id: 'all',      label: '전체' },
+  { id: 'notice',   label: '공지' },
   { id: 'question', label: '질문/답변' },
   { id: 'feedback', label: '사업 피드백' },
   { id: 'recruit',  label: '팀원 모집' },
   { id: 'free',     label: '자유게시판' },
-  { id: 'notice',   label: '공지' },
 ]
 const TYPE_LABELS = { question:'질문', feedback:'피드백', recruit:'팀원 모집', free:'자유', notice:'공지' }
 const TYPE_COLORS = {
@@ -28,17 +28,25 @@ function PostCard({ post }) {
   const navigate = useNavigate()
   const author = post.profiles
   const date = post.created_at ? format(new Date(post.created_at), 'M월 d일', { locale: ko }) : ''
+  const isNotice = post.post_type === 'notice'
+
   return (
     <div
       className="card card-clickable"
       onClick={() => navigate(`/community/${post.id}`)}
-      style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}
+      style={{
+        padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px',
+        borderLeft: isNotice ? '3px solid var(--c-red)' : undefined,
+        background: isNotice ? 'rgba(248,113,113,0.04)' : undefined,
+      }}
     >
       {/* 상단: 타입 배지 + 날짜 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           {post.is_pinned && (
-            <span style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-red)', border: '1px solid var(--c-red)', padding: '2px 7px' }}>PINNED</span>
+            <span style={{ display:'flex', alignItems:'center', gap:'3px', fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-red)', border: '1px solid var(--c-red)', padding: '2px 7px' }}>
+              <Pin size={9} /> 고정
+            </span>
           )}
           <span style={{
             fontFamily: 'var(--f-mono)', fontSize: '10px', letterSpacing: '0.5px',
@@ -57,11 +65,11 @@ function PostCard({ post }) {
         {post.title}
       </div>
 
-      {/* 내용 미리보기 */}
-      {post.content && (
+      {/* 내용 미리보기 (body 사용) */}
+      {(post.body || post.content) && (
         <div style={{ fontSize: '13px', color: 'var(--c-muted)', lineHeight: 1.65,
           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
-        }}>{post.content}</div>
+        }}>{post.body || post.content}</div>
       )}
 
       {/* 하단: 작성자 + 통계 */}
@@ -74,7 +82,7 @@ function PostCard({ post }) {
           {[
             [Eye, post.view_count || 0],
             [Heart, post.like_count || 0],
-            [MessageCircle, post.comment_count || 0],
+            [MessageCircle, post.reply_count || post.comment_count || 0],
           ].map(([Icon, count], i) => (
             <span key={i} style={{ display: 'flex', alignItems: 'center', gap: '3px', fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--c-gray-5)' }}>
               <Icon size={11} /> {count}
@@ -91,7 +99,7 @@ function WriteModal({ onClose }) {
   const [content, setContent] = useState('')
   const [postType, setPostType] = useState('free')
   const [err, setErr] = useState('')
-  const { user } = useAuthStore()
+  const { user, profile, isAdmin } = useAuthStore()
   const createPost = useCreatePost()
 
   const handleSubmit = async () => {
@@ -110,6 +118,11 @@ function WriteModal({ onClose }) {
     }
   }
 
+  // 허용 타입: admin은 공지 포함 전체, 일반 유저는 공지 제외
+  const allowedTypes = POST_TYPES.filter(t =>
+    t.id !== 'all' && (t.id !== 'notice' || isAdmin?.())
+  )
+
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
@@ -122,7 +135,7 @@ function WriteModal({ onClose }) {
             <label className="label">카테고리</label>
             <select value={postType} onChange={e => setPostType(e.target.value)} className="input"
               style={{ appearance: 'none', cursor: 'pointer' }}>
-              {POST_TYPES.filter(t => t.id !== 'all' && (t.id !== 'notice' || profile?.role === 'admin')).map(t =>
+              {allowedTypes.map(t =>
                 <option key={t.id} value={t.id}>{t.label}</option>
               )}
             </select>
@@ -161,50 +174,61 @@ export default function CommunityPage() {
   const { user } = useAuthStore()
   const { data: posts = [], isLoading } = usePosts({ post_type: activeType === 'all' ? null : activeType })
 
+  // 공지를 맨 위로, is_pinned 우선 정렬
+  const sorted = [...posts].sort((a, b) => {
+    if (a.post_type === 'notice' && b.post_type !== 'notice') return -1
+    if (a.post_type !== 'notice' && b.post_type === 'notice') return 1
+    if (a.is_pinned && !b.is_pinned) return -1
+    if (!a.is_pinned && b.is_pinned) return 1
+    return 0
+  })
+
   return (
     <div style={{ paddingBottom: '80px' }}>
       {showWrite && <WriteModal onClose={() => setShowWrite(false)} />}
 
       {/* 헤더 */}
       <div style={{ padding: '32px 0 0', borderBottom: '1px solid var(--c-border)' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '14px' }}>
-          <div>
-            <div className="t-eyebrow" style={{ marginBottom: '8px' }}>COMMUNITY</div>
-            <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(24px,4vw,34px)', fontWeight: 700, marginBottom: '6px', lineHeight: 1.2 }}>
-              창업 커뮤니티
-            </h1>
-            <p style={{ color: 'var(--c-muted)', fontSize: '13px' }}>
-              청소년 창업가들이 모여 이야기를 나누고 서로 돕는 공간입니다.
-            </p>
+        <div className="container">
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '14px' }}>
+            <div>
+              <div className="t-eyebrow" style={{ marginBottom: '8px' }}>COMMUNITY</div>
+              <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(24px,4vw,34px)', fontWeight: 700, marginBottom: '6px', lineHeight: 1.2 }}>
+                창업 커뮤니티
+              </h1>
+              <p style={{ color: 'var(--c-muted)', fontSize: '13px' }}>
+                청소년 창업가들이 모여 이야기를 나누고 서로 돕는 공간입니다.
+              </p>
+            </div>
+            <button onClick={() => user ? setShowWrite(true) : alert('로그인이 필요합니다')}
+              className="btn btn-gold"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}
+            >
+              <PenSquare size={14} /> 글 쓰기
+            </button>
           </div>
-          <button onClick={() => user ? setShowWrite(true) : alert('로그인이 필요합니다')}
-            className="btn btn-gold"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}
-          >
-            <PenSquare size={14} /> 글 쓰기
-          </button>
-        </div>
 
-        {/* 탭 */}
-        <div className="tab-bar">
-          {POST_TYPES.map(t => (
-            <button key={t.id}
-              className={`tab-item${activeType === t.id ? ' active' : ''}`}
-              onClick={() => setActiveType(t.id)}
-            >{t.label}</button>
-          ))}
+          {/* 탭 */}
+          <div className="tab-bar">
+            {POST_TYPES.map(t => (
+              <button key={t.id}
+                className={`tab-item${activeType === t.id ? ' active' : ''}`}
+                onClick={() => setActiveType(t.id)}
+              >{t.label}</button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* 게시글 목록 */}
-      <div style={{ marginTop: '20px' }}>
+      <div className="container" style={{ marginTop: '20px' }}>
         {isLoading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {[0,1,2,3].map(i => <div key={i} className="card skeleton" style={{ height: '110px' }} />)}
           </div>
-        ) : posts.length > 0 ? (
+        ) : sorted.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            {posts.map(p => <PostCard key={p.id} post={p} />)}
+            {sorted.map(p => <PostCard key={p.id} post={p} />)}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 20px', gap: '16px', textAlign: 'center' }}>
