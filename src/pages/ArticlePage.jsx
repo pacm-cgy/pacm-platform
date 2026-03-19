@@ -62,13 +62,13 @@ function BookmarkButton({ articleId }) {
 export default function ArticlePage() {
   const { slug } = useParams()
   const navigate = useNavigate()
+  const { data: article, isLoading, isError } = useArticle(slug)
 
-  // 페이지 타이틀
+  // 페이지 타이틀 (article 선언 후)
   useEffect(() => {
     if (article?.title) document.title = `${article.title} — Insightship`
     return () => { document.title = 'Insightship — 청소년 창업 플랫폼' }
   }, [article?.title])
-  const { data: article, isLoading, isError } = useArticle(slug)
   const [progress, setProgress] = useState(0)
   const [liked, setLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
