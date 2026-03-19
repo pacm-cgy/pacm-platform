@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { ExternalLink, RefreshCw, Search } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { RefreshCw, Search } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { supabase } from '../lib/supabase'
@@ -18,22 +19,22 @@ const FILTERS = ['전체', '투자/펀딩', 'AI', '창업', '청소년창업', '
 const PAGE_SIZE = 60
 
 function NewsRow({ article }) {
+  const navigate = useNavigate()
   const date = article.published_at
     ? format(new Date(article.published_at), 'M월 d일', { locale: ko })
     : ''
   const catColor = CATEGORY_COLORS[article.ai_category] || '#9ca3af'
   const catKo = CATEGORY_KO[article.ai_category] || '뉴스'
-  const targetUrl = article.source_url?.startsWith('http') ? article.source_url : null
 
   return (
     <article
-      onClick={() => { if (targetUrl) window.open(targetUrl, '_blank', 'noopener,noreferrer') }}
+      onClick={() => navigate(`/article/${article.slug}`)}
       style={{
         display: 'flex', alignItems: 'flex-start', gap: '14px',
         padding: '14px 0', borderBottom: '1px solid var(--c-border)',
-        cursor: targetUrl ? 'pointer' : 'default', transition: 'background 0.12s',
+        cursor: 'pointer', transition: 'background 0.12s',
       }}
-      onMouseEnter={e => { if (targetUrl) e.currentTarget.style.background = 'var(--c-gray-1)' }}
+      onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-gray-1)' }}
       onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
     >
       <div style={{ flexShrink: 0, paddingTop: '6px' }}>
@@ -62,11 +63,6 @@ function NewsRow({ article }) {
           </span>
         </div>
       </div>
-      {targetUrl && (
-        <div style={{ flexShrink: 0, paddingTop: '5px' }}>
-          <ExternalLink size={13} color="var(--c-gray-5)" />
-        </div>
-      )}
     </article>
   )
 }

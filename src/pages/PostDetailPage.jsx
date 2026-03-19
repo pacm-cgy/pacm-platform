@@ -12,8 +12,16 @@ function usePost(id) {
     queryKey: ['post', id],
     queryFn: async () => {
       if (!id) return null
-      // 조회수 증가
-      supabase.from('community_posts').update({ view_count: supabase.rpc('increment_post_view', {post_id: id}) }).eq('id', id).then(() => {})
+      // 조회수 증가 (fire & forget)
+      supabase.rpc('increment_post_view', { post_id: id }).catch(() => {})
+      // RPC 없으면 직접 update로 폴백
+      supabase.from('community_posts')
+        .select('view_count').eq('id', id).maybeSingle()
+        .then(({ data }) => {
+          if (data) supabase.from('community_posts')
+            .update({ view_count: (data.view_count || 0) + 1 })
+            .eq('id', id).then(() => {})
+        }).catch(() => {})
       const { data, error } = await supabase
         .from('community_posts')
         .select(`*, profiles!author_id(id, display_name, avatar_url, startup_name, school)`)

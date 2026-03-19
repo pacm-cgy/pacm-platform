@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { ArticleCard, ArticleHero, ArticleSideItem, ArticleMagItem, ArticleCardSkeleton } from '../components/article/ArticleCard'
-import { useArticles, useNewsArticles, useProjects, useTrends, useSubscribeNewsletter } from '../hooks/useData'
+import { useArticles, useNewsArticles, useProjects, useTrends, useSubscribeNewsletter, usePinnedNotices } from '../hooks/useData'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 
@@ -169,8 +169,35 @@ export default function HomePage() {
     (newsArticles || []).flatMap(a => a.tags || []).filter(t => t !== '뉴스')
   )].slice(0, 6)
 
+  const { data: notices = [] } = usePinnedNotices()
+  const activeNotice = notices[0] || null
+
   return (
     <div style={{ paddingBottom: '72px' }}>
+
+      {/* ── 공지 배너 ── */}
+      {activeNotice && (
+        <div
+          onClick={() => navigate(`/community/${activeNotice.id}`)}
+          style={{
+            background: 'rgba(249,115,22,0.1)', borderBottom: '1px solid rgba(249,115,22,0.25)',
+            padding: '10px 0', cursor: 'pointer', userSelect: 'none',
+          }}
+        >
+          <div className="container" style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+            <span style={{ fontSize:'15px', flexShrink:0 }}>📢</span>
+            <span style={{
+              fontFamily:'var(--f-sans)', fontSize:'13px', color:'var(--c-paper)', fontWeight:500,
+              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1,
+            }}>
+              {activeNotice.title}
+            </span>
+            <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-gold)', flexShrink:0, letterSpacing:'0.5px' }}>
+              자세히 →
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ── HERO GRID */}
       <section style={{ paddingTop: '36px' }}>

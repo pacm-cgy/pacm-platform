@@ -377,3 +377,24 @@ export function useIsBookmarked(articleId) {
     enabled: !!user && !!articleId,
   })
 }
+
+// ── PINNED NOTICES (홈 최상단 배너용) ──────────────────────────
+export function usePinnedNotices() {
+  return useQuery({
+    queryKey: ['pinned_notices'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('community_posts')
+        .select('id, title, body, created_at')
+        .eq('post_type', 'notice')
+        .eq('is_pinned', true)
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false })
+        .limit(3)
+      if (error) return []
+      return data || []
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 10 * 60 * 1000,
+  })
+}
