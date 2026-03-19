@@ -76,36 +76,12 @@
   ],
   "crons": [
     {
-      "path": "/api/fetch-news",
-      "schedule": "0 21 * * *"
-    },
-    {
-      "path": "/api/summarize-news",
-      "schedule": "0 22 * * *"
-    },
-    {
       "path": "/api/send-newsletter",
       "schedule": "0 0 * * 1"
     },
     {
-      "path": "/api/fetch-og",
-      "schedule": "0 2 * * *"
-    },
-    {
       "path": "/api/generate-report",
       "schedule": "0 23 * * 5"
-    },
-    {
-      "path": "/api/generate-images",
-      "schedule": "0 18 * * *"
-    },
-    {
-      "path": "/api/extract-news-trends",
-      "schedule": "0 23 * * *"
-    },
-    {
-      "path": "/api/add-knowledge",
-      "schedule": "30 23 * * *"
     }
   ]
 }
