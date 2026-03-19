@@ -64,7 +64,7 @@ export default function ArticlePage() {
   const navigate = useNavigate()
 
   // 페이지 타이틀
-  React.useEffect(() => {
+  useEffect(() => {
     if (article?.title) document.title = `${article.title} — Insightship`
     return () => { document.title = 'Insightship — 청소년 창업 플랫폼' }
   }, [article?.title])
