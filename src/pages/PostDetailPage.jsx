@@ -40,7 +40,7 @@ function useComments(postId) {
       if (!postId) return []
       const { data, error } = await supabase
         .from('comments')
-        .select(`id, body, created_at, author_id, parent_id,
+        .select(`id, body, created_at, author_id, like_count, parent_id,
           profiles!author_id(id, display_name, avatar_url)`)
         .eq('post_id', postId)
         .order('created_at', { ascending: true })

@@ -34,13 +34,18 @@ export default async function handler(req) {
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
 
   // 1) 오늘 + 어제 뉴스 카테고리별 수집량
-  const [todayNews, yNews] = await Promise.all([
+  let [todayNews, yNews] = await Promise.all([
     fetch(`${SB_URL}/rest/v1/articles?status=eq.published&category=eq.news&published_at=gte.${today}&select=ai_category`, { headers: H }).then(r=>r.json()),
     fetch(`${SB_URL}/rest/v1/articles?status=eq.published&category=eq.news&published_at=gte.${yesterday}&published_at=lt.${today}&select=ai_category`, { headers: H }).then(r=>r.json()),
   ])
 
+  // 오늘 뉴스 없으면 어제 데이터로 폴백 (KST 기준 이른 아침)
   if (!Array.isArray(todayNews) || !todayNews.length) {
-    return new Response(JSON.stringify({ message: '오늘 뉴스 없음' }), { status: 200 })
+    if (!Array.isArray(yNews) || !yNews.length) {
+      return new Response(JSON.stringify({ message: '최근 뉴스 없음' }), { status: 200 })
+    }
+    todayNews = yNews
+    yNews = []
   }
 
   // 카테고리별 집계
