@@ -327,7 +327,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── TODAY'S INSIGHT */}}
+      {/* ── TODAY'S INSIGHT */}
       {/* 광고 배너 */}
       <div style={{ marginTop: '32px' }}>
         <a href="/advertise" style={{ display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:'4px', width:'100%', minHeight:'80px', background:'var(--c-gray-1)', border:'1px dashed var(--c-gray-4)', textDecoration:'none', padding:'16px', boxSizing:'border-box' }}>
