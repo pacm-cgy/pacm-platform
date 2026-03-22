@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { ArticleCard, ArticleHero, ArticleSideItem, ArticleMagItem, ArticleCardSkeleton } from '../components/article/ArticleCard'
 import { useArticles, useNewsArticles, useProjects, useTrends, useSubscribeNewsletter, usePinnedNotices } from '../hooks/useData'
+import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 
@@ -159,6 +160,13 @@ export default function HomePage() {
 
   const coverArticle   = featuredArticles[0] || allArticles[0]
   const sideArticles   = featuredArticles.slice(1, 4).length ? featuredArticles.slice(1, 4) : allArticles.slice(1, 4)
+  useEffect(() => {
+    supabase.from('newsletter_subscribers')
+      .select('id', { count: 'exact', head: true })
+      .eq('is_active', true)
+      .then(({ count }) => { if (count) setSubCount(count) })
+  }, [])
+
   const todayInsight   = allArticles.filter(a => a.category === 'insight').slice(0, 3)
   const magazineFeature = allArticles.filter(a => a.category === 'magazine')[0]
   const magazineList   = allArticles.filter(a => a.category === 'magazine').slice(1, 5)
@@ -257,7 +265,68 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── TODAY'S INSIGHT */}
+      {/* ── 창업 챌린지 배너 ── */}
+      <section style={{ marginTop: '32px' }}>
+        <a href="/community" style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'linear-gradient(135deg, var(--c-indigo) 0%, #4f46e5 100%)',
+          borderRadius: '12px', padding: '20px 28px', textDecoration: 'none',
+          border: '1px solid rgba(99,102,241,0.4)', gap: '16px',
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{
+              background: 'rgba(255,255,255,0.15)', borderRadius: '8px',
+              padding: '8px 12px', fontFamily: 'var(--f-mono)', fontSize: '11px',
+              color: '#c7d2fe', letterSpacing: '0.1em', whiteSpace: 'nowrap'
+            }}>CHALLENGE S1</div>
+            <div>
+              <div style={{ fontFamily: 'var(--f-serif)', fontSize: '17px', fontWeight: 700, color: '#fff', marginBottom: '3px' }}>
+                🚀 PACM 창업 챌린지 — "AI로 학교 문제 해결하기"
+              </div>
+              <div style={{ fontFamily: 'var(--f-sans)', fontSize: '12px', color: '#c7d2fe' }}>
+                4월 20일까지 · 우수 아이디어 메인 게재 · 대표 직접 피드백
+              </div>
+            </div>
+          </div>
+          <div style={{
+            background: '#fff', color: 'var(--c-indigo)', borderRadius: '6px',
+            padding: '8px 16px', fontFamily: 'var(--f-mono)', fontSize: '12px',
+            fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0
+          }}>참여하기 →</div>
+        </a>
+      </section>
+
+      {/* ── 뉴스레터 100명 캠페인 CTA ── */}
+      <section style={{ marginTop: '16px' }}>
+        <div style={{
+          background: 'var(--c-card)', border: '1px solid var(--c-border)',
+          borderRadius: '12px', padding: '20px 28px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: '16px', flexWrap: 'wrap'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
+            <div>
+              <div style={{ fontFamily: 'var(--f-sans)', fontSize: '13px', fontWeight: 600, color: 'var(--c-text)', marginBottom: '6px' }}>
+                📬 매주 월요일 창업 인사이트 — 구독자 100명 목표 캠페인
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ flex: 1, height: '4px', background: 'var(--c-border)', borderRadius: '2px', maxWidth: '200px' }}>
+                  <div style={{ width: `${Math.min(subCount, 100)}%`, height: '100%', background: 'var(--c-lime)', borderRadius: '2px', transition: 'width 0.5s' }} />
+                </div>
+                <span style={{ fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--c-muted)' }}>{subCount} / 100명</span>
+              </div>
+            </div>
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={() => document.querySelector('.newsletter-form input')?.focus()}
+            style={{ flexShrink: 0 }}
+          >무료 구독하기</button>
+        </div>
+      </section>
+
+      {/* ── TODAY'S INSIGHT */}}
       {/* 광고 배너 */}
       <div style={{ marginTop: '32px' }}>
         <a href="/advertise" style={{ display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:'4px', width:'100%', minHeight:'80px', background:'var(--c-gray-1)', border:'1px dashed var(--c-gray-4)', textDecoration:'none', padding:'16px', boxSizing:'border-box' }}>
