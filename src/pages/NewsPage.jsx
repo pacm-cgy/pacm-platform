@@ -152,9 +152,16 @@ export default function NewsPage() {
 
       const newData = data || []
       if (reset) {
-        setArticles(newData)
+        // title 기준 중복 제거 (DB constraint 이전 데이터 대비 방어)
+        const seen = new Set()
+        const deduped = newData.filter(a => { if (seen.has(a.title)) return false; seen.add(a.title); return true; })
+        setArticles(deduped)
       } else {
-        setArticles(prev => [...prev, ...newData])
+        setArticles(prev => {
+          const seen = new Set(prev.map(a => a.title))
+          const deduped = newData.filter(a => { if (seen.has(a.title)) return false; seen.add(a.title); return true; })
+          return [...prev, ...deduped]
+        })
       }
       if (pageNum === 0) setTotal(count || 0)
       setHasMore(newData.length === PAGE_SIZE)
