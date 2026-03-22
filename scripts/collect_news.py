@@ -128,8 +128,8 @@ _title_cache = set()
 def load_recent_cache():
     """최근 7일 URL/제목 캐시 로드"""
     try:
-        week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).strftime('%Y-%m-%d')
-        data = supa_get(f'/articles?status=eq.published&category=eq.news&published_at=gte.{week_ago}&select=source_url,title&limit=2000')
+        week_ago = (datetime.now(timezone.utc) - timedelta(days=90)).strftime('%Y-%m-%d')
+        data = supa_get(f'/articles?status=eq.published&category=eq.news&published_at=gte.{week_ago}&select=source_url,title&limit=5000')
         for a in (data or []):
             if a.get('source_url'):
                 _url_cache.add(a['source_url'])
@@ -224,6 +224,8 @@ for feed_url, tag, ai_cat in FEEDS:
             status, _ = supa_post('/articles', article)
             if status == 201:
                 inserted += 1
+                _url_cache.add(link)
+                _title_cache.add(clean_title[:20])
                 _url_cache.add(link)
                 _title_cache.add(clean_title[:20])
         except Exception as e:
