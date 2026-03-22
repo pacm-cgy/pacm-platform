@@ -118,6 +118,19 @@ export default function ArticlePage() {
   const catColor = CATEGORY_COLORS[article.ai_category] || 'var(--c-gold)'
 
   // AI 요약 최대 2000자 처리
+  // HTML 태그 제거 함수 (excerpt/body에 HTML이 남아있을 경우 대비)
+  const stripHtml = (s) => {
+    if (!s) return ''
+    return s
+      .replace(/<(script|style)[^>]*>[\s\S]*?<\/(script|style)>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+      .replace(/&#x?[0-9a-fA-F]+;/g, '')
+      .replace(/https?:\/\/\S+/g, '')
+      .replace(/\s{2,}/g, ' ').trim()
+  }
+
   const summary = article.ai_summary
     ? article.ai_summary.slice(0, 2000)
     : null
@@ -207,11 +220,24 @@ export default function ArticlePage() {
                 </div>
               </>
             ) : (
-              /* 요약 없는 경우 본문 표시 */
-              <div style={{ fontSize:'15px', lineHeight:1.85, color:'var(--c-gray-7)' }}>
-                {(article.body || article.excerpt || '').split('\n').map((para, i) =>
-                  para.trim() ? <p key={i} style={{ marginBottom:'14px' }}>{para}</p> : null
-                )}
+              /* 요약 없는 경우 - HTML 제거 후 안내 표시 */
+              <div>
+                <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'20px', padding:'10px 16px', background:'rgba(99,102,241,0.08)', border:'1px solid rgba(99,102,241,0.2)' }}>
+                  <span style={{ fontSize:'14px' }}>⏳</span>
+                  <span style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'#818cf8', letterSpacing:'0.5px' }}>
+                    AI 요약이 곧 업데이트됩니다 — 원문 보기 버튼을 이용해 주세요
+                  </span>
+                </div>
+                {(() => {
+                  const raw = stripHtml(article.body || article.excerpt || '')
+                  return raw ? (
+                    <div style={{ fontSize:'15px', lineHeight:1.85, color:'var(--c-gray-7)' }}>
+                      {raw.split('\n').map((para, i) =>
+                        para.trim() ? <p key={i} style={{ marginBottom:'14px' }}>{para}</p> : null
+                      )}
+                    </div>
+                  ) : null
+                })()}
               </div>
             )}
 
