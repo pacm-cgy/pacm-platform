@@ -65,17 +65,40 @@ IRRELEVANT = [
 ]
 
 def strip_html(s):
+    """HTML 태그와 엔티티를 완전히 제거"""
     if not s: return ''
+    # 스크립트/스타일 블록 통째로 제거
+    s = re.sub(r'<(script|style)[^>]*>[\s\S]*?</(script|style)>', ' ', s, flags=re.I)
+    # HTML 태그 제거
     s = re.sub(r'<[^>]+>', ' ', s)
-    for e, r in [('&nbsp;',' '),('&amp;','&'),('&lt;','<'),('&gt;','>'),('&quot;','"'),('&#39;',"'"),('\xa0',' ')]:
+    # HTML 엔티티 디코딩
+    entities = [('&nbsp;',' '),('&amp;','&'),('&lt;','<'),('&gt;','>'),
+                ('&quot;','"'),('&#39;',"'"),('&apos;',"'"),('\xa0',' '),
+                ('&ldquo;','"'),('&rdquo;','"'),('&lsquo;',"'"),('&rsquo;',"'"),
+                ('&middot;','·'),('&bull;','•'),('&hellip;','...'),('&mdash;','—')]
+    for e, r in entities:
         s = s.replace(e, r)
-    return re.sub(r'\s+', ' ', re.sub(r'&#[0-9]+;', '', s)).strip()
+    # 숫자 엔티티 제거
+    s = re.sub(r'&#x?[0-9a-fA-F]+;', '', s)
+    # 연속 공백 정리
+    return re.sub(r'\s+', ' ', s).strip()
 
 def parse_google_desc(raw):
-    src_m = re.search(r'<font[^>]*color="#6f6f6f"[^>]*>([\s\S]+?)</font>', raw, re.I)
+    """Google News RSS description에서 출처와 텍스트 추출 - HTML 완전 제거"""
+    if not raw: return '', None
+    # 1) 출처: <font color="#6f6f6f"> 또는 마지막 <a> 텍스트
+    src_m = re.search(r'<font[^>]*color=["']?#6f6f6f["']?[^>]*>([\s\S]+?)</font>', raw, re.I)
     source = strip_html(src_m.group(1)) if src_m else None
+    # 2) 본문: <a> 태그 안 텍스트 우선, 없으면 전체에서 HTML 제거
     a_m = re.search(r'<a[^>]+>([\s\S]+?)</a>', raw)
     text = strip_html(a_m.group(1)) if a_m else strip_html(raw)
+    # 3) strip_html 후에도 남아있는 HTML 잔재 제거 (이중 안전장치)
+    text = re.sub(r'<[^>]*>', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    # 4) URL 제거 (http:// 또는 https:// 포함된 문자열)
+    text = re.sub(r'https?://\S+', '', text).strip()
+    # 5) 의미없는 짧은 텍스트 제거
+    if len(text) < 5: text = ''
     return text[:400], source
 
 def make_slug():
