@@ -267,7 +267,7 @@ export default function HomePage() {
         </a>
       </div>
 
-      <section style={{ paddingTop: '52px' }}>
+      {(!loadingArticles && todayInsight.length === 0) ? null : <section style={{ paddingTop: '52px' }}>
         <div className="section-header">
           <div className="section-title">오늘의 인사이트</div>
           <button className="btn btn-ghost" onClick={() => navigate('/insight')}>전체 보기 <ChevronRight size={13} /></button>
@@ -287,7 +287,7 @@ export default function HomePage() {
             <div style={{ fontSize: '12px' }}>곧 새로운 창업 인사이트가 공개됩니다</div>
           </div>
         )}
-      </section>
+      </section>}
 
       {/* ── MAGAZINE */}
       {(magazineFeature || magazineList.length > 0) && <section style={{ paddingTop: '52px' }}>
