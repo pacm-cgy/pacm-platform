@@ -2,9 +2,7 @@
   "relation": ["delegate_permission/common.handle_all_urls"],
   "target": {
     "namespace": "android_app",
-    "package_name": "kr.pacm.app",
-    "sha256_cert_fingerprints": [
-      "REPLACE_WITH_YOUR_SIGNING_KEY_SHA256_FINGERPRINT"
-    ]
+    "package_name": "kr.pacm.insightship",
+    "sha256_cert_fingerprints": ["6E:42:BA:49:27:0B:F0:87:1C:3F:C4:11:B5:8D:42:89:C6:A0:EE:22:32:C1:85:3E:78:B2:37:BF:71:E1:21:CF"]
   }
 }]
