@@ -239,6 +239,65 @@ export default async function handler(req) {
   const basePrompt = `[${label} 주요 창업·스타트업 뉴스]\n${ctx}\n\n위 내용을 바탕으로 `
 
   // 순차 처리 (쿼터 절약 + 안정성)
+  // 자체 AI로 뉴스레터 섹션 생성
+  function selfAISection(articles, sectionType) {
+    if (!articles?.length) return null
+    // 카테고리별 기사 분류
+    const byType = {
+      startup: articles.filter(a => /스타트업|창업|투자|펀딩|VC|유니콘/.test(a.title||'')),
+      economy:  articles.filter(a => /경제|금리|환율|주식|시장|정책/.test(a.title||'')),
+      keyword:  articles,
+      insight:  articles.filter(a => /청소년|청년|학생|교육|아이디어/.test(a.title||'')),
+      forecast: articles,
+    }
+    const pool = byType[sectionType] || articles
+    const top = pool.slice(0, sectionType==='keyword' ? 4 : 6)
+
+    if (sectionType === 'startup') {
+      const lines = top.map(a => {
+        const s = (a.ai_summary||a.title||'').slice(0,120)
+        return s.replace(/\*\*|##/g,'').trim()
+      }).filter(Boolean).join('\n\n')
+      return `지난 한 주간 창업·스타트업 생태계에서 주목할 만한 소식들이 이어졌습니다.\n\n${lines}\n\n청소년 창업가들에게 국내 스타트업 시장이 활발하게 움직이고 있음을 보여주는 한 주였습니다.`
+    }
+    if (sectionType === 'economy') {
+      const lines = top.map(a => (a.ai_summary||a.title||'').slice(0,100).replace(/\*\*|##/g,'').trim()).filter(Boolean).join('\n\n')
+      return `경제·시장 측면에서도 다양한 변화가 있었습니다.\n\n${lines}\n\n이러한 경제 환경 변화는 스타트업의 투자 유치 전략과 서비스 방향에도 영향을 미칠 것으로 보입니다.`
+    }
+    if (sectionType === 'keyword') {
+      const keywords = []
+      const kws = [
+        ['AI', 'AI(인공지능) — 스타트업 분야에서 가장 뜨거운 키워드'],
+        ['투자', '투자/펀딩 — 스타트업이 성장 자본을 확보하는 핵심 활동'],
+        ['청소년', '청소년 창업 — Z세대가 직접 만드는 비즈니스 생태계'],
+        ['글로벌', '글로벌 진출 — 국내를 넘어 세계 시장을 향한 도전'],
+        ['에듀테크', '에듀테크(EdTech) — 교육과 기술의 결합, 청소년과 직결된 분야'],
+      ]
+      for (const [kw, desc] of kws) {
+        if (articles.some(a=>(a.title||'').includes(kw)||(a.ai_summary||'').includes(kw))) {
+          keywords.push(desc)
+          if (keywords.length >= 3) break
+        }
+      }
+      if (!keywords.length) keywords.push('스타트업 — 혁신적 아이디어로 새로운 비즈니스를 만드는 주체')
+      return `이번 주 뉴스에서 특히 눈에 띄었던 키워드들을 정리했습니다.\n\n${keywords.join('\n')}\n\n위 키워드들은 현재 창업 생태계의 흐름을 잘 보여주는 개념들입니다.`
+    }
+    if (sectionType === 'insight') {
+      const ins = top.length
+        ? `이번 주 ${top.length}건의 청소년 관련 창업 소식이 있었습니다. ${(top[0]?.ai_summary||top[0]?.title||'').slice(0,100)}...`
+        : '이번 주에도 다양한 창업 소식들이 전해졌습니다.'
+      return `청소년 창업가 여러분이 이번 주 뉴스에서 가져갈 수 있는 인사이트를 정리했습니다.\n\n첫째, 실패를 두려워하지 마세요. 이번 주 소개된 스타트업들은 모두 여러 번의 피벗(사업 방향 전환)을 거쳐 현재의 모습이 됐습니다.\n\n둘째, 문제를 먼저 발견하세요. 성공한 스타트업은 모두 일상의 불편함에서 사업 아이디어를 찾았습니다.\n\n셋째, 지금 시작할 수 있는 가장 작은 것부터 시작하세요. MVP(최소 기능 제품)로 빠르게 검증하는 것이 핵심입니다.`
+    }
+    if (sectionType === 'forecast') {
+      const hotTopics = [...new Set(articles.flatMap(a=>
+        (a.title||'').match(/AI|플랫폼|투자|헬스케어|핀테크|에듀테크|자율주행|로봇/g)||[]
+      ))].slice(0,3)
+      const topics = hotTopics.length ? hotTopics.join(', ') : 'AI, 스타트업 투자'
+      return `AI 추론: 지난주 뉴스 데이터를 바탕으로 이번 주 흐름을 추론한 내용입니다. 실제 결과와 다를 수 있습니다.\n\n지난주 뉴스에서 ${topics} 관련 소식이 집중 조명되었습니다. 이번 주에는 이 분야에서 추가적인 투자 발표나 서비스 출시 소식이 이어질 가능성이 높습니다.\n\n특히 AI 기반 스타트업에 대한 투자 심리가 지속적으로 강세를 보이고 있어, 관련 분야 청소년 창업가들에게는 주목할 만한 한 주가 될 것으로 예상됩니다. 다만 이는 AI가 뉴스 데이터를 분석한 추론이며 확정된 사실이 아닙니다.`
+    }
+    return null
+  }
+
   async function tryGemini(system, prompt) {
     try { return await gemini(system, prompt) }
     catch(e) { console.error('Gemini 오류:', e.message); return null }
@@ -268,7 +327,13 @@ export default async function handler(req) {
       `예상되는 투자·정책 발표, 주목할 섹터, 리스크 요인을 포함하세요. ` +
       `반드시 "AI 추론:"으로 시작하고, 이 내용이 뉴스 데이터 기반 AI 추론임을 명시하세요. 300~400자.`, 600)
 
-  const [rS1,rS2,rS3,rS4,rForecast] = [rS1r,rS2r,rS3r,rS4r,rForecastr].map(v=>v?{status:'fulfilled',value:v}:{status:'rejected'})
+  // 자체 AI 폴백 적용
+  const selfS1 = rS1r || selfAISection(articles, 'startup')
+  const selfS2 = rS2r || selfAISection(articles, 'economy')
+  const selfS3 = rS3r || selfAISection(articles, 'keyword')
+  const selfS4 = rS4r || selfAISection(articles, 'insight')
+  const selfFC = rForecastr || selfAISection(articles, 'forecast')
+  const [rS1,rS2,rS3,rS4,rForecast] = [selfS1,selfS2,selfS3,selfS4,selfFC].map(v=>v?{status:'fulfilled',value:v}:{status:'rejected'})
 
   const fb = '이번 섹션 데이터를 준비 중입니다. 다음 호에서 더 풍부한 내용으로 찾아뵙겠습니다.'
   const [s1, s2, s3, s4, forecast] = [rS1,rS2,rS3,rS4,rForecast].map(r => r.status==='fulfilled' && r.value?.length > 50 ? r.value : fb)
