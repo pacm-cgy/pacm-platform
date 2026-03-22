@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Search, Menu, X, Bookmark, ChevronDown } from 'lucide-react'
+import { Search, Menu, X, Bookmark, ChevronDown, Home, Newspaper, TrendingUp, MessageSquare, Briefcase, Zap } from 'lucide-react'
 import { useAuthStore, useUIStore, useThemeStore } from '../../store'
 import { useSearchArticles } from '../../hooks/useData'
 import { supabase } from '../../lib/supabase'
@@ -53,8 +53,10 @@ function Topbar() {
       fontFamily: 'var(--f-mono)', fontSize: '11px',
       padding: '7px 0', borderBottom: '1px solid #ffffff12',
       overflow: 'hidden',
-      maxWidth: '100vw',        /* 화면 너비 초과 방지 */
+      maxWidth: '100vw',
       boxSizing: 'border-box',
+      contain: 'paint',
+      clipPath: 'inset(0)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', maxWidth: 'var(--max-width)', margin: '0 auto', padding: '0 var(--pad-x)', overflow: 'hidden' }}>
         <span style={{ color: 'var(--c-gold)', whiteSpace: 'nowrap', marginRight: '16px' }}>INSIGHTSHIP</span>
@@ -320,6 +322,30 @@ export default function Header() {
         )}
       </header>
 
+
+      {/* 모바일 하단 탭바 */}
+      <nav className="mobile-bottom-nav">
+        {[
+          { path: '/',          icon: Home,         label: '홈' },
+          { path: '/news',      icon: Newspaper,    label: '뉴스' },
+          { path: '/trend',     icon: TrendingUp,   label: '트렌드' },
+          { path: '/community', icon: MessageSquare,label: '커뮤니티' },
+          { path: '/connect',   icon: Briefcase,    label: '기업연결' },
+        ].map(item => {
+          const active = location.pathname === item.path ||
+            (item.path !== '/' && location.pathname.startsWith(item.path))
+          const Icon = item.icon
+          return (
+            <button key={item.path} onClick={() => navigate(item.path)}>
+              <Icon size={20} color={active ? 'var(--c-gold)' : '#666'} strokeWidth={active ? 2 : 1.5} />
+              <span className="nav-label" style={{ color: active ? 'var(--c-gold)' : '#666', fontWeight: active ? 700 : 400 }}>
+                {item.label}
+              </span>
+            </button>
+          )
+        })}
+      </nav>
+
       {searchOpen && <SearchOverlay onClose={closeSearch} />}
       {authModal && <AuthModal mode={authModal} onClose={() => setAuthModal(null)} onSwitch={setAuthModal} />}
 
@@ -327,11 +353,48 @@ export default function Header() {
         @media (max-width: 768px) {
           .no-mobile { display: none !important; }
           .mobile-only { display: flex !important; }
-          /* 상단 바 모바일 */
           .topbar-inner { font-size: 10px !important; }
         }
         @media (min-width: 769px) {
           .mobile-only { display: none !important; }
+          .mobile-bottom-nav { display: none !important; }
+        }
+        /* 모바일 하단 탭바 */
+        .mobile-bottom-nav {
+          display: none;
+        }
+        @media (max-width: 768px) {
+          .mobile-bottom-nav {
+            display: flex !important;
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            z-index: 999;
+            background: var(--c-ink);
+            border-top: 1px solid var(--c-gray-3);
+            justify-content: space-around;
+            align-items: stretch;
+            height: 56px;
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+          }
+          .mobile-bottom-nav button {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: none;
+            border: none;
+            cursor: pointer;
+            gap: 3px;
+            min-height: 44px;
+            padding: 4px 2px;
+          }
+          .mobile-bottom-nav .nav-label {
+            font-size: 10px;
+            font-family: var(--f-sans);
+          }
+          /* 본문 하단 여백 */
+          body { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)) !important; }
         }
       `}</style>
     </>

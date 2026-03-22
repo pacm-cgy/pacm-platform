@@ -172,7 +172,18 @@ for feed_url, tag, ai_cat in FEEDS:
 
         pub_date = get_tag('pubDate')
         try:
-            pub_iso = parsedate_to_datetime(pub_date).isoformat()
+            parsed_dt = parsedate_to_datetime(pub_date)
+            now_utc = datetime.now(timezone.utc)
+            # 연도가 현재와 1년 이상 차이나면 현재 연도로 교정
+            # (RSS에서 연도 없이 "Mon, 05 Mar" 형태이거나 오래된 날짜인 경우)
+            if abs(parsed_dt.year - now_utc.year) >= 1:
+                corrected = parsed_dt.replace(year=now_utc.year)
+                # 교정된 날짜가 미래면 작년으로
+                if corrected > now_utc + timedelta(days=1):
+                    corrected = corrected.replace(year=now_utc.year - 1)
+                pub_iso = corrected.isoformat()
+            else:
+                pub_iso = parsed_dt.isoformat()
         except:
             pub_iso = datetime.now(timezone.utc).isoformat()
 

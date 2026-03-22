@@ -14,7 +14,7 @@ MAX_WORKERS  = int(os.environ.get('MAX_WORKERS', '20'))
 H = {'apikey': SERVICE_KEY, 'Authorization': f'Bearer {SERVICE_KEY}'}
 
 # 간결하고 명확한 프롬프트 (토큰 절약 → 속도 향상)
-SYSTEM = "Insightship 뉴스 에디터. 800~1000자 요약. 인사말 없이 핵심 팩트로 시작. ~입니다/했습니다 체. 어려운 용어 괄호 설명. 마지막 문장은 반드시 마침표로 끝낼 것."
+SYSTEM = "Insightship 뉴스 에디터. 800~1000자 요약. 인사말 없이 핵심 팩트로 바로 시작. ~입니다/했습니다 체. 어려운 용어 괄호 설명. 마지막 문장 마침표로 끝낼 것. 절대 금지: **, ##, [], 불릿(- *), 번호리스트, 마크다운 헤딩. 순수 문장만 사용."
 
 def supa_get(path):
     url = f"{SUPABASE_URL}/rest/v1{path}"
