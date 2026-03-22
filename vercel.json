@@ -85,7 +85,7 @@
   "crons": [
     {
       "path": "/api/send-newsletter",
-      "schedule": "0 0 * * 1"
+      "schedule": "0 23 * * 0"
     },
     {
       "path": "/api/generate-report",

@@ -165,7 +165,9 @@ function TrendCard({ snapshot }) {
           {snapshot.metric_unit === '억원' ? '₩' : ''}{Number(snapshot.metric_value).toLocaleString()}{snapshot.metric_unit !== '억원' ? snapshot.metric_unit : '억'}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'var(--f-mono)', fontSize: '11px', color, marginBottom: '10px' }}>
-          <Icon size={11} /> {Math.abs(snapshot.change_pct || 0).toFixed(1)}% YoY
+          <Icon size={11} /> {Math.abs(snapshot.change_pct || 0).toFixed(1)}%{' '}
+            {['AI분석','기술/IT','경제/창업','교육/창업','사회/창업','환경/에너지','헬스케어'].includes(snapshot.category)
+              ? '전일대비' : '전월대비'}
         </div>
         {snapshot.source_name && (
           <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gray-5)', marginBottom: '12px', lineHeight: 1.4 }}>

@@ -118,17 +118,26 @@ export default function ArticlePage() {
   const catColor = CATEGORY_COLORS[article.ai_category] || 'var(--c-gold)'
 
   // AI 요약 최대 2000자 처리
-  // HTML 태그 제거 함수 (excerpt/body에 HTML이 남아있을 경우 대비)
+  // HTML 태그 완전 제거 (excerpt/body 보호)
   const stripHtml = (s) => {
     if (!s) return ''
-    return s
-      .replace(/<(script|style)[^>]*>[\s\S]*?<\/(script|style)>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-      .replace(/&#x?[0-9a-fA-F]+;/g, '')
-      .replace(/https?:\/\/\S+/g, '')
-      .replace(/\s{2,}/g, ' ').trim()
+    let t = s
+    // script/style 블록 제거
+    t = t.replace(/<(script|style)[^>]*>[\s\S]*?<\/(script|style)>/gi, '')
+    // HTML 태그 반복 제거 (중첩 태그 대비 2회)
+    t = t.replace(/<[^>]+>/g, ' ')
+    t = t.replace(/<[^>]+>/g, ' ')
+    // 엔티티 디코딩
+    t = t.replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&lt;/g,'<')
+         .replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'")
+         .replace(/&#x?[0-9a-fA-F]+;/g,'')
+    // URL 제거
+    t = t.replace(/https?:\/\/\S+/g, '')
+    // 공백 정리
+    t = t.replace(/\s{2,}/g, ' ').trim()
+    // HTML 잔재 체크: 아직 < > 가 있거나 href= 등이 있으면 빈 문자열
+    if (/<[a-z]/i.test(t) || /href=/i.test(t) || t.startsWith('<')) return ''
+    return t
   }
 
   const summary = article.ai_summary

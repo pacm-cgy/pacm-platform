@@ -27,7 +27,9 @@ function TrendCard({ snapshot }) {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'var(--f-mono)', fontSize: '11px', color }}>
         <Icon size={11} />
-        {Math.abs(snapshot.change_pct || 0).toFixed(1)}% YoY
+        {Math.abs(snapshot.change_pct || 0).toFixed(1)}%{' '}
+          {['AI분析','기술/IT','경제/창업','교육/창업','사회/창업','환경/에너지','헬스케어'].includes(snapshot.category)
+            ? '전일대비' : '전월대비'}
       </div>
     </div>
   )
