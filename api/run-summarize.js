@@ -17,7 +17,7 @@ async function summarizeOne(article) {
 
   try {
     const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -109,6 +109,6 @@ export default async function handler(req) {
 
   return new Response(JSON.stringify({
     done, failed, processed: articles.length, remaining,
-    model: 'gemini-2.5-flash', timestamp: new Date().toISOString(),
+    model: 'gemini-2.0-flash', timestamp: new Date().toISOString(),
   }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 }

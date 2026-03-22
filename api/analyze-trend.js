@@ -1,4 +1,4 @@
-// 트렌드 AI 분석 - gemini-2.5-pro → 2.5-flash 폴백
+// 트렌드 AI 분석 - gemini-2.0-flash (무료)
 // system_instruction 분리로 응답 끊김 완전 방지
 export const config = { runtime: 'edge' }
 
@@ -149,8 +149,8 @@ export default async function handler(req) {
 
   let analysis = null, modelUsed = null, lastError = null
 
-  // gemini-2.5-pro → 2.5-flash 폴백
-  for (const [model, timeout] of [['gemini-2.5-pro', 35000], ['gemini-2.5-flash', 25000]]) {
+  // gemini-2.0-flash 단일 모델
+  for (const [model, timeout] of [['gemini-2.0-flash', 25000]]) {
     try {
       analysis = await callGemini(model, SYSTEM_ROLE, userPrompt, timeout)
       modelUsed = model

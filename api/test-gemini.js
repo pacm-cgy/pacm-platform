@@ -5,7 +5,7 @@ export default async function handler(req) {
   const results = { key_prefix: GEMINI_KEY?.slice(0,12) + '...' }
 
   // 실제 생성 테스트
-  const candidates = ['gemini-2.5-pro', 'gemini-2.5-flash']
+  const candidates = ['gemini-2.0-flash', 'gemini-2.0-flash']
   results.tests = {}
 
   for (const model of candidates) {

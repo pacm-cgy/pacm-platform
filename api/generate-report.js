@@ -14,7 +14,7 @@ const SH = () => ({
 // ── Gemini 호출 (섹션 하나, 400~500자) ───────────────────────────
 async function callGemini(prompt) {
   const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -110,7 +110,7 @@ async function upsertArticle(title, body, tags, slug, adminId) {
 // ── Gemini 1회 호출로 2~3개 섹션 동시 생성 (토큰 절약) ──────────
 async function callGeminiMulti(prompt) {
   const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
