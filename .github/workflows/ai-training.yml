@@ -1,0 +1,34 @@
+name: AI 모델 주간 학습
+
+on:
+  schedule:
+    - cron: '0 20 * * 0'   # 매주 일요일 KST 05:00 (UTC 20:00)
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ vars.GITHUB_PAT || github.token }}
+
+      - name: Python 환경 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 키워드 가중치 학습
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python3 scripts/insightship_ai.py train
+
+      - name: 학습된 모델 커밋
+        run: |
+          git config user.name "Insightship AI"
+          git config user.email "ai@pacm.kr"
+          git add scripts/insightship_model.pkl || true
+          git diff --staged --quiet || git commit -m "chore: AI 모델 주간 학습 업데이트 [skip ci]"
+          git push || true

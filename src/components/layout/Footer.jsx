@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom'
-import { InsightshipLogo } from './Header'
 
 export default function Footer() {
   const navigate = useNavigate()
@@ -15,7 +14,13 @@ export default function Footer() {
           {/* 브랜드 */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '18px' }}>
-              <InsightshipLogo size={30} />
+              <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+              <circle cx="14" cy="14" r="13" stroke="#6366F1" strokeWidth="1.5" opacity=".4"/>
+              <path d="M14 4 L14 22 L6 22 Z" fill="#6366F1" opacity=".9"/>
+              <path d="M14 9 L14 22 L21 22 Z" fill="#818CF8" opacity=".5"/>
+              <path d="M5 23 Q14 27 23 23" stroke="#84CC16" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+              <circle cx="14" cy="4" r="2" fill="#6366F1"/>
+            </svg>
               <div>
                 <div style={{ fontFamily: 'var(--f-sans)', fontWeight: 800, fontSize: '14px', letterSpacing: '1.5px', color: 'var(--c-paper)' }}>
                   INSIGHT<span style={{ color: 'var(--c-gold)' }}>SHIP</span>

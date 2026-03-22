@@ -327,3 +327,116 @@ def run_batch():
 
 if __name__ == '__main__':
     run_batch()
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 6. 학습 기반 향상 — 실제 데이터로 키워드 가중치 자동 갱신
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+import pickle, json, os, math, urllib.request
+from collections import Counter
+
+MODEL_PATH = os.path.join(os.path.dirname(__file__), 'insightship_model.pkl')
+
+def train_keyword_weights(articles: list) -> dict:
+    """
+    실제 뉴스 데이터에서 중요 키워드를 학습
+    고품질 요약이 있는 기사의 키워드 → 가중치 높게
+    """
+    all_tokens = Counter()
+    summary_tokens = Counter()
+
+    for a in articles:
+        body_toks = tokenize_ko(a.get('title','') + ' ' + a.get('excerpt',''))
+        for t in body_toks:
+            all_tokens[t] += 1
+
+        if a.get('ai_summary') and len(a['ai_summary']) > 300:
+            summ_toks = tokenize_ko(a['ai_summary'])
+            for t in summ_toks:
+                summary_tokens[t] += 1
+
+    # 요약에 자주 나오는 단어 = 중요 키워드
+    learned_weights = {}
+    total = sum(all_tokens.values()) or 1
+    for tok, cnt in summary_tokens.items():
+        bg_prob = all_tokens.get(tok, 1) / total
+        fg_prob = cnt / (sum(summary_tokens.values()) or 1)
+        # 확률 비율 (PMI 유사)
+        ratio = fg_prob / bg_prob
+        if ratio > 2.0 and cnt >= 5:
+            learned_weights[tok] = min(3.0, 1.0 + ratio * 0.3)
+
+    return learned_weights
+
+
+def save_model(weights: dict):
+    with open(MODEL_PATH, 'wb') as f:
+        pickle.dump({'keyword_weights': weights, 'version': '1.0'}, f)
+    print(f"✅ 모델 저장: {MODEL_PATH} ({len(weights)}개 키워드)")
+
+
+def load_model() -> dict:
+    if not os.path.exists(MODEL_PATH):
+        return {}
+    with open(MODEL_PATH, 'rb') as f:
+        data = pickle.load(f)
+    return data.get('keyword_weights', {})
+
+
+# 시작 시 모델 로드하여 STARTUP_KEYWORDS에 병합
+def init_model():
+    global STARTUP_KEYWORDS
+    learned = load_model()
+    if learned:
+        merged = {**STARTUP_KEYWORDS, **learned}
+        STARTUP_KEYWORDS = merged
+        print(f"✅ 학습 모델 로드: {len(learned)}개 키워드 추가")
+
+
+# ── 학습 실행 (GitHub Actions에서 주기적으로 호출) ────────────
+def run_training():
+    """DB에서 데이터 수집 → 키워드 가중치 학습 → 모델 저장"""
+    if not SUPABASE_URL:
+        print("SUPABASE_URL 없음")
+        return
+
+    H = {'apikey': SERVICE_KEY, 'Authorization': f'Bearer {SERVICE_KEY}'}
+    articles = []
+
+    # 최신 2000개 요약 완료 기사로 학습
+    for offset in range(0, 2000, 200):
+        url = (f"{SUPABASE_URL}/rest/v1/articles?status=eq.published"
+               f"&category=eq.news&ai_summary=not.is.null"
+               f"&select=title,excerpt,ai_summary"
+               f"&order=published_at.desc&limit=200&offset={offset}")
+        req = urllib.request.Request(url, headers=H)
+        try:
+            with urllib.request.urlopen(req, timeout=12) as r:
+                batch = json.loads(r.read())
+            if not batch:
+                break
+            articles.extend(batch)
+        except Exception as e:
+            print(f"오류 offset={offset}: {e}")
+            break
+
+    if len(articles) < 100:
+        print(f"학습 데이터 부족: {len(articles)}개")
+        return
+
+    print(f"학습 데이터: {len(articles)}개")
+    weights = train_keyword_weights(articles)
+    save_model(weights)
+    print(f"상위 키워드: {sorted(weights.items(), key=lambda x:-x[1])[:10]}")
+
+
+# 모듈 로드 시 모델 초기화
+init_model()
+
+if __name__ == '__main__':
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == 'train':
+        run_training()
+    else:
+        run_batch()
