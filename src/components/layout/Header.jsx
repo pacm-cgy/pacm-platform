@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { id: 'story',     label: '스토리',   path: '/story' },
   { id: 'trend',     label: '트렌드',   path: '/trend' },
   { id: 'community', label: '커뮤니티', path: '/community' },
+  { id: 'edu',       label: '창업 EDU', path: '/edu' },
   { id: 'connect',   label: '기업연결', path: '/connect' },
   { id: 'news',      label: '뉴스',     path: '/news' },
 ]
@@ -27,6 +28,7 @@ const MOBILE_NAV = [
   { path:'/news', icon:Newspaper, label:'뉴스' },
   { path:'/trend', icon:TrendingUp, label:'트렌드' },
   { path:'/community', icon:MessageSquare, label:'커뮤니티' },
+  { path:'/edu', icon:Zap, label:'EDU' },
   { path:'/connect', icon:Briefcase, label:'기업연결' },
 ]
 
