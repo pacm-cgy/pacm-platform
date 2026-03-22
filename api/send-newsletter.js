@@ -31,15 +31,29 @@ function getLastWeekRange() {
   }
 }
 
-// Gemini 폴백 체인 (무료): 2.0-flash → 1.5-flash → 1.5-flash-8b
-const GEMINI_MODELS = [
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
-  'gemini-1.5-flash-8b',
-]
+// AI 호출 - Groq(llama-3.3-70b) 우선, Gemini 폴백
+const GROQ_KEY   = process.env.GROQ_API_KEY
+const GEMINI_MODELS = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b']
 
-async function gemini(system, user, maxTokens = 1500) {
-  let lastError = null
+async function callGroq(system, user, maxTokens = 1500) {
+  if (!GROQ_KEY) throw new Error('GROQ_KEY 없음')
+  const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_KEY}` },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      max_tokens: maxTokens,
+      temperature: 0.6,
+    }),
+    signal: AbortSignal.timeout(25000),
+  })
+  if (!r.ok) throw new Error(`Groq ${r.status}`)
+  const d = await r.json()
+  return d.choices?.[0]?.message?.content?.trim() || ''
+}
+
+async function callGemini(system, user, maxTokens = 1500) {
   for (const model of GEMINI_MODELS) {
     try {
       const r = await fetch(
@@ -50,28 +64,30 @@ async function gemini(system, user, maxTokens = 1500) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: system }] },
             contents: [{ role: 'user', parts: [{ text: user }] }],
-            generationConfig: {
-              maxOutputTokens: maxTokens,
-              temperature: 0.6,
-            },
+            generationConfig: { maxOutputTokens: maxTokens, temperature: 0.6 },
           }),
-          signal: AbortSignal.timeout(25000),
+          signal: AbortSignal.timeout(20000),
         }
       )
-      // 429 쿼터 초과 시 다음 모델로
-      if (r.status === 429) { lastError = new Error(`${model} 쿼터초과`); continue }
-      if (!r.ok) { lastError = new Error(`${model} ${r.status}`); continue }
+      if (r.status === 429) { await new Promise(r=>setTimeout(r,500)); continue }
+      if (!r.ok) continue
       const d = await r.json()
       const text = d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
       if (text.length > 50) return text
-      lastError = new Error(`${model} 응답 짧음`)
-    } catch(e) {
-      lastError = e
-    }
-    // 모델 간 500ms 대기
-    await new Promise(r => setTimeout(r, 500))
+    } catch(e) { continue }
   }
-  throw lastError || new Error('모든 모델 실패')
+  throw new Error('Gemini 모든 모델 실패')
+}
+
+// Groq 우선 → Gemini 폴백
+async function gemini(system, user, maxTokens = 1500) {
+  try {
+    const txt = await callGroq(system, user, maxTokens)
+    if (txt.length > 50) return txt
+  } catch(e) {
+    console.error('Groq 실패, Gemini 폴백:', e.message)
+  }
+  return callGemini(system, user, maxTokens)
 }
 
 const SYSTEM_NEWS = `당신은 Insightship 뉴스레터 에디터입니다.

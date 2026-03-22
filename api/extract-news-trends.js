@@ -3,6 +3,44 @@
 // 2) 전일 대비 change_pct 자동 계산
 export const config = { runtime: 'edge' }
 
+// Groq + Gemini 폴백 헬퍼
+const GROQ_KEY = process.env.GROQ_API_KEY
+async function callAI(system, user, maxTokens=1000) {
+  // 1차: Groq (llama-3.3-70b)
+  if (GROQ_KEY) {
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':`Bearer ${GROQ_KEY}`},
+        body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'system',content:system},{role:'user',content:user}],max_tokens:maxTokens,temperature:0.4}),
+        signal:AbortSignal.timeout(20000)
+      })
+      if (r.ok) {
+        const d=await r.json()
+        const t=d.choices?.[0]?.message?.content?.trim()||''
+        if (t.length>50) return t
+      }
+    } catch(e) {}
+  }
+  // 2차: Gemini 폴백
+  for (const model of ['gemini-1.5-flash','gemini-2.0-flash','gemini-1.5-flash-8b']) {
+    try {
+      const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({system_instruction:{parts:[{text:system}]},contents:[{role:'user',parts:[{text:user}]}],generationConfig:{maxOutputTokens:maxTokens,temperature:0.4}}),
+        signal:AbortSignal.timeout(18000)
+      })
+      if (r.status===429) continue
+      if (!r.ok) continue
+      const d=await r.json()
+      const t=d.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||''
+      if (t.length>50) return t
+    } catch(e) { continue }
+  }
+  throw new Error('AI 호출 실패')
+}
+
+
 const SB_URL  = process.env.SUPABASE_URL
 const SB_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY
 const GEMINI  = process.env.GEMINI_API_KEY

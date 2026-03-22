@@ -87,7 +87,7 @@ def parse_google_desc(raw):
     """Google News RSS description에서 출처와 텍스트 추출 - HTML 완전 제거"""
     if not raw: return '', None
     # 1) 출처: <font color="#6f6f6f"> 또는 마지막 <a> 텍스트
-    src_m = re.search(r'<font[^>]*color=["']?#6f6f6f["']?[^>]*>([\s\S]+?)</font>', raw, re.I)
+    src_m = re.search(r'<font[^>]*color="#6f6f6f"[^>]*>([\s\S]+?)</font>', raw, re.I)
     source = strip_html(src_m.group(1)) if src_m else None
     # 2) 본문: <a> 태그 안 텍스트 우선, 없으면 전체에서 HTML 제거
     a_m = re.search(r'<a[^>]+>([\s\S]+?)</a>', raw)
