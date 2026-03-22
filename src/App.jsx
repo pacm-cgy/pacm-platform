@@ -51,6 +51,7 @@ const AboutPage      = lazy(() => import('./pages/AboutPage'))
 const AdminPage      = lazy(() => import('./pages/AdminPage'))
 const TermsPage       = lazy(() => import('./pages/TermsPage'))
 const PrivacyPage     = lazy(() => import('./pages/PrivacyPage'))
+const EduPage         = lazy(() => import('./pages/EduPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
