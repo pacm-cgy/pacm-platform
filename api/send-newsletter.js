@@ -31,6 +31,17 @@ function getLastWeekRange() {
   }
 }
 
+// AI 호출 우선순위:
+// 1. Insightship 자체 AI (self-ai-summarize, 비용 0)
+// 2. Groq (무료 14,400 RPD)
+// 3. Gemini (무료 250 RPD)
+
+async function callSelfAI(system, user, maxTokens=1500) {
+  // 자체 AI는 뉴스레터 섹션 생성에는 적합하지 않아 스킵
+  // (뉴스 단건 요약 전용)
+  throw new Error('self-ai: 뉴스레터 섹션 생성 불가')
+}
+
 // AI 호출 - Groq(llama-3.3-70b) 우선, Gemini 폴백
 const GROQ_KEY   = process.env.GROQ_API_KEY
 const GEMINI_MODELS = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b']

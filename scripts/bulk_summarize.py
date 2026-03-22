@@ -1,9 +1,21 @@
 """
-뉴스 AI 요약 생성 - Groq API (llama-3.3-70b)
-무료 플랜: 14,400 req/day, 30 RPM — Gemini 대비 10배 여유
+뉴스 AI 요약 생성
+1차: Insightship 자체 AI (insightship_ai.py) — 완전 무료, API 불필요
+2차: Groq API 폴백 (GROQ_API_KEY 있을 때)
+3차: Gemini 폴백
 """
-import urllib.request, json, os, time, re
+import urllib.request, json, os, time, re, sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# 자체 AI 엔진 로드
+sys.path.insert(0, os.path.dirname(__file__))
+try:
+    from insightship_ai import summarize as self_summarize
+    SELF_AI_OK = True
+    print("✅ Insightship 자체 AI 로드 완료")
+except Exception as e:
+    SELF_AI_OK = False
+    print(f"⚠️  자체 AI 로드 실패: {e}")
 
 SUPABASE_URL  = os.environ['SUPABASE_URL']
 SERVICE_KEY   = os.environ['SUPABASE_SERVICE_KEY']
@@ -111,16 +123,30 @@ def clean_summary(txt):
 
 
 def summarize(article):
-    """뉴스 1건 요약 - Groq 우선, Gemini 폴백"""
+    """
+    뉴스 1건 요약
+    1순위: Insightship 자체 AI (완전 무료, API 불필요)
+    2순위: Groq API 폴백
+    3순위: Gemini 폴백
+    """
     title = article.get('title', '')
     body  = article.get('body', '')
     exc   = article.get('excerpt', '')
     text  = body[:2000] if len(body) > 200 else (exc[:800] if len(exc) > 30 else title)
 
-    # 1차: Groq (빠르고 무료 할당량 넉넉)
+    # 1순위: 자체 AI (항상 사용 가능, API 비용 0원)
+    if SELF_AI_OK:
+        try:
+            result = self_summarize(title, text)
+            if result and len(result) >= 200:
+                return clean_summary(result)
+        except Exception as e:
+            pass  # 폴백으로 진행
+
+    # 2순위: Groq
     result = call_groq(title, text)
     if not result:
-        # 2차: Gemini 폴백
+        # 3순위: Gemini
         result = call_gemini(title, text)
 
     return clean_summary(result)
