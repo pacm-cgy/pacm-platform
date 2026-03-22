@@ -31,28 +31,47 @@ function getLastWeekRange() {
   }
 }
 
-// Gemini 2.0 Flash (무료)
+// Gemini 폴백 체인 (무료): 2.0-flash → 1.5-flash → 1.5-flash-8b
+const GEMINI_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-1.5-flash-8b',
+]
+
 async function gemini(system, user, maxTokens = 1500) {
-  const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: system }] },
-        contents: [{ role: 'user', parts: [{ text: user }] }],
-        generationConfig: {
-          maxOutputTokens: maxTokens,
-          temperature: 0.6,
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      }),
-      signal: AbortSignal.timeout(25000),
+  let lastError = null
+  for (const model of GEMINI_MODELS) {
+    try {
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: system }] },
+            contents: [{ role: 'user', parts: [{ text: user }] }],
+            generationConfig: {
+              maxOutputTokens: maxTokens,
+              temperature: 0.6,
+            },
+          }),
+          signal: AbortSignal.timeout(25000),
+        }
+      )
+      // 429 쿼터 초과 시 다음 모델로
+      if (r.status === 429) { lastError = new Error(`${model} 쿼터초과`); continue }
+      if (!r.ok) { lastError = new Error(`${model} ${r.status}`); continue }
+      const d = await r.json()
+      const text = d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
+      if (text.length > 50) return text
+      lastError = new Error(`${model} 응답 짧음`)
+    } catch(e) {
+      lastError = e
     }
-  )
-  if (!r.ok) throw new Error(`Gemini ${r.status}`)
-  const d = await r.json()
-  return d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
+    // 모델 간 500ms 대기
+    await new Promise(r => setTimeout(r, 500))
+  }
+  throw lastError || new Error('모든 모델 실패')
 }
 
 const SYSTEM_NEWS = `당신은 Insightship 뉴스레터 에디터입니다.
@@ -189,36 +208,36 @@ export default async function handler(req) {
 
   const basePrompt = `[${label} 주요 창업·스타트업 뉴스]\n${ctx}\n\n위 내용을 바탕으로 `
 
-  const [rS1, rS2, rS3, rS4, rForecast] = await Promise.allSettled([
-    // 섹션1: 지난주 창업·스타트업 핵심 흐름
-    gemini(SYSTEM_NEWS, basePrompt +
+  // 순차 처리 (쿼터 절약 + 안정성)
+  async function tryGemini(system, prompt) {
+    try { return await gemini(system, prompt) }
+    catch(e) { console.error('Gemini 오류:', e.message); return null }
+  }
+
+  const rS1r = await tryGemini(SYSTEM_NEWS, basePrompt +
       `지난 한 주간(${label}) 한국 창업·스타트업 생태계의 핵심 흐름을 정리하세요. ` +
       `주요 투자·펀딩 사례(금액·기업명·라운드 포함), 눈에 띄는 스타트업, AI·헬스케어·핀테크·에듀테크 섹터 동향을 ` +
       `구체적 수치와 함께 서술하세요. 청소년 창업가가 '이번 주 이런 일이 있었구나'를 느낄 수 있도록 생생하게 작성하세요. 500~600자.`),
 
-    // 섹션2: 경제 & 시장 맥락
-    gemini(SYSTEM_NEWS, basePrompt +
+  const rS2r = await tryGemini(SYSTEM_NEWS, basePrompt +
       `지난주(${label}) 경제·시장 동향이 스타트업 생태계에 어떤 영향을 미쳤는지 분석하세요. ` +
       `투자 심리, 금리·환율 영향, 주요 정책 변화를 포함하되, ` +
       `청소년 독자가 이해할 수 있도록 쉽게 설명하세요. 400~500자.`),
 
-    // 섹션3: 주목할 트렌드 키워드
-    gemini(SYSTEM_NEWS, basePrompt +
+  const rS3r = await tryGemini(SYSTEM_NEWS, basePrompt +
       `지난주(${label}) 뉴스에서 반복적으로 등장한 핵심 키워드 3~4개를 선정하고, ` +
       `각각이 왜 주목받는지 배경과 의미를 설명하세요. ` +
       `형식: "키워드명 — 설명" 형태로 한 줄씩. 300~400자.`),
 
-    // 섹션4: 청소년 창업가를 위한 인사이트
-    gemini(SYSTEM_NEWS, basePrompt +
+  const rS4r = await tryGemini(SYSTEM_NEWS, basePrompt +
       `지난주 동향에서 청소년 창업가가 실제로 참고할 수 있는 인사이트 2~3가지를 도출하세요. ` +
       `'무엇을 배울 수 있는가', '어떻게 적용할 수 있는가'를 구체적 예시와 함께 작성하세요. 400~500자.`),
 
-    // 섹션5: 이번주 흐름 AI 추론
-    gemini(SYSTEM_FORECAST, basePrompt +
+  const rForecastr = await tryGemini(SYSTEM_FORECAST, basePrompt +
       `지난주(${label}) 데이터를 바탕으로 이번 주(${thisWeekLabel}) 창업 생태계 흐름을 추론하세요. ` +
       `예상되는 투자·정책 발표, 주목할 섹터, 리스크 요인을 포함하세요. ` +
       `반드시 "AI 추론:"으로 시작하고, 이 내용이 뉴스 데이터 기반 AI 추론임을 명시하세요. 300~400자.`, 600),
-  ])
+  const [rS1,rS2,rS3,rS4,rForecast] = [rS1r,rS2r,rS3r,rS4r,rForecastr].map(v=>v?{status:'fulfilled',value:v}:{status:'rejected'})
 
   const fb = '이번 섹션 데이터를 준비 중입니다. 다음 호에서 더 풍부한 내용으로 찾아뵙겠습니다.'
   const [s1, s2, s3, s4, forecast] = [rS1,rS2,rS3,rS4,rForecast].map(r => r.status==='fulfilled' && r.value?.length > 50 ? r.value : fb)

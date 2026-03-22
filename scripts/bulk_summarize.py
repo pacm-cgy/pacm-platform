@@ -50,12 +50,27 @@ def gemini_call(article):
         }
     }).encode()
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}"
-    req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
-    try:
-        with urllib.request.urlopen(req, timeout=15) as r:
-            d = json.loads(r.read())
-            txt = d.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '').strip()
+    # 모델 폴백 체인 (429 쿼터 초과 시 다음 모델로)
+    MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b']
+    txt = None
+    for model in MODELS:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_KEY}"
+        req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
+        try:
+            with urllib.request.urlopen(req, timeout=15) as r:
+                d = json.loads(r.read())
+                txt = d.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '').strip()
+                if txt: break  # 성공 시 루프 탈출
+        except urllib.error.HTTPError as he:
+            if he.code == 429:  # 쿼터 초과 - 다음 모델 시도
+                import time; time.sleep(0.5)
+                continue
+            break  # 다른 오류는 포기
+        except Exception:
+            break
+    if True:  # 원래 코드 들여쓰기 유지
+        txt = txt or ''
+        if True:  # dummy - 아래 원본 if 블록 유지
             # 품질 검증
             if not txt or len(txt) < 100:
                 return None
