@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BookOpen, ChevronRight, Clock, Tag, Star, Zap, TrendingUp, Search } from 'lucide-react'
+import { BookOpen, ChevronRight, Clock, Tag, Star, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 const CATEGORIES = [
