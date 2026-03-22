@@ -13,14 +13,14 @@ function TrendCard({ snapshot }) {
   const isDown = (snapshot.change_pct || 0) < 0
   const Icon = isUp ? TrendingUp : isDown ? TrendingDown : Minus
   const color = isUp ? 'var(--c-green)' : isDown ? 'var(--c-red)' : 'var(--c-muted)'
-  const ICONS = { ai_startup: '🤖', edutech: '📱', social: '🌱', youth: '💸' }
+  const ICONS = { ai_startup: 'AI', edutech: 'EDU', social: 'ECO', youth: 'UP' }
 
   return (
     <div className="card" style={{ padding: '20px 22px', cursor: 'pointer', transition: 'var(--t-fast)' }}
       onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-gray-1)'; e.currentTarget.style.borderColor = 'var(--c-gold)' }}
       onMouseLeave={e => { e.currentTarget.style.background = 'var(--c-card)'; e.currentTarget.style.borderColor = 'var(--c-border)' }}
     >
-      <div style={{ fontSize: '28px', marginBottom: '10px' }}>{ICONS[snapshot.category] || '📊'}</div>
+      <div style={{ fontSize: '28px', marginBottom: '10px' }}>{ICONS[snapshot.category] || '—'}</div>
       <div className="t-caption" style={{ marginBottom: '5px' }}>{snapshot.metric_name}</div>
       <div style={{ fontFamily: 'var(--f-serif)', fontSize: '21px', fontWeight: 700, marginBottom: '5px' }}>
         {snapshot.metric_unit === '억원' ? '₩' : ''}{Number(snapshot.metric_value).toLocaleString()}{snapshot.metric_unit !== '억원' ? snapshot.metric_unit : '억'}
@@ -282,7 +282,7 @@ export default function HomePage() {
           </div>
         ) : (
           <div style={{ padding: '44px', textAlign: 'center', color: 'var(--c-muted)', border: '1px dashed var(--c-gray-3)', borderRadius: 'var(--r-sm)' }}>
-            <div style={{ fontSize: '28px', marginBottom: '10px' }}>📝</div>
+            
             <div style={{ fontFamily: 'var(--f-serif)', fontSize: '15px', color: 'var(--c-paper)', marginBottom: '4px' }}>인사이트 아티클 준비 중</div>
             <div style={{ fontSize: '12px' }}>곧 새로운 창업 인사이트가 공개됩니다</div>
           </div>
@@ -290,7 +290,7 @@ export default function HomePage() {
       </section>
 
       {/* ── MAGAZINE */}
-      <section style={{ paddingTop: '52px' }}>
+      {(magazineFeature || magazineList.length > 0) && <section style={{ paddingTop: '52px' }}>
         <div className="section-header">
           <div className="section-title">이번 주 매거진</div>
           <button className="btn btn-ghost" onClick={() => navigate('/story')}>전체 보기 <ChevronRight size={13} /></button>
@@ -313,7 +313,7 @@ export default function HomePage() {
             </div>
           ) : (
             <div style={{ background: 'var(--c-gray-1)', minHeight: '360px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', color: 'var(--c-muted)' }}>
-              <span style={{ fontSize: '32px' }}>📖</span>
+              
               <span style={{ fontFamily: 'var(--f-serif)', fontSize: '15px', color: 'var(--c-paper)' }}>매거진 준비 중</span>
             </div>
           )}
@@ -325,7 +325,7 @@ export default function HomePage() {
             )}
           </div>
         </div>
-      </section>
+      </section>}
 
       {/* ── TREND TRACKER */}
       <section style={{ paddingTop: '52px' }}>
@@ -336,7 +336,7 @@ export default function HomePage() {
         <div className="grid-4 grid-bordered">
           {trends.length > 0 ? trends.slice(0, 8).map(t => <TrendCard key={t.id} snapshot={t} />) : (
             <div style={{ gridColumn: '1/-1', padding: '44px', textAlign: 'center', color: 'var(--c-muted)' }}>
-              <span style={{ fontSize: '28px', display: 'block', marginBottom: '10px' }}>📈</span>
+              <span style={{ fontSize: '28px', display: 'block', marginBottom: '10px' }}>~</span>
               <span style={{ fontFamily: 'var(--f-serif)', fontSize: '15px', color: 'var(--c-paper)' }}>트렌드 지표 준비 중</span>
             </div>
           )}
