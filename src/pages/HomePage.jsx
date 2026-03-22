@@ -143,6 +143,7 @@ export default function HomePage() {
   // 모바일 반응형 (인라인 style override용)
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768)
   const [isSmall, setIsSmall] = useState(() => window.innerWidth <= 480)
+  const [subCount, setSubCount] = useState(1)
   useEffect(() => {
     const handler = () => {
       setIsMobile(window.innerWidth <= 768)
