@@ -52,6 +52,7 @@ const AdminPage      = lazy(() => import('./pages/AdminPage'))
 const TermsPage       = lazy(() => import('./pages/TermsPage'))
 const PrivacyPage     = lazy(() => import('./pages/PrivacyPage'))
 const EduPage         = lazy(() => import('./pages/EduPage'))
+const MagazinePage    = lazy(() => import('./pages/MagazinePage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -133,6 +134,7 @@ export default function App() {
                       <Route path="/messages"   element={<MessagesPage />} />
                       <Route path="/advertise"  element={<AdvertisePage />} />
                       <Route path="/edu"        element={<EduPage />} />
+                       <Route path="/magazine"   element={<MagazinePage />} />
                       <Route path="/404"        element={<NotFoundPage />} />
                       <Route path="*"           element={<Navigate to="/404" replace />} />
                     </Routes>

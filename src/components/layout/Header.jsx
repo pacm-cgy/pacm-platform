@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { id: 'trend',     label: '트렌드',   path: '/trend' },
   { id: 'community', label: '커뮤니티', path: '/community' },
   { id: 'edu',       label: '창업 EDU', path: '/edu' },
+  { id: 'magazine',  label: '매거진',   path: '/magazine' },
   { id: 'connect',   label: '기업연결', path: '/connect' },
   { id: 'news',      label: '뉴스',     path: '/news' },
 ]
