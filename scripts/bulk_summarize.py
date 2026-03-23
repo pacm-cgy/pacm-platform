@@ -194,6 +194,34 @@ def get_remaining():
 def cleanup_old_null():
     """비활성화 — (요약 생략) 대신 null 유지하여 재처리 대상 유지"""
     return 0
+
+
+# ── 메인 실행 ────────────────────────────────────────────────
+
+remaining = get_remaining()
+print(f"요약 필요 뉴스: {remaining}개")
+
+if remaining == 0:
+    print("요약할 뉴스 없음. 종료.")
+    exit(0)
+
+# 요약 대상 조회 — null 및 "(요약 생략)" 모두 포함
+articles = supa_get(
+    '/articles?status=eq.published&category=eq.news'
+    '&or=(ai_summary.is.null,ai_summary.eq.%28%EC%9A%94%EC%95%BD+%EC%83%9D%EB%9E%B5%29)'
+    f'&select=id,title,body,excerpt&order=published_at.desc&limit={MAX_PER_RUN}'
+)
+print(f"이번 배치: {len(articles)}개")
+
+if not articles:
+    print("처리할 기사 없음. 종료.")
+    exit(0)
+
+done = 0
+fail = 0
+start = time.time()
+
+
 def process(a):
     summary = summarize(a)
     if summary:
