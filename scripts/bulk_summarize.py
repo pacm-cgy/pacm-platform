@@ -70,17 +70,22 @@ def supa_patch(article_id, data):
 
 
 def get_remaining():
+    import urllib.parse
+    v = urllib.parse.quote("(요약 생략)", safe="")
+    base = SUPABASE_URL + "/rest/v1/articles"
+    H_c = {**H_R, "Prefer": "count=exact"}
     try:
-        req = urllib.request.Request(
-            SUPABASE_URL + "/rest/v1/articles"
-            "?or=(ai_summary.is.null,"
-            "ai_summary.eq.%28%EC%9A%94%EC%95%BD%20%EC%83%9D%EB%9E%B5%29)"
-            "&status=eq.published&category=eq.news",
-            headers={**H_R, "Prefer": "count=exact"}
-        )
-        with urllib.request.urlopen(req, timeout=10) as r:
-            return int(r.headers.get("Content-Range", "*/0").split("/")[-1])
-    except Exception:
+        n1 = n2 = 0
+        with urllib.request.urlopen(urllib.request.Request(
+                base + "?ai_summary=is.null&status=eq.published", headers=H_c), timeout=10) as r:
+            n1 = int(r.headers.get("Content-Range","*/0").split("/")[-1])
+        with urllib.request.urlopen(urllib.request.Request(
+                base + f"?ai_summary=eq.{v}&status=eq.published", headers=H_c), timeout=10) as r:
+            n2 = int(r.headers.get("Content-Range","*/0").split("/")[-1])
+        print(f"  null:{n1}건 + 요약생략:{n2}건")
+        return n1 + n2
+    except Exception as e:
+        print(f"[get_remaining] {e}", file=sys.stderr)
         return -1
 
 
@@ -96,13 +101,19 @@ if remaining == 0:
     print("모두 완료. 종료.")
     sys.exit(0)
 
-articles = supa_get(
-    "/articles?status=eq.published&category=eq.news"
-    "&or=(ai_summary.is.null,"
-    "ai_summary.eq.%28%EC%9A%94%EC%95%BD%20%EC%83%9D%EB%9E%B5%29)"
-    f"&select=id,title,body,excerpt&order=published_at.desc&limit={MAX_PER_RUN}"
-)
-print(f"이번 배치: {len(articles)}개")
+import urllib.parse as _up
+_v = _up.quote("(요약 생략)", safe="")
+_half = max(MAX_PER_RUN // 2, 50)
+_a1 = supa_get(f"/articles?ai_summary=is.null&status=eq.published"
+               f"&select=id,title,body,excerpt&order=published_at.desc&limit={_half}")
+_a2 = supa_get(f"/articles?ai_summary=eq.{_v}&status=eq.published"
+               f"&select=id,title,body,excerpt&order=published_at.desc&limit={_half}")
+_a1 = _a1 if isinstance(_a1, list) else []
+_a2 = _a2 if isinstance(_a2, list) else []
+articles = _a1 + _a2
+_seen = set()
+articles = [a for a in articles if not (a["id"] in _seen or _seen.add(a["id"]))]
+print(f"이번 배치: null {len(_a1)}건 + 요약생략 {len(_a2)}건 = {len(articles)}건")
 
 if not articles:
     print("처리할 기사 없음. 종료.")
