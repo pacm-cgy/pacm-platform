@@ -1,4 +1,4 @@
-name: 뉴스 자동 수집 (매시간)
+name: 뉴스 수집+요약+트렌드 (매시간)
 
 on:
   schedule:
@@ -20,7 +20,7 @@ jobs:
           ADMIN_PROFILE_ID: ${{ vars.ADMIN_PROFILE_ID }}
         run: python3 scripts/collect_news.py
 
-      - name: AI 요약 처리 (최대 10라운드, 조기종료)
+      - name: AI 요약 처리 (최대 3라운드, 조기종료)
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
@@ -29,8 +29,8 @@ jobs:
           BATCH_SIZE: "80"
           MAX_WORKERS: "20"
         run: |
-          for i in 1 2 3 4 5 6 7 8 9 10; do
-            echo "=== 요약 라운드 $i/10 ==="
+          for i in 1 2 3; do
+            echo "=== 요약 라운드 $i/3 ==="
             python3 scripts/bulk_summarize.py
             REMAINING=$(python3 scripts/check_remaining.py 2>/dev/null || echo "0")
             echo "남은 null: $REMAINING"
