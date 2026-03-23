@@ -178,7 +178,7 @@ def supa_patch(article_id, data):
 def get_remaining():
     try:
         req = urllib.request.Request(
-            f"{SUPABASE_URL}/rest/v1/articles?status=eq.published&category=eq.news&ai_summary=is.null&select=id&limit=1",
+            f"{SUPABASE_URL}/rest/v1/articles?status=eq.published&category=eq.news&or=(ai_summary.is.null,ai_summary.eq.(요약 생략))&select=id&limit=1",
             headers={**H, 'Prefer': 'count=exact'}
         )
         with urllib.request.urlopen(req, timeout=8) as r:
@@ -192,7 +192,7 @@ def cleanup_old_null():
     try:
         from datetime import datetime, timezone, timedelta
         cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).strftime('%Y-%m-%d')
-        old = supa_get(f'/articles?status=eq.published&category=eq.news&ai_summary=is.null&published_at=lt.{cutoff}&select=id&limit=200')
+        old = supa_get(f'/articles?status=eq.published&category=eq.news&or=(ai_summary.is.null,ai_summary.eq.(요약 생략))&published_at=lt.{cutoff}&select=id&limit=200')
         if not old:
             return 0
         count = 0
@@ -231,7 +231,7 @@ if cleaned:
 
 # 요약 대상 조회
 articles = supa_get(
-    f'/articles?status=eq.published&category=eq.news&ai_summary=is.null'
+    f'/articles?status=eq.published&category=eq.news&or=(ai_summary.is.null,ai_summary.eq.(요약 생략))'
     f'&select=id,title,body,excerpt&order=published_at.desc&limit={MAX_PER_RUN}'
 )
 print(f"이번 배치: {len(articles)}개")

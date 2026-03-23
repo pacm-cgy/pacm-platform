@@ -16,8 +16,7 @@ jobs:
       - name: Python 환경 설정
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: '3.x'
 
       - name: 의존성 설치
         run: |
