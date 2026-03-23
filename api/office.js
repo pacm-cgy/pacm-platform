@@ -75,6 +75,19 @@ async function agentRespond(agent, task) {
 }
 
 export default async function handler(req) {
+  // CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Max-Age': '86400',
+      }
+    })
+  }
+
   if (req.method === 'GET') {
     // 헬스체크
     return new Response(JSON.stringify({ ok: true, service: 'PACM AI Office Terminal' }), { status: 200 })
@@ -329,9 +342,16 @@ export default async function handler(req) {
   return json({ type: 'error', output: `❌ 알 수 없는 명령어: "${cmd}"\n"help"를 입력하면 명령어 목록을 볼 수 있습니다.` })
 }
 
+function cors(res) {
+  res.headers.set('Access-Control-Allow-Origin', '*')
+  res.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  return res
+}
+
 function json(data) {
-  return new Response(JSON.stringify(data), {
+  return cors(new Response(JSON.stringify(data), {
     status: 200,
-    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-  })
+    headers: { 'Content-Type': 'application/json' }
+  }))
 }
