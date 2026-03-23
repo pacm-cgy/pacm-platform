@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase'
 const NAV_ITEMS = [
   { id: 'home',      label: '홈',       path: '/' },
   { id: 'insight',   label: '인사이트', path: '/insight' },
+  { id: 'office', label: '🏢 오피스', path: '/office' },
   { id: 'story',     label: '스토리',   path: '/story' },
   { id: 'trend',     label: '트렌드',   path: '/trend' },
   { id: 'community', label: '커뮤니티', path: '/community' },

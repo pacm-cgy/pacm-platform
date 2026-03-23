@@ -117,6 +117,7 @@ export default function App() {
                       <Route path="/"           element={<HomePage />} />
                       <Route path="/insight"    element={<InsightPage />} />
                       <Route path="/insight/:category" element={<InsightPage />} />
+                      <Route path="/office" element={<OfficePage />} />
                       <Route path="/story"      element={<StoryPage />} />
                       <Route path="/trend"      element={<TrendPage />} />
                       <Route path="/community"         element={<CommunityPage />} />
