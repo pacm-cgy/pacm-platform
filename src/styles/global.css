@@ -591,6 +591,20 @@ body {
 .btn-accent:hover { filter: brightness(1.05); }
 .btn-sm { padding: 5px 12px; font-size: 12px; }
 .btn-lg { padding: 12px 28px; font-size: 15px; }
+/* ── btn-gold (Insightship 레거시 → brand amber accent) */
+.btn-gold {
+  background: var(--accent-warm);
+  color: #1a1410;
+  border: none;
+  font-weight: 700;
+}
+.btn-gold:hover:not(:disabled) {
+  background: #FBBF24;
+  box-shadow: 0 4px 16px rgba(245,158,11,.25);
+}
+.btn-gold.btn-sm { padding: 5px 12px; font-size: 12.5px; }
+.btn-gold.btn-lg { padding: 12px 24px; font-size: 15px; border-radius: var(--r-lg); }
+
 
 /* ── 배지 */
 .badge {
@@ -1070,3 +1084,19 @@ tr:hover td { background: var(--bg-2); }
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; }
 img { max-width: 100%; }
+
+/* ── Pricing Cards (수익창출 페이지) */
+.pricing-card {
+  background: var(--bg-1);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-xl);
+  padding: 28px 24px;
+  display: flex; flex-direction: column; gap: 16px;
+  transition: var(--t-mid);
+}
+.pricing-card:hover { border-color: var(--line-2); }
+.pricing-card.featured {
+  border-color: var(--brand);
+  background: rgba(79,70,229,.04);
+  box-shadow: 0 0 0 1px var(--brand);
+}
