@@ -8,17 +8,27 @@ on:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: 뉴스 수집 전용 (collect_news.py)
+      - name: Python 환경 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 의존성 설치
+        run: |
+          pip install requests --quiet 2>/dev/null || true
+
+      - name: 뉴스 수집 (collect_news.py)
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
           ADMIN_PROFILE_ID: ${{ vars.ADMIN_PROFILE_ID }}
         run: |
-          echo "=== 뉴스 수집 시작 ===" 
+          echo "=== 뉴스 수집 시작 $(date '+%H:%M:%S') ==="
           python3 scripts/collect_news.py
-          echo "=== 수집 완료 ==="
+          echo "=== 수집 완료 $(date '+%H:%M:%S') ==="

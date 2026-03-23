@@ -1,0 +1,43 @@
+name: 누락 요약 즉시 처리 (1회성)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/fix-summaries-v2.yml'
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python 환경 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 누락 요약 처리 (5라운드)
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
+          GROQ_API_KEY: ${{ vars.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ vars.GEMINI_API_KEY }}
+          BATCH_SIZE: "100"
+          MAX_WORKERS: "25"
+        run: |
+          echo "=== 누락 요약 긴급 처리 시작 ==="
+          for i in 1 2 3 4 5; do
+            echo "--- 라운드 $i/5 ---"
+            python3 scripts/bulk_summarize.py
+            REMAINING=$(python3 scripts/check_remaining.py 2>/dev/null || echo "?")
+            echo "남은: $REMAINING"
+            if [ "$REMAINING" = "0" ]; then
+              echo "✅ 전부 완료!"
+              break
+            fi
+            sleep 3
+          done
+          echo "=== 처리 완료 ==="
