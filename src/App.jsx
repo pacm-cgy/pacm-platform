@@ -132,6 +132,7 @@ export default function App() {
                       <Route path="/profile/:id" element={<ProfilePage />} />
                       <Route path="/messages"   element={<MessagesPage />} />
                       <Route path="/advertise"  element={<AdvertisePage />} />
+                      <Route path="/edu"        element={<EduPage />} />
                       <Route path="/404"        element={<NotFoundPage />} />
                       <Route path="*"           element={<Navigate to="/404" replace />} />
                     </Routes>
