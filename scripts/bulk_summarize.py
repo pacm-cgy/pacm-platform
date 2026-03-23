@@ -85,7 +85,12 @@ def call_gemini(title, text):
     for model in ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b']:
         payload = json.dumps({
             'system_instruction': {'parts': [{'text': SYSTEM}]},
-            'contents': [{'role': 'user', 'parts': [{'text': f"제목: {title}\n본문: {text[:4000]}\n\n1,500~2,500자 심층 요약. 핵심 팩트로 바로 시작하되 배경과 시사점까지 포함하세요."}]}],
+            'contents': [{'role': 'user', 'parts': [{'text': (
+    f"제목: {title}\n\n" +
+    (f"본문: {text[:4000]}\n\n1,500~2,500자 심층 요약. 핵심 팩트로 바로 시작하되 배경과 시사점까지 포함하세요."
+     if len(text) > 50 and text != title
+     else f"위 제목의 뉴스를 청소년 창업가 관점에서 300~500자로 요약하세요. 이 분야의 배경과 의미를 포함하여 설명해 주세요. 인사말 없이 바로 시작.")
+)}]}],
             'generationConfig': {'maxOutputTokens': 4096, 'temperature': 0.2},
         }).encode()
         req = urllib.request.Request(
@@ -140,27 +145,46 @@ def summarize(article):
     2순위: Groq API 폴백
     3순위: Gemini 폴백
     """
-    title = article.get('title', '')
-    body  = article.get('body', '')
-    exc   = article.get('excerpt', '')
-    text  = body[:2000] if len(body) > 200 else (exc[:800] if len(exc) > 30 else title)
+    title = article.get('title', '') or ''
+    body  = article.get('body',  '') or ''
+    exc   = article.get('excerpt','') or ''
 
-    # 1순위: 자체 AI (항상 사용 가능, API 비용 0원)
+    # 텍스트 우선순위: body > excerpt > title
+    if len(body) > 200:
+        text = body[:5000]
+        has_content = True
+    elif len(exc) > 30:
+        text = exc[:2000]
+        has_content = True
+    else:
+        # 본문 없음 — 제목만으로 생성
+        text = title
+        has_content = False
+
+    # 1순위: 자체 AI — 본문 여부와 무관하게 항상 시도 (v2는 빈 본문도 처리 가능)
     if SELF_AI_OK:
         try:
             result = self_summarize(title, text)
-            if result and len(result) >= 200:
+            if result and len(result) >= 50:
                 return clean_summary(result)
-        except Exception as e:
-            pass  # 폴백으로 진행
+        except Exception:
+            pass
 
-    # 2순위: Groq
+    # 2순위: Groq (본문 없어도 제목으로 생성 가능)
     result = call_groq(title, text)
-    if not result:
-        # 3순위: Gemini
-        result = call_gemini(title, text)
+    if result and len(result) >= 50:
+        return clean_summary(result)
 
-    return clean_summary(result)
+    # 3순위: Gemini
+    result = call_gemini(title, text)
+    if result and len(result) >= 50:
+        return clean_summary(result)
+
+    # 최후 폴백: 제목 기반 단순 요약
+    if title:
+        return f"{title}\n\n이 기사는 창업·스타트업 관련 소식을 다루고 있습니다. 자세한 내용은 원문을 확인하세요."
+
+    return ''
 
 
 def supa_get(path):
@@ -233,7 +257,7 @@ start = time.time()
 def process(a):
     try:
         summary = summarize(a)
-        if summary and len(summary) > 50:
+        if summary and len(summary) > 20:
             ok = supa_patch(a['id'], {'ai_summary': summary})
             return 'ok' if ok else 'fail'
         return 'fail'

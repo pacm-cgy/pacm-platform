@@ -301,8 +301,19 @@ def summarize(title: str, body: str, target_len: int = 2000) -> str:
     """
     weights = load_model()
     body = clean_text(body)
-    if not body:
-        return f"{title}에 관한 내용입니다."
+    if not body or len(body) < 15:
+        # 본문 없을 때 제목 기반으로 최소 요약 생성
+        import random
+        random.seed(hash(title) % 100)
+        topic = detect_topic(title, tokenize_ko(title))
+        tokens = tokenize_ko(title)
+        term_explained = apply_term_dict(title)
+        return (
+            f"{topic} 분야에서 주목할 만한 소식입니다.\n\n"
+            f"{term_explained}\n\n"
+            f"이번 소식은 국내 {topic} 생태계에 관심을 가진 청소년 창업가들이 참고할 만한 내용입니다. "
+            f"관련 분야의 흐름을 파악하고, 실제 사업 기회와 연결 짓는 시각을 갖추는 것이 중요합니다."
+        )
 
     sentences = split_sentences(body)
     if not sentences:
