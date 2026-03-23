@@ -1,34 +1,65 @@
-name: AI 모델 주간 학습
+name: AI 연구소 — 자체 AI 지속 학습 (매일 03:00 KST)
 
 on:
   schedule:
-    - cron: '0 20 * * 0'   # 매주 일요일 KST 05:00 (UTC 20:00)
+    - cron: '0 18 * * *'   # 매일 KST 03:00 (UTC 18:00)
   workflow_dispatch:
+    inputs:
+      mode:
+        description: '실행 모드'
+        required: true
+        default: 'train'
+        type: choice
+        options: [train, eval, batch, full]
 
 jobs:
-  train:
+  ai-lab:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ vars.GITHUB_PAT || github.token }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Python 환경 설정
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
-      - name: 키워드 가중치 학습
+      - name: "🧠 [AI연구소] v2 모델 성능 평가"
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python3 scripts/insightship_ai.py train
-
-      - name: 학습된 모델 커밋
         run: |
-          git config user.name "Insightship AI"
-          git config user.email "ai@pacm.kr"
-          git add scripts/insightship_model.pkl || true
-          git diff --staged --quiet || git commit -m "chore: AI 모델 주간 학습 업데이트 [skip ci]"
-          git push || true
+          echo "=== Insightship AI v2 평가 시작 ==="
+          python3 scripts/insightship_ai_v2.py eval
+          echo "=================================="
+
+      - name: "📚 [AI연구소] 실제 데이터로 지속 학습"
+        if: ${{ github.event.inputs.mode != 'eval' }}
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "=== 지속 학습 시작 (실제 요약 데이터 기반) ==="
+          python3 scripts/insightship_ai_v2.py train
+          echo "=== 학습 완료 ==="
+
+      - name: "⚡ [AI연구소] 미요약 기사 자체 AI 처리"
+        if: ${{ github.event.inputs.mode == 'batch' || github.event.inputs.mode == 'full' || github.event_name == 'schedule' }}
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "=== 자체 AI v2 배치 요약 ==="
+          python3 scripts/insightship_ai_v2.py batch
+
+      - name: "💾 [AI연구소] 학습된 모델 커밋"
+        run: |
+          git config user.name "Insightship AI Lab"
+          git config user.email "ai-lab@insightship.pacm.kr"
+          git add scripts/insightship_model_v2.json || true
+          git diff --staged --quiet || git commit -m "🧠 AI v2 모델 자동 업데이트 $(date '+%Y-%m-%d')"
+          git push || echo "변경 없음"

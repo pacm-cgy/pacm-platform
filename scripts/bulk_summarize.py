@@ -9,13 +9,18 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 자체 AI 엔진 로드
 sys.path.insert(0, os.path.dirname(__file__))
-try:
-    from insightship_ai import summarize as self_summarize
-    SELF_AI_OK = True
-    print("✅ Insightship 자체 AI 로드 완료")
-except Exception as e:
-    SELF_AI_OK = False
-    print(f"⚠️  자체 AI 로드 실패: {e}")
+# 자체 AI v2 우선 로드, v1 폴백
+SELF_AI_OK = False
+self_summarize = None
+for ai_module in ['insightship_ai_v2', 'insightship_ai']:
+    try:
+        mod = __import__(ai_module)
+        self_summarize = mod.summarize
+        SELF_AI_OK = True
+        print(f"✅ 자체 AI 로드 완료: {ai_module}")
+        break
+    except Exception as e:
+        print(f"⚠️  {ai_module} 로드 실패: {e}")
 
 SUPABASE_URL  = os.environ['SUPABASE_URL']
 SERVICE_KEY   = os.environ['SUPABASE_SERVICE_KEY']
