@@ -1,223 +1,223 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Send, Search, Plus, ArrowLeft, MessageSquare } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store'
-import { Send, ArrowLeft, User } from 'lucide-react'
-import { format } from 'date-fns'
-import { ko } from 'date-fns/locale'
+import { Link } from 'react-router-dom'
 
 export default function MessagesPage() {
-  const { user, profile } = useAuthStore()
-  const navigate = useNavigate()
-  const [params] = useSearchParams()
-  const toId = params.get('to')
-
-  const [threads, setThreads] = useState([])   // 대화 목록
-  const [activeThread, setActiveThread] = useState(null) // 선택된 상대방
+  const { user } = useAuthStore()
+  const [convs, setConvs]       = useState([])
+  const [activeConv, setActive] = useState(null)
   const [messages, setMessages] = useState([])
-  const [input, setInput] = useState('')
-  const [sending, setSending] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [threadProfile, setThreadProfile] = useState(null)
-  const bottomRef = useRef(null)
+  const [input, setInput]       = useState('')
+  const [loading, setLoading]   = useState(false)
+  const msgEndRef = useRef(null)
 
   useEffect(() => {
-    if (!user) navigate('/')
+    if (user) loadConvs()
   }, [user])
 
-  // 대화 목록 로드
   useEffect(() => {
-    if (!user) return
-    loadThreads()
-  }, [user])
-
-  // to 파라미터로 직접 오면 해당 유저와 대화 열기
-  useEffect(() => {
-    if (toId && user && toId !== user.id) {
-      setActiveThread(toId)
-      supabase.from('profiles').select('id,display_name,avatar_url,username').eq('id', toId).maybeSingle()
-        .then(({ data }) => setThreadProfile(data))
+    if (activeConv) {
+      loadMessages(activeConv.id)
+      const sub = supabase
+        .channel(`msgs-${activeConv.id}`)
+        .on('postgres_changes', {
+          event:'INSERT', schema:'public', table:'messages',
+          filter: `conv_id=eq.${activeConv.id}`
+        }, payload => {
+          setMessages(prev => [...prev, payload.new])
+          setTimeout(() => msgEndRef.current?.scrollIntoView({ behavior:'smooth' }), 50)
+        })
+        .subscribe()
+      return () => sub.unsubscribe()
     }
-  }, [toId, user])
+  }, [activeConv])
 
-  // 메시지 로드
-  useEffect(() => {
-    if (!activeThread || !user) return
-    loadMessages(activeThread)
-    // 읽음 처리
-    supabase.from('messages').update({ is_read: true })
-      .eq('receiver_id', user.id).eq('sender_id', activeThread).eq('is_read', false)
-      .then(() => {})
-  }, [activeThread, user])
-
-  // 스크롤
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
-  async function loadThreads() {
-    setLoading(true)
-    const { data: sent } = await supabase.from('messages')
-      .select('sender_id,receiver_id,content,created_at,is_read')
-      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-      .order('created_at', { ascending: false }).limit(200)
-
-    if (!sent) { setLoading(false); return }
-
-    // 상대방별로 그룹화
-    const threadMap = {}
-    for (const m of sent) {
-      const otherId = m.sender_id === user.id ? m.receiver_id : m.sender_id
-      if (!threadMap[otherId]) threadMap[otherId] = { lastMsg: m, unread: 0, otherId }
-      if (m.receiver_id === user.id && !m.is_read) threadMap[otherId].unread++
-    }
-
-    // 상대방 프로필 로드
-    const otherIds = Object.keys(threadMap)
-    if (!otherIds.length) { setThreads([]); setLoading(false); return }
-
-    const { data: profiles } = await supabase.from('profiles')
-      .select('id,display_name,avatar_url,username').in('id', otherIds)
-    const profileMap = {}
-    for (const p of (profiles||[])) profileMap[p.id] = p
-
-    const result = Object.values(threadMap).map(t => ({ ...t, profile: profileMap[t.otherId] }))
-      .sort((a,b) => new Date(b.lastMsg.created_at) - new Date(a.lastMsg.created_at))
-
-    setThreads(result)
-    setLoading(false)
+  async function loadConvs() {
+    const { data } = await supabase
+      .from('messages_conversations')
+      .select('*')
+      .or(`participant_a.eq.${user.id},participant_b.eq.${user.id}`)
+      .order('last_msg_at', { ascending: false })
+    setConvs(data || [])
   }
 
-  async function loadMessages(otherId) {
-    const { data } = await supabase.from('messages')
+  async function loadMessages(convId) {
+    setLoading(true)
+    const { data } = await supabase
+      .from('messages')
       .select('*')
-      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${otherId}),and(sender_id.eq.${otherId},receiver_id.eq.${user.id})`)
-      .order('created_at', { ascending: true }).limit(100)
+      .eq('conv_id', convId)
+      .order('created_at', { ascending: true })
     setMessages(data || [])
+    setLoading(false)
+    setTimeout(() => msgEndRef.current?.scrollIntoView({ behavior:'smooth' }), 100)
+    // 읽음 처리
+    await supabase.from('messages')
+      .update({ is_read: true })
+      .eq('conv_id', convId)
+      .neq('sender_id', user?.id)
   }
 
   async function sendMessage() {
-    if (!input.trim() || !activeThread || sending) return
-    setSending(true)
-    const content = input.trim().slice(0, 2000)
+    if (!input.trim() || !activeConv || !user) return
+    const content = input.trim()
     setInput('')
-    const { data, error } = await supabase.from('messages').insert({
-      sender_id: user.id, receiver_id: activeThread, content
+    const { data } = await supabase.from('messages').insert({
+      conv_id: activeConv.id,
+      sender_id: user.id,
+      content,
     }).select().single()
-    if (!error && data) {
+    if (data) {
       setMessages(prev => [...prev, data])
-      loadThreads()
-    } else if (error?.code === '42P01') {
-      alert('메시지 기능을 사용하려면 관리자가 DB를 초기화해야 합니다.\n어드민 대시보드 > DB 초기화 실행')
-      setInput(content)
+      await supabase.from('messages_conversations')
+        .update({ last_msg_at: new Date().toISOString() })
+        .eq('id', activeConv.id)
+      setTimeout(() => msgEndRef.current?.scrollIntoView({ behavior:'smooth' }), 50)
     }
-    setSending(false)
   }
 
-  function selectThread(otherId, prof) {
-    setActiveThread(otherId)
-    setThreadProfile(prof)
-  }
-
-  if (!user) return null
+  if (!user) return (
+    <div className="page-inner" style={{ textAlign:'center', paddingTop:80 }}>
+      <MessageSquare size={48} color="var(--text-4)" style={{ margin:'0 auto 16px' }} />
+      <h2 style={{ fontFamily:'var(--f-display)', marginBottom:8 }}>메시지</h2>
+      <p style={{ color:'var(--text-3)', marginBottom:24 }}>로그인 후 메시지를 이용할 수 있습니다</p>
+      <Link to="/login" className="btn btn-primary">로그인</Link>
+    </div>
+  )
 
   return (
-    <div style={{ display:'flex', height:'calc(100vh - 130px)', maxWidth:'900px', margin:'0 auto', border:'1px solid var(--c-border)', borderTop:'none' }}>
+    <div style={{ display:'flex', height:'calc(100vh - 32px - var(--nav-h))', maxHeight:700 }}>
+
       {/* 대화 목록 */}
-      <div style={{ width:'260px', flexShrink:0, borderRight:'1px solid var(--c-border)', overflowY:'auto', display:'flex', flexDirection:'column' }}>
-        <div style={{ padding:'16px', borderBottom:'1px solid var(--c-border)', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--c-gold)', letterSpacing:'2px' }}>
-          MESSAGES
+      <div style={{
+        width: activeConv ? 0 : '100%',
+        maxWidth: 320,
+        borderRight: '1px solid var(--line-1)',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        flexShrink: 0,
+        transition: 'all 0.3s ease',
+      }} className="conv-list-panel">
+
+        <div style={{ padding:'16px', borderBottom:'1px solid var(--line-1)', display:'flex', alignItems:'center', gap:8 }}>
+          <h2 style={{ fontFamily:'var(--f-display)', fontSize:18, fontWeight:700, flex:1 }}>메시지</h2>
+          <button className="icon-btn"><Plus size={16} /></button>
         </div>
-        {loading ? (
-          <div style={{ padding:'20px', color:'var(--c-muted)', fontSize:'12px' }}>로딩 중...</div>
-        ) : threads.length === 0 ? (
-          <div style={{ padding:'20px', color:'var(--c-muted)', fontSize:'12px' }}>대화가 없습니다</div>
-        ) : threads.map(t => (
-          <div key={t.otherId}
-            onClick={() => selectThread(t.otherId, t.profile)}
-            style={{ padding:'14px 16px', cursor:'pointer', borderBottom:'1px solid var(--c-border)', background: activeThread===t.otherId ? 'var(--c-gray-1)' : 'transparent', transition:'background 0.1s' }}>
-            <div style={{ display:'flex', gap:'10px', alignItems:'center' }}>
-              <div className="avatar" style={{ width:'34px', height:'34px', fontSize:'13px', flexShrink:0 }}>
-                {t.profile?.avatar_url ? <img src={t.profile.avatar_url} alt=""/> : t.profile?.display_name?.[0]||'U'}
+
+        <div style={{ padding:'10px 12px', borderBottom:'1px solid var(--line-1)' }}>
+          <div className="search-bar">
+            <Search size={13} color="var(--text-4)" />
+            <input placeholder="대화 검색..." />
+          </div>
+        </div>
+
+        <div style={{ flex:1, overflowY:'auto' }}>
+          {convs.length === 0 ? (
+            <div style={{ padding:32, textAlign:'center', color:'var(--text-3)', fontSize:13 }}>
+              아직 대화가 없습니다
+            </div>
+          ) : convs.map(conv => (
+            <div
+              key={conv.id}
+              onClick={() => setActive(conv)}
+              style={{
+                padding:'14px 16px',
+                borderBottom:'1px solid var(--line-1)',
+                cursor:'pointer',
+                background: activeConv?.id === conv.id ? 'var(--brand-dim)' : 'transparent',
+                transition:'background 0.15s',
+                display:'flex', gap:12, alignItems:'center'
+              }}
+            >
+              <div style={{
+                width:40, height:40, borderRadius:'50%',
+                background:'var(--bg-3)', flexShrink:0,
+                display:'flex', alignItems:'center', justifyContent:'center',
+                fontWeight:700, fontSize:15, color:'var(--brand)'
+              }}>
+                {conv.context_type === 'scout' ? '🎯' : '💬'}
               </div>
               <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:'13px', fontWeight:600, display:'flex', justifyContent:'space-between' }}>
-                  <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.profile?.display_name||'알 수 없음'}</span>
-                  {t.unread > 0 && <span style={{ background:'var(--c-gold)', color:'#000', fontSize:'10px', fontWeight:700, borderRadius:'10px', padding:'1px 6px', flexShrink:0, marginLeft:'4px' }}>{t.unread}</span>}
+                <div style={{ fontSize:13.5, fontWeight:600, color:'var(--text-1)', marginBottom:2 }}>
+                  {conv.context_type === 'scout' ? '스카우트 문의' : '일반 메시지'}
                 </div>
-                <div style={{ fontSize:'11px', color:'var(--c-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginTop:'2px' }}>
-                  {t.lastMsg.content?.slice(0,30)}
+                <div style={{ fontSize:12, color:'var(--text-3)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {new Date(conv.last_msg_at).toLocaleString('ko-KR', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })}
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
-      {/* 채팅 영역 */}
-      {activeThread ? (
+      {/* 메시지 뷰 */}
+      {activeConv ? (
         <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
-          {/* 헤더 */}
-          <div style={{ padding:'14px 16px', borderBottom:'1px solid var(--c-border)', display:'flex', alignItems:'center', gap:'10px' }}>
-            <div className="avatar" style={{ width:'32px', height:'32px', fontSize:'13px' }}>
-              {threadProfile?.avatar_url ? <img src={threadProfile.avatar_url} alt=""/> : threadProfile?.display_name?.[0]||'U'}
+          {/* 채팅 헤더 */}
+          <div style={{ padding:'14px 20px', borderBottom:'1px solid var(--line-1)', display:'flex', alignItems:'center', gap:12 }}>
+            <button className="icon-btn" onClick={() => setActive(null)}>
+              <ArrowLeft size={16} />
+            </button>
+            <div style={{ width:36, height:36, borderRadius:'50%', background:'var(--bg-3)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>
+              {activeConv.context_type === 'scout' ? '🎯' : '💬'}
             </div>
             <div>
-              <div style={{ fontSize:'14px', fontWeight:600 }}>{threadProfile?.display_name||'알 수 없음'}</div>
-              <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-muted)' }}>@{threadProfile?.username}</div>
+              <div style={{ fontSize:14, fontWeight:600 }}>
+                {activeConv.context_type === 'scout' ? '스카우트 문의' : '메시지'}
+              </div>
+              <div style={{ fontSize:11, color:'var(--text-3)', fontFamily:'var(--f-mono)' }}>
+                {activeConv.platform}
+              </div>
             </div>
-            <button onClick={() => navigate(`/profile/${activeThread}`)} className="btn btn-ghost btn-sm" style={{ marginLeft:'auto', gap:'4px' }}>
-              <User size={12}/> 프로필
-            </button>
           </div>
 
           {/* 메시지 목록 */}
-          <div style={{ flex:1, overflowY:'auto', padding:'16px', display:'flex', flexDirection:'column', gap:'10px' }}>
-            {messages.map(m => {
-              const isMine = m.sender_id === user.id
-              return (
-                <div key={m.id} style={{ display:'flex', justifyContent:isMine?'flex-end':'flex-start' }}>
-                  <div style={{
-                    maxWidth:'70%', padding:'10px 14px', fontSize:'14px', lineHeight:1.6,
-                    background: isMine ? 'var(--c-gold)' : 'var(--c-gray-2)',
-                    color: isMine ? '#000' : 'var(--c-paper)',
-                    borderRadius: isMine ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                    wordBreak:'break-word',
-                  }}>
-                    {m.content}
-                    <div style={{ fontSize:'10px', color:isMine?'rgba(0,0,0,0.5)':'var(--c-gray-5)', marginTop:'4px', textAlign:isMine?'right':'left', fontFamily:'var(--f-mono)' }}>
-                      {format(new Date(m.created_at), 'H:mm', { locale: ko })}
-                    </div>
+          <div style={{ flex:1, overflowY:'auto', padding:'16px 20px', display:'flex', flexDirection:'column', gap:4 }}>
+            {loading ? (
+              <div style={{ textAlign:'center', color:'var(--text-3)', paddingTop:40 }}>로딩 중...</div>
+            ) : messages.map(m => (
+              <div key={m.id} className={`msg-bubble${m.sender_id === user?.id ? ' me' : ''}`}>
+                {m.sender_id !== user?.id && (
+                  <div className="msg-avatar" style={{ background:'var(--brand-dim)' }} />
+                )}
+                <div>
+                  <div className="msg-content">{m.content}</div>
+                  <div className="msg-time" style={{ textAlign: m.sender_id === user?.id ? 'right' : 'left' }}>
+                    {new Date(m.created_at).toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit' })}
                   </div>
                 </div>
-              )
-            })}
-            <div ref={bottomRef}/>
+              </div>
+            ))}
+            <div ref={msgEndRef} />
           </div>
 
           {/* 입력창 */}
-          <div style={{ padding:'12px 16px', borderTop:'1px solid var(--c-border)', display:'flex', gap:'8px' }}>
+          <div style={{ padding:'12px 20px', borderTop:'1px solid var(--line-1)', display:'flex', gap:10 }}>
             <input
-              value={input} onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-              placeholder="메시지를 입력하세요..." maxLength={2000}
-              style={{ flex:1, padding:'10px 14px', background:'var(--c-gray-1)', border:'1px solid var(--c-border)', color:'var(--c-paper)', fontSize:'14px', fontFamily:'var(--f-sans)', outline:'none' }}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), sendMessage())}
+              placeholder="메시지를 입력하세요..."
+              style={{ flex:1 }}
             />
-            <button onClick={sendMessage} disabled={sending || !input.trim()} className="btn btn-gold" style={{ padding:'10px 16px' }}>
-              <Send size={15}/>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={sendMessage}
+              disabled={!input.trim()}
+            >
+              <Send size={14} />
             </button>
           </div>
         </div>
       ) : (
-        <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:'var(--c-muted)', fontSize:'14px', flexDirection:'column', gap:'8px' }}>
-          <MessageCircle size={36} color="var(--c-gray-4)"/>
-          <span>대화를 선택하세요</span>
+        <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text-3)', flexDirection:'column', gap:12 }}>
+          <MessageSquare size={40} />
+          <p style={{ fontSize:14 }}>대화를 선택하세요</p>
         </div>
       )}
     </div>
   )
-}
-
-function MessageCircle({ size, color }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color||'currentColor'} strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
 }
