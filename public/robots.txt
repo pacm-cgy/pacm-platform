@@ -1,7 +1,22 @@
 User-agent: *
 Allow: /
-Disallow: /profile
-Disallow: /bookmarks
-Disallow: /my-posts
+Disallow: /admin
+Disallow: /office
+Disallow: /messages
 
-Sitemap: https://pacm.kr/sitemap.xml
+Sitemap: https://www.insightship.pacm.kr/sitemap.xml
+
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 1
+
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 2
+
+User-agent: Naverbot
+Allow: /
+Crawl-delay: 1
+
+User-agent: Yeti
+Allow: /
