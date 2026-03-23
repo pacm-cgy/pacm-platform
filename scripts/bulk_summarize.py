@@ -188,58 +188,8 @@ def get_remaining():
 
 
 def cleanup_old_null():
-    """30일 이상 오래된 null 요약 정리"""
-    try:
-        from datetime import datetime, timezone, timedelta
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).strftime('%Y-%m-%d')
-        old = supa_get(f'/articles?status=eq.published&category=eq.news&or=(ai_summary.is.null,ai_summary.eq.(요약 생략))&published_at=lt.{cutoff}&select=id&limit=200')
-        if not old:
-            return 0
-        count = 0
-        for a in old:
-            payload = json.dumps({'ai_summary': '(요약 생략)'}).encode()
-            req = urllib.request.Request(
-                f'{SUPABASE_URL}/rest/v1/articles?id=eq.{a["id"]}',
-                data=payload, headers={**H, 'Prefer': 'return=minimal'}, method='PATCH'
-            )
-            try:
-                with urllib.request.urlopen(req, timeout=8):
-                    count += 1
-            except:
-                pass
-        return count
-    except:
-        return 0
-
-
-# ── 메인 ──────────────────────────────────────────────────────────
-MAX_PER_RUN = 80   # Groq 14,400/day 기준 넉넉하게
-WORKERS     = 5    # 동시 처리 수 (Groq 30 RPM 기준 안전)
-
-print(f"Groq 연결: {'✅' if GROQ_API_KEY else '❌ (Gemini 폴백 사용)'}")
-remaining = get_remaining()
-print(f"요약 필요 뉴스: {remaining}개")
-
-if remaining == 0:
-    print("요약할 뉴스 없음. 종료.")
-    exit(0)
-
-# 오래된 null 정리 먼저
-cleaned = cleanup_old_null()
-if cleaned:
-    print(f"오래된 null {cleaned}개 정리")
-
-# 요약 대상 조회
-articles = supa_get(
-    f'/articles?status=eq.published&category=eq.news&or=(ai_summary.is.null,ai_summary.eq.(요약 생략))'
-    f'&select=id,title,body,excerpt&order=published_at.desc&limit={MAX_PER_RUN}'
-)
-print(f"이번 배치: {len(articles)}개")
-
-done = 0
-fail = 0
-start = time.time()
-
+    """비활성화 — (요약 생략) 대신 null 유지하여 재처리 대상 유지"""
+    return 0
 def process(a):
     summary = summarize(a)
     if summary:
