@@ -205,7 +205,7 @@ export default function EduPage() {
         <div style={{ color: '#c7d2fe', fontSize: '14px', marginBottom: '20px' }}>
           PACM 창업 챌린지에 참여해서 아이디어를 현실로 만드세요
         </div>
-        <button onClick={() => navigate('/community')} className="btn" style={{ background: '#fff', color: 'var(--c-indigo)', fontWeight: 700 }}>
+        <button onClick={() => navigate('/community')} className="btn" style={{ background: 'var(--bg-1)', color: 'var(--c-indigo)', fontWeight: 700 }}>
           창업 챌린지 참여하기 <ChevronRight size={14} style={{ verticalAlign: 'middle' }} />
         </button>
       </div>

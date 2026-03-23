@@ -216,7 +216,7 @@ export default function NewsPage() {
         <div className="container">
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
             <div>
-              <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gold)', letterSpacing: '3px', marginBottom: '6px' }}>
+              <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--brand)', letterSpacing: '3px', marginBottom: '6px' }}>
                 STARTUP NEWS
               </div>
               <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(20px,4vw,28px)', fontWeight: 700, marginBottom: '4px' }}>
@@ -229,7 +229,7 @@ export default function NewsPage() {
             <button
               onClick={handleRefresh}
               style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: '1px solid var(--c-border)', color: 'var(--c-muted)', padding: '8px 12px', cursor: 'pointer', fontFamily: 'var(--f-mono)', fontSize: '11px', transition: 'all 0.12s', flexShrink: 0 }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--c-gold)'; e.currentTarget.style.color = 'var(--c-gold)' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--brand)'; e.currentTarget.style.color = 'var(--brand)' }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--c-border)'; e.currentTarget.style.color = 'var(--c-muted)' }}
             >
               <RefreshCw size={12} className={isLoading ? 'spin' : ''} />
@@ -240,7 +240,7 @@ export default function NewsPage() {
           {/* 검색 */}
           <form onSubmit={handleSearch} style={{ marginBottom: '14px', position: 'relative' }}>
             <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--c-border)', background: 'var(--c-gray-1)', transition: 'border-color 0.15s' }}
-              onFocusCapture={e => e.currentTarget.style.borderColor = 'var(--c-gold)'}
+              onFocusCapture={e => e.currentTarget.style.borderColor = 'var(--brand)'}
               onBlurCapture={e => e.currentTarget.style.borderColor = 'var(--c-border)'}
             >
               <Search size={14} color="var(--c-gray-5)" style={{ marginLeft: '12px', flexShrink: 0 }} />
@@ -256,7 +256,7 @@ export default function NewsPage() {
                   <X size={14} />
                 </button>
               )}
-              <button type="submit" style={{ background: 'var(--c-gold)', border: 'none', color: '#1a1814', padding: '10px 16px', cursor: 'pointer', fontFamily: 'var(--f-mono)', fontSize: '11px', letterSpacing: '0.5px', fontWeight: 700, flexShrink: 0, transition: 'opacity 0.12s' }}
+              <button type="submit" style={{ background: 'var(--brand)', border: 'none', color: '#1a1814', padding: '10px 16px', cursor: 'pointer', fontFamily: 'var(--f-mono)', fontSize: '11px', letterSpacing: '0.5px', fontWeight: 700, flexShrink: 0, transition: 'opacity 0.12s' }}
                 onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
                 onMouseLeave={e => e.currentTarget.style.opacity = '1'}
               >
@@ -275,7 +275,7 @@ export default function NewsPage() {
                   padding: '7px 14px', border: 'none', cursor: 'pointer',
                   fontFamily: 'var(--f-mono)', fontSize: '11px', letterSpacing: '0.3px',
                   whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.12s',
-                  background: activeFilter === f.value ? 'var(--c-gold)' : 'var(--c-gray-2)',
+                  background: activeFilter === f.value ? 'var(--brand)' : 'var(--c-gray-2)',
                   color: activeFilter === f.value ? '#1a1814' : 'var(--c-muted)',
                   fontWeight: activeFilter === f.value ? 700 : 400,
                   borderBottom: activeFilter === f.value ? 'none' : '2px solid transparent',
@@ -294,7 +294,7 @@ export default function NewsPage() {
           {searchQuery ? `"${searchQuery}" 검색 결과` : activeFilter !== '전체' ? `${activeFilter}` : '전체'} · {total.toLocaleString()}건
         </span>
         {searchQuery && (
-          <button onClick={clearSearch} style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gold)', background: 'none', border: 'none', cursor: 'pointer', padding: '0', display: 'flex', alignItems: 'center', gap: '3px' }}>
+          <button onClick={clearSearch} style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--brand)', background: 'none', border: 'none', cursor: 'pointer', padding: '0', display: 'flex', alignItems: 'center', gap: '3px' }}>
             <X size={10} /> 검색 초기화
           </button>
         )}

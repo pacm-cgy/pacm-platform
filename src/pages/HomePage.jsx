@@ -291,7 +291,7 @@ export default function HomePage() {
             </div>
           </div>
           <div style={{
-            background: '#fff', color: 'var(--c-indigo)', borderRadius: '6px',
+            background: 'var(--bg-1)', color: 'var(--c-indigo)', borderRadius: '6px',
             padding: '8px 16px', fontFamily: 'var(--f-mono)', fontSize: '12px',
             fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0
           }}>참여하기 →</div>
