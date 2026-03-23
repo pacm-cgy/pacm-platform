@@ -1,700 +1,534 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, BookOpen, Sparkles, TrendingUp, Users, Globe, Lightbulb, BarChart2, Newspaper } from 'lucide-react'
+import { ChevronLeft, ChevronRight, BookOpen } from 'lucide-react'
 
-// ── 매거진 스프레드 정의 (28 스프레드 = 56페이지)
+/**
+ * PACM 창업 매거진
+ * - 모든 내용은 공개된 사실, 검증된 개념, 실제 데이터 기반
+ * - 특정 개인/기업의 미검증 수치나 인터뷰 내용은 포함하지 않음
+ * - 창업 이론, 경영 방법론, 공개 사례만 수록
+ */
+
 const MAGAZINE_SECTIONS = [
-  // 섹션 0: 커버
+  // 0: 커버
   { type: 'cover' },
 
-  // 섹션 1-2: 창업자 스토리
+  // ── SECTION 1: 창업의 기초
   {
-    type: 'article', icon: '🚀', category: 'FOUNDER STORY',
-    title: '"실패가 나를 만들었다" — PACM 조경용 대표',
-    subtitle: '초등학교 2학년부터 꿈꾼 경영, 청소년 창업 플랫폼을 만들기까지',
-    body: `초등학교 2학년. 남들이 운동장에서 뛰놀 때, 한 소년은 '경영'이라는 단어에 가슴이 뛰었다. 그 소년이 바로 PACM의 조경용 대표다.
+    type: 'article', category: 'STARTUP BASICS',
+    title: '창업이란 무엇인가',
+    subtitle: '새로운 가치를 만드는 행위의 본질',
+    body: `창업(起業)은 새로운 사업을 시작하는 행위다. 단순히 회사를 등록하는 것이 아니라, 세상의 문제를 발견하고 그 해결책을 제품이나 서비스로 만들어 사람들에게 제공하는 과정 전체를 의미한다.
 
-"처음 사업을 시작했을 때 모든 것이 실패였어요. 아이디어는 있었지만 실행 방법을 몰랐고, 멘토도 없었고, 정보도 없었습니다. 그래서 인사이트쉽을 만들었어요."
+경제학자 조지프 슘페터(Joseph Schumpeter)는 창업가를 "창조적 파괴(Creative Destruction)의 주체"로 정의했다. 기존의 것을 더 나은 것으로 대체하는 혁신을 통해 경제를 발전시키는 사람이라는 뜻이다.
 
-인사이트쉽은 단순한 뉴스 플랫폼이 아니다. 청소년들이 창업의 '격차 없이' 도전할 수 있는 세상을 만들기 위한 첫 번째 발걸음이다. 조 대표는 청소년을 '공부만 해야 하는 존재'로 가두는 사회적 편견과 싸우고 있다.
+스탠퍼드 대학교 교수 스티브 블랭크(Steve Blank)는 스타트업을 "반복 가능하고 확장 가능한 비즈니스 모델을 찾는 임시 조직"으로 정의했다. 이 정의에서 핵심은 '찾는'이라는 단어다. 스타트업은 아직 답을 모르는 상태에서 시작한다.
 
-"AI 전환(AX)의 시대에 학벌보다 실무 역량이 중요해졌습니다. 지금이 청소년들이 도전할 수 있는 최고의 시기입니다."`,
-    insight: '가장 좋은 시작 시점은 지금 이 순간이다.',
+린 스타트업(Lean Startup) 방법론의 창시자 에릭 리스(Eric Ries)는 Build-Measure-Learn 사이클을 통해 빠르게 가설을 검증하고 방향을 수정하는 것이 스타트업의 핵심이라고 설명했다.`,
+    insight: '창업은 문제를 발견하는 것에서 시작된다.',
     accent: '#6366F1'
   },
   {
-    type: 'article', icon: '💡', category: 'FOUNDER STORY',
-    title: '17살에 첫 스타트업을 창업한 김민준의 이야기',
-    subtitle: '학교 수업 중 떠오른 아이디어로 MAU 1만 명을 달성한 고등학생 CEO',
-    body: `"수업 시간에 선생님 말씀을 들으면서 '왜 이 정보는 이렇게 전달하기 어려울까?'라는 생각이 들었어요. 그게 첫 번째 아이디어였습니다."
+    type: 'article', category: 'STARTUP BASICS',
+    title: 'MVP — 최소 기능 제품의 원리',
+    subtitle: 'Eric Ries의 린 스타트업에서 배우는 검증의 방법',
+    body: `MVP(Minimum Viable Product)는 에릭 리스가 린 스타트업(2011) 에서 소개한 개념이다. 핵심 가설을 검증하기 위한 최소한의 기능을 가진 제품을 말한다.
 
-김민준(17)은 학교 수업 정보를 시각화해주는 앱을 만들어 같은 학교 학생들에게 먼저 배포했다. 처음 100명, 그 다음엔 1,000명. 소문이 퍼지면서 다른 학교까지 퍼졌고, 6개월 만에 MAU 1만 명을 달성했다.
+MVP의 목적은 완성도가 아니라 학습이다. "고객이 이 문제를 해결하기 위해 돈을 지불할 것인가?"라는 가장 중요한 질문에 답하기 위해 최소한의 자원을 투입하는 것이다.
 
-핵심 비결은 단순했다. '나 자신이 사용자'라는 점이었다. 그는 매일 자신의 앱을 사용하며 불편한 점을 직접 고쳤고, 사용자 피드백을 24시간 내에 반영했다.
+실제 사례로 자주 인용되는 것은 드롭박스(Dropbox)다. 공동창업자 드루 휴스턴(Drew Houston)은 실제 제품을 만들기 전에 제품이 작동하는 것처럼 보이는 데모 영상만 만들었다. 영상을 공개한 후 하룻밤 사이에 수천 명이 베타 대기 신청을 했고, 이를 통해 시장 수요를 검증했다.
 
-"창업의 가장 큰 장점은 배움의 속도입니다. 학교에서 1년 배울 것을 창업하면 한 달에 배웁니다."`,
-    insight: '가장 좋은 사용자는 창업자 자신이다.',
+중요한 것은 MVP가 '나쁜 제품'이 아니라는 점이다. 핵심 가치는 완전히 전달하되, 불필요한 기능을 제거한 제품이다.`,
+    insight: 'MVP는 배우기 위한 실험이지, 출시를 위한 제품이 아니다.',
     accent: '#6366F1'
   },
 
-  // 섹션 3-4: AI 트렌드
+  // ── SECTION 2: AI와 창업
   {
-    type: 'article', icon: '🤖', category: 'AI TREND',
-    title: '2026 AI 창업 생태계 완전 분석',
-    subtitle: 'ChatGPT 이후 3년, AI 스타트업의 지형도가 바뀌었다',
-    body: `2023년 ChatGPT 출시 이후 AI 스타트업 생태계는 급격히 변화했다. 초기에는 "AI로 무엇이든 만들 수 있다"는 환상이 지배했지만, 2026년 현재 시장은 더 성숙하고 선별적이다.
+    type: 'article', category: 'AI × STARTUP',
+    title: 'Large Language Model이 창업 생태계를 바꾸는 방식',
+    subtitle: 'GPT, Claude 등 LLM의 등장이 스타트업 지형에 미친 영향',
+    body: `2022년 11월 OpenAI가 ChatGPT를 공개한 이후 스타트업 생태계는 빠르게 재편됐다. 출시 5일 만에 사용자 100만 명을 돌파했으며, 이는 역사상 가장 빠른 소비자 서비스 성장 중 하나로 기록된다.
 
-투자자들이 주목하는 AI 스타트업의 조건은 세 가지로 좁혀졌다. 첫째, 특정 산업의 깊은 도메인 지식. 둘째, 단순 AI 래퍼가 아닌 독자적 데이터셋 보유. 셋째, 측정 가능한 비즈니스 성과.
+LLM의 등장이 스타트업에 미친 영향은 두 가지 방향에서 분석할 수 있다. 첫째, 개발 비용의 급격한 하락이다. 자연어 처리, 텍스트 생성, 코드 자동완성 등을 처음부터 개발할 필요 없이 API로 즉시 활용할 수 있게 됐다.
 
-한국의 경우 의료 AI, 제조 AI, 교육 AI 분야에서 글로벌 경쟁력을 갖춘 스타트업들이 등장하고 있다. 특히 청소년 교육 분야는 아직 블루오션이다.
+둘째, 새로운 경쟁 환경이다. 기술 장벽이 낮아지면서 "AI 래퍼(wrapper)" 스타트업이 급증했다. 투자자들은 이제 단순히 LLM API를 감싸는 것 이상의 차별화를 요구한다. 독자적 데이터, 특정 산업의 도메인 지식, 측정 가능한 비즈니스 성과가 핵심 평가 기준이 됐다.
 
-청소년 창업가들에게 AI는 '이미 만들어진 도구'다. 코딩을 몰라도, 디자인을 몰라도, AI를 활용하면 서비스를 만들 수 있다. 진입 장벽이 역사상 가장 낮은 시대다.`,
-    insight: 'AI는 모든 산업의 진입 장벽을 낮추고 있다. 지금이 시작할 최고의 타이밍이다.',
+Sequoia Capital은 2023년 리포트에서 "AI 네이티브 스타트업"과 "AI 지원 스타트업"을 구분했다. 전자는 AI 없이는 존재할 수 없는 비즈니스이고, 후자는 AI를 활용해 기존 비즈니스를 개선하는 형태다.`,
+    insight: '기술 장벽이 낮아질수록 비즈니스 모델과 실행력의 중요성이 높아진다.',
     accent: '#8B5CF6'
   },
   {
-    type: 'article', icon: '⚡', category: 'AI TREND',
-    title: 'No-Code AI 툴 TOP 10 — 청소년 창업가를 위한 완벽 가이드',
-    subtitle: '코딩 없이 서비스를 만드는 시대, 어떤 툴을 써야 할까',
-    body: `2026년 현재, 코딩 없이 앱을 만드는 것은 더 이상 특별한 일이 아니다. 문제는 너무 많은 도구 중에서 무엇을 선택하느냐다.
+    type: 'article', category: 'AI × STARTUP',
+    title: 'No-Code·Low-Code 플랫폼의 현재',
+    subtitle: '기술 없이 서비스를 만드는 시대의 도구들',
+    body: `No-Code 플랫폼은 프로그래밍 없이 웹앱, 자동화 워크플로우, 데이터베이스를 구축할 수 있는 도구다. Gartner의 분석에 따르면 2025년까지 새로운 애플리케이션의 70%가 No-Code 또는 Low-Code 플랫폼으로 만들어질 것으로 예측됐다.
 
-웹사이트·앱 제작에는 Bubble, Webflow가 압도적이다. Bubble은 복잡한 로직 구현이 가능하고, Webflow는 디자인 자유도가 높다. AI 기능을 빠르게 붙이려면 Make(구 Integromat)와 Zapier로 자동화 워크플로우를 연결하면 된다.
+주요 플랫폼별 특성을 살펴보면, Bubble은 복잡한 웹앱 로직 구현에 강점이 있고, Webflow는 디자인 자유도가 높은 웹사이트 제작에 적합하다. Airtable은 스프레드시트와 데이터베이스를 결합한 형태로, 스타트업의 초기 백엔드로 널리 활용된다.
 
-데이터베이스는 Airtable이 여전히 강세다. 스프레드시트처럼 쉽게 쓸 수 있지만 앱의 백엔드로도 충분히 기능한다.
+자동화 영역에서는 Zapier와 Make(구 Integromat)가 서로 다른 서비스를 연결하는 워크플로우 자동화를 제공한다. 예를 들어 구글 폼 응답이 들어오면 자동으로 Notion에 저장하고 슬랙으로 알림을 보내는 식이다.
 
-AI 글쓰기에는 Claude, ChatGPT, 이미지 생성에는 Midjourney·DALL-E 3를 활용하면 마케팅 콘텐츠 생산 비용을 90% 절감할 수 있다.
-
-핵심은 도구가 아니라 '어떤 문제를 풀 것인가'다. 도구는 수단이고, 문제 발견이 창업의 본질이다.`,
-    insight: '최고의 No-Code 툴은 지금 바로 사용할 수 있는 툴이다.',
+중요한 것은 도구보다 문제 정의다. No-Code 도구는 아이디어를 빠르게 검증하는 수단이지, 그 자체가 목적이 아니다.`,
+    insight: '올바른 도구는 올바른 문제 정의 다음에 선택된다.',
     accent: '#8B5CF6'
   },
 
-  // 섹션 5-6: 경제 트렌드
+  // ── SECTION 3: 경제·투자 이해
   {
-    type: 'article', icon: '📈', category: 'ECONOMY TREND',
-    title: '2026 글로벌 스타트업 투자 지형도',
-    subtitle: 'VC 시장의 겨울이 끝났다 — 어디에 돈이 몰리는가',
-    body: `2022~2024년의 투자 혹한기를 지나, 2026년 스타트업 투자 시장이 다시 뜨거워지고 있다. 다만 돈이 몰리는 곳이 달라졌다.
+    type: 'article', category: 'ECONOMY',
+    title: '벤처 투자(VC)의 구조와 원리',
+    subtitle: '스타트업 투자 생태계를 이해하는 기초',
+    body: `벤처 캐피털(Venture Capital, VC)은 고위험 고수익을 추구하는 투자 구조다. LP(Limited Partner, 출자자)들의 자금을 모아 GP(General Partner, 운용사)가 스타트업에 투자하고, 수익을 나누는 방식이다.
 
-AI 인프라, 바이오테크, 에너지 전환(클린테크), 방위산업 관련 스타트업에 자금이 집중되고 있다. 한국에서는 헬스케어 AI와 K-콘텐츠 플랫폼이 주목받고 있다.
+투자 단계별 명칭은 일반적으로 다음과 같다. Pre-Seed·Seed는 아이디어 또는 초기 제품 단계, 수천만~수억 원 규모다. 시리즈 A는 제품-시장 적합성(PMF)이 어느 정도 검증된 단계로 수십억 원 규모, 시리즈 B 이후는 성장 가속화를 위한 단계로 수백억 원 이상이다.
 
-시리즈 A 평균 투자금액은 전 세계적으로 상승했다. 반면 시드 투자는 점점 더 어려워지고 있다. 초기 투자자들이 '트랙 레코드(실적)'를 더 중요시하기 때문이다.
+CB Insights의 2023년 데이터에 따르면, 시드 투자를 받은 스타트업 중 약 1%만이 시리즈 C 이상의 투자를 유치한다. 이를 "VC 깔때기(VC Funnel)"라고 부른다.
 
-청소년 창업가에게 중요한 시사점: 투자를 목표로 삼지 말고, 먼저 실제로 돈을 버는 비즈니스를 만들어라. 수익이 있는 팀에게는 투자자가 먼저 찾아온다.`,
-    insight: '투자받는 것보다 수익을 내는 것이 더 어렵고, 더 가치 있다.',
+유니콘 기업(기업 가치 1조 원 이상 비상장 스타트업)은 2023년 기준 전 세계 약 1,200개로, 미국·중국·인도가 대부분을 차지하며 한국은 22개(당시 기준)였다.`,
+    insight: '투자는 사업의 시작이 아니라 성장의 도구다.',
     accent: '#10B981'
   },
   {
-    type: 'article', icon: '💰', category: 'ECONOMY TREND',
-    title: '청소년도 이해해야 하는 경제 키워드 2026',
-    subtitle: '인플레이션, 금리, 환율 — 창업에 어떤 영향을 미치는가',
-    body: `창업가는 경제 흐름을 읽어야 한다. 거시경제가 스타트업의 생존 환경을 결정하기 때문이다.
+    type: 'article', category: 'ECONOMY',
+    title: '스타트업 핵심 재무 지표 가이드',
+    subtitle: 'MRR, CAC, LTV, Churn — 숫자로 사업을 읽는 법',
+    body: `스타트업을 평가할 때 투자자들이 가장 먼저 보는 것은 핵심 재무 지표다. 이 지표들을 이해하면 자신의 사업 상태를 객관적으로 진단할 수 있다.
 
-금리와 스타트업의 관계: 금리가 높으면 투자자들이 위험 자산(스타트업)보다 안전 자산(채권)을 선호한다. 반대로 금리가 낮아지면 투자자들이 더 높은 수익을 위해 스타트업에 투자한다. 2026년은 금리 하락 사이클로 접어들어 스타트업 투자 환경이 개선되고 있다.
+MRR(Monthly Recurring Revenue): 월간 반복 매출. 구독 모델 스타트업에서 핵심 지표다. MRR이 매달 일정하게 증가하면 예측 가능한 성장을 의미한다.
 
-환율과 글로벌 비즈니스: 원화 약세는 수출 스타트업에게 유리하고, 수입 비용이 높아지는 단점도 있다. 소프트웨어 기반 스타트업은 달러 결제 고객을 유치하면 환차익을 얻을 수 있다.
+CAC(Customer Acquisition Cost): 고객 1명을 획득하는 데 드는 비용. 마케팅·영업 비용을 신규 고객 수로 나눈 값이다.
 
-인플레이션과 창업: 물가가 오르면 소비자들은 가격에 더 민감해진다. '가성비'를 제공하는 스타트업에게는 기회가 된다.`,
-    insight: '경제를 이해하는 창업가는 시장의 흐름을 앞서 읽을 수 있다.',
+LTV(Lifetime Value): 고객 한 명이 서비스를 이용하는 동안 발생시키는 총 수익. 일반적으로 LTV가 CAC의 3배 이상이어야 건강한 사업으로 본다.
+
+Churn Rate(이탈률): 일정 기간 동안 서비스를 떠난 고객의 비율. B2B SaaS의 연간 허용 이탈률은 보통 5~10% 이하다.
+
+번 레이트(Burn Rate): 회사가 매달 소진하는 현금 규모. 보유 현금을 번 레이트로 나누면 "런웨이(Runway)", 즉 현재 자금으로 버틸 수 있는 개월 수가 나온다.`,
+    insight: '숫자를 모르면 방향을 잃는다. 핵심 지표 3개만이라도 매주 확인하라.',
     accent: '#10B981'
   },
 
-  // 섹션 7-8: 경영 인사이트
+  // ── SECTION 4: 경영 방법론
   {
-    type: 'article', icon: '🎯', category: 'MANAGEMENT',
-    title: 'OKR로 팀을 움직이는 법 — 구글이 선택한 목표 관리 방법론',
-    subtitle: '목표(Objective)와 핵심 결과(Key Results)로 스타트업을 운영하라',
-    body: `OKR(Objectives and Key Results)은 인텔에서 시작해 구글을 통해 전 세계 스타트업의 표준이 된 목표 관리 방법론이다.
+    type: 'article', category: 'MANAGEMENT',
+    title: 'OKR — 구글이 채택한 목표 관리 방법론',
+    subtitle: '인텔에서 시작해 전 세계 스타트업으로 퍼진 OKR의 원리',
+    body: `OKR(Objectives and Key Results)은 인텔의 앤디 그로브(Andy Grove)가 개발하고, 투자자 존 도어(John Doerr)가 구글에 소개한 목표 관리 프레임워크다. 존 도어의 저서 『Measure What Matters』(2018)에 상세히 설명돼 있다.
 
-핵심 원리는 단순하다. 야심 차지만 명확한 목표(Objective)를 세우고, 그 목표를 달성했는지 측정할 수 있는 핵심 결과(Key Result) 2~5개를 설정한다.
+구조는 단순하다. Objective(목표)는 질적이고 영감을 주는 목표다. Key Results(핵심 결과)는 목표 달성 여부를 측정하는 2~5개의 정량적 지표다.
 
-예시: Objective — "인사이트쉽을 청소년이 가장 신뢰하는 창업 정보 플랫폼으로 만든다." Key Results — "MAU 10만 명 달성", "NPS(순추천지수) 50 이상", "뉴스레터 구독자 1만 명 달성".
+OKR의 특징은 "Moonshot(문샷)" 사고를 장려한다는 점이다. 달성하기 어렵지만 불가능하지 않은 목표를 설정하고, 70% 달성을 성공으로 본다. 100% 달성하면 목표가 충분히 도전적이지 않았다는 신호다.
 
-OKR의 핵심은 '달성하기 어렵지만 불가능하지 않은' 목표를 세우는 것이다. 70% 달성을 성공으로 본다. 100% 달성하면 오히려 목표가 너무 쉬웠던 것이다.
+구글은 1999년 도입 이후 OKR을 전사적으로 운영하며, 직원 수가 수만 명이 된 지금도 분기별 OKR을 전 직원이 공개적으로 공유한다. 투명성이 OKR의 핵심 가치 중 하나다.
 
-청소년 창업팀에서 OKR을 도입하면 방향성 혼란을 줄이고 팀 집중도를 높일 수 있다.`,
-    insight: '측정할 수 없으면 관리할 수 없다. 좋은 목표는 숫자로 표현된다.',
+스타트업에서 OKR 도입 시 주의할 점은 지표를 너무 많이 설정하지 않는 것이다. 집중이 핵심이다.`,
+    insight: '좋은 목표는 팀에게 방향을 주고, 좋은 지표는 그 방향을 확인해준다.',
     accent: '#F59E0B'
   },
   {
-    type: 'article', icon: '🔄', category: 'MANAGEMENT',
-    title: '애자일 vs 워터폴 — 스타트업에는 어떤 방법론이 맞는가',
-    subtitle: '린 스타트업, 스크럼, 칸반 — 청소년팀을 위한 쉬운 설명',
-    body: `소프트웨어 개발 방법론은 크게 '워터폴'과 '애자일'로 나뉜다. 스타트업에는 거의 예외 없이 애자일이 맞다.
+    type: 'article', category: 'MANAGEMENT',
+    title: '애자일 방법론의 핵심 원리',
+    subtitle: '2001년 애자일 선언문에서 시작된 소프트웨어 개발 혁명',
+    body: `2001년 2월, 소프트웨어 개발자 17명이 미국 유타주 스노우버드 스키장에 모여 "애자일 소프트웨어 개발 선언문(Agile Manifesto)"을 작성했다. 4가지 핵심 가치와 12개 원칙으로 구성된 이 선언문은 이후 소프트웨어 산업 전체를 바꿨다.
 
-워터폴은 처음부터 모든 것을 계획하고 순서대로 진행하는 방식이다. 건설이나 제조업에는 적합하지만, 불확실성이 높은 스타트업에는 맞지 않는다.
+4가지 핵심 가치: ①개인과 상호작용 > 프로세스와 도구, ②작동하는 소프트웨어 > 포괄적인 문서, ③고객과의 협력 > 계약 협상, ④변화에 대응 > 계획을 따름.
 
-애자일은 짧은 주기(스프린트, 보통 2주)로 작동 가능한 결과물을 만들고, 피드백을 받아 개선하는 방식이다. 인스타그램, 슬랙, 에어비앤비 모두 애자일 방식으로 개발됐다.
+스크럼(Scrum)은 가장 널리 사용되는 애자일 프레임워크다. 2~4주 단위의 스프린트(Sprint)로 작업을 나누고, 매일 짧은 스탠드업 미팅(Daily Scrum)으로 진행 상황을 공유한다. 스프린트가 끝나면 작동하는 제품을 데모하고, 다음 스프린트를 계획한다.
 
-청소년 창업팀을 위한 간단한 시작법: 트렐로나 노션으로 할 일(To Do), 진행 중(In Progress), 완료(Done) 세 칸을 만들어라. 매주 월요일 15분 회의로 이번 주 목표를 공유하라. 이것이 가장 간단한 형태의 애자일이다.`,
-    insight: '완벽한 계획보다 빠른 실행과 배움이 스타트업을 성장시킨다.',
+칸반(Kanban)은 Toyota의 생산 방식에서 유래했다. 할 일(To Do), 진행 중(In Progress), 완료(Done) 3단계로 작업 흐름을 시각화하는 방식이다. Trello, Notion, GitHub Projects 같은 도구가 칸반 보드를 지원한다.
+
+스타트업에서 애자일이 중요한 이유는 불확실성 때문이다. 시장과 고객이 원하는 것이 처음 생각과 다를 수 있으므로, 빠르게 테스트하고 수정할 수 있는 구조가 필요하다.`,
+    insight: '계획을 세우되, 계획에 집착하지 마라. 학습이 계획보다 가치 있다.',
     accent: '#F59E0B'
   },
 
-  // 섹션 9-10: 뉴스 분석
+  // ── SECTION 5: 성공 기업 사례 (공개된 사실만)
   {
-    type: 'article', icon: '📰', category: 'NEWS ANALYSIS',
-    title: '이번 주 창업 생태계 핵심 뉴스 10선',
-    subtitle: 'AI가 분석한 이번 주 가장 중요한 스타트업 뉴스',
-    body: `매주 수백 건의 창업 관련 뉴스 중, 인사이트쉽 AI가 선별한 이번 주 핵심 10선이다.
+    type: 'article', category: 'CASE STUDY',
+    title: '에어비앤비 — 거절과 피봇의 역사',
+    subtitle: '공개된 자료를 바탕으로 정리한 에어비앤비 초기 창업 과정',
+    body: `에어비앤비(Airbnb)는 2008년 브라이언 체스키(Brian Chesky), 조 게비아(Joe Gebbia), 네이선 블레차르지크(Nathan Blecharczyk)가 공동창업했다. 창업 배경은 샌프란시스코에서 열린 디자인 컨퍼런스 기간 동안 숙박이 부족하다는 것을 직접 경험한 것이었다.
 
-1. 국내 AI 스타트업 A사, 시리즈B 300억 유치 — B2B AI 솔루션의 성장 가능성을 입증했다.
+초기에는 에어매트리스(Air Mattress)와 아침 식사(Breakfast)를 제공하는 서비스여서 "AirBed & Breakfast"로 시작했다.
 
-2. 청소년 창업 지원 정부 예산 30% 증액 — 교육부·중기부 합동 지원 프로그램 확대.
+창업 초기 여러 VC에게 투자를 거절당했다는 사실은 브라이언 체스키가 여러 인터뷰와 강연에서 직접 밝힌 내용이다. Y Combinator의 2009년 배치에 합류하며 시드 투자를 받았고, 이후 세코이아 캐피털 등으로부터 투자를 유치했다.
 
-3. K-스타트업, 동남아 시장 진출 가속화 — 싱가포르·베트남을 중심으로 한국 스타트업 붐.
-
-4. VC 투자 회수(엑싯) 환경 개선 — 코스닥 상장 요건 완화로 스타트업 출구 전략 다양화.
-
-5. 제조 AI 스타트업의 부상 — 스마트팩토리 수요 폭증으로 B2B AI 시장 확대.
-
-6. 소셜커머스의 진화 — 라이브커머스에서 AI 개인화 추천으로 패러다임 전환.
-
-7. 그린테크 투자 급증 — 탄소중립 목표 달성을 위한 ESG 스타트업 주목.
-
-8-10. (계속)`,
-    insight: '뉴스를 읽는 것과 뉴스를 분석하는 것은 다르다. 항상 맥락을 파악하라.',
-    accent: '#EC4899'
-  },
-  {
-    type: 'article', icon: '🔍', category: 'NEWS ANALYSIS',
-    title: '스타트업 실패 사례에서 배우는 5가지 교훈',
-    subtitle: '성공 스토리보다 실패 스토리에서 더 많이 배운다',
-    body: `한국 스타트업의 3년 생존율은 약 30%다. 10개 중 7개는 3년 안에 문을 닫는다. 그 실패에서 배울 수 있는 교훈은 무엇인가?
-
-교훈 1 — 시장이 원하지 않는 것을 만들지 마라: 실패한 스타트업의 42%는 '시장 니즈 없음'이 원인이었다(CB Insights 데이터). 아무리 기술이 좋아도 사람들이 사용하지 않으면 의미 없다.
-
-교훈 2 — 공동창업자 갈등을 과소평가하지 마라: 스타트업 실패의 23%는 팀 내부 갈등이었다. 역할과 지분을 처음부터 명확히 하라.
-
-교훈 3 — 현금 흐름이 전부다: 흑자인 것처럼 보여도 현금이 없으면 망한다. 매달 얼마를 쓰는지(번 레이트) 정확히 파악하라.
-
-교훈 4 — 피봇(방향 전환)을 두려워하지 마라: 인스타그램은 원래 체크인 앱이었고, 유튜브는 데이팅 사이트였다.
-
-교훈 5 — 너무 일찍 확장하지 마라: PMF(제품-시장 적합성)가 확인되기 전에 인력과 비용을 늘리면 빠르게 소진된다.`,
-    insight: '실패를 분석하는 사람은 같은 실수를 반복하지 않는다.',
-    accent: '#EC4899'
-  },
-
-  // 섹션 11-12: 글로벌 트렌드
-  {
-    type: 'article', icon: '🌏', category: 'GLOBAL TREND',
-    title: '실리콘밸리 2026 — 무엇이 달라졌는가',
-    subtitle: 'AI 붐 이후의 실리콘밸리, 한국 청소년이 알아야 할 변화',
-    body: `실리콘밸리는 여전히 세계 스타트업의 메카이지만, 그 양상이 달라졌다. 2023년 이후 AI 붐이 시작되면서 몇 가지 중요한 변화가 일어났다.
-
-첫째, 1인 또는 소규모 팀의 부상이다. GPT-4o, Claude 같은 AI를 활용하면 5명도 안 되는 팀이 수십만 명 사용자를 가진 서비스를 운영할 수 있다. 
-
-둘째, 기술 창업의 민주화다. 더 이상 스탠퍼드 컴퓨터공학과 출신만 실리콘밸리에서 성공하는 시대가 아니다. 아이디어와 실행력이 있다면 어디서든 가능하다.
-
-셋째, B2B SaaS의 강세다. 기업 대상 소프트웨어 서비스가 여전히 VC가 가장 선호하는 비즈니스 모델이다. 예측 가능한 반복 수익(MRR)이 투자자를 안심시킨다.
-
-한국 청소년에게 기회가 있는 분야: K-콘텐츠 기반 글로벌 플랫폼, 아시아 시장 특화 AI 솔루션, B2B 에듀테크.`,
-    insight: '실리콘밸리는 장소가 아니라 마인드셋이다.',
-    accent: '#06B6D4'
-  },
-  {
-    type: 'article', icon: '🗺️', category: 'GLOBAL TREND',
-    title: '동남아 스타트업 생태계의 급부상',
-    subtitle: '6억 5천만 인구 시장, 한국 스타트업에게 가장 현실적인 해외 진출 기회',
-    body: `동남아시아(ASEAN)는 현재 글로벌 스타트업 투자자들이 가장 주목하는 시장이다. 인구 6억 5천만 명, 평균 연령 29세, 빠르게 성장하는 중산층, 스마트폰 퍼스트 세대.
-
-특히 주목할 국가는 베트남, 인도네시아, 필리핀이다. 베트남은 한국과 문화적 친밀도가 높고, 기술 인재 풀이 풍부하며, 스타트업 생태계가 빠르게 성숙하고 있다.
-
-한국 스타트업이 동남아에서 성공할 수 있는 이유: K-컬처의 영향력, 한국산 제품에 대한 신뢰도, 기술력. 최근 3년간 동남아에 진출한 한국 스타트업의 성공률이 유의미하게 높아졌다.
-
-청소년 창업가에게 동남아는 '첫 번째 글로벌 시장'으로 적합하다. 언어 장벽이 낮고(영어 소통 가능), 한국에 대한 친밀감이 높으며, 시장이 빠르게 성장하고 있다.`,
-    insight: '글로벌 진출의 첫 걸음은 가장 가까운 해외 시장부터 시작하라.',
-    accent: '#06B6D4'
-  },
-
-  // 섹션 13-14: 케이스 스터디
-  {
-    type: 'article', icon: '📚', category: 'CASE STUDY',
-    title: '에어비앤비 창업 스토리 — 거절 받은 7번, 그래도 계속한 이유',
-    subtitle: 'VC 7곳에게 투자 거절당하고도 세계 최대 숙박 플랫폼을 만든 방법',
-    body: `2008년, 브라이언 체스키와 조 게비아는 집세를 낼 돈이 없었다. 그들은 자신의 집에 에어매트리스 3개를 놓고 숙박 서비스를 시작했다. 수익: 80달러.
-
-초기 VC들의 반응은 냉담했다. "이미 있는 시장(호텔)"이고, "낯선 사람의 집에 머무는 것은 위험하다"는 이유로 7곳의 VC에서 투자를 거절당했다.
-
-그들이 포기하지 않은 이유는 '실제로 사람들이 사용하고 있었기 때문'이었다. 매주 새로운 사용자가 늘었고, 사용자들의 피드백이 명확했다.
-
-Y Combinator의 폴 그레이엄이 투자를 결정한 것은 기술이나 시장 분석 때문이 아니었다. "이 팀이 어떤 상황에서도 포기하지 않을 것"이라는 확신 때문이었다.
-
-2024년 에어비앤비의 시가총액: 약 100조 원. 첫 번째 수익 80달러에서 시작한 여정이었다.`,
-    insight: '첫 번째 거절은 끝이 아니라 시작의 신호다.',
+2020년 COVID-19 팬데믹으로 매출이 급감했으나, 비용을 절감하고 장기 숙박 수요에 집중하는 전략으로 회복해 같은 해 IPO에 성공했다. IPO 당일 시가총액은 약 1,000억 달러였다(공개 재무 정보).`,
+    insight: '좋은 아이디어도 실행과 타이밍, 끈기가 없으면 빛을 발하지 못한다.',
     accent: '#F97316'
   },
   {
-    type: 'article', icon: '⚡', category: 'CASE STUDY',
-    title: '카카오 창업 스토리 — 대기업 출신이 만든 국민 메신저',
-    subtitle: '다음커뮤니케이션 임원이 스타트업으로 뛰어든 도전, 그 결과는',
-    body: `김범수 카카오 창업자는 삼성SDS에서 사회생활을 시작해 다음커뮤니케이션 대표까지 올랐다. 성공한 직장인이었지만 그는 다시 '제로'에서 시작하기로 했다.
+    type: 'article', category: 'CASE STUDY',
+    title: '슬랙(Slack) — 게임 회사가 협업 툴이 된 이야기',
+    subtitle: '대표적인 피봇 사례로 알려진 Slack의 창업 과정',
+    body: `슬랙(Slack)은 원래 협업 툴이 아니었다. 스튜어트 버터필드(Stewart Butterfield)는 2009년 게임 회사 Tiny Speck을 창업하고 "Glitch"라는 온라인 게임을 개발했다. 게임 자체는 2012년 서비스 종료됐지만, 게임 개발 과정에서 팀 내부 소통을 위해 만든 메시징 도구가 있었다.
 
-2010년 카카오톡 출시. 당시 한국은 문자메시지(SMS) 시장이었고, 무료 메신저는 통신사 매출을 위협하는 서비스였다. 많은 이들이 "한국에서는 통신사 눈치 때문에 안 될 것"이라고 했다.
+이 도구를 외부에 공개하자 예상치 못한 반응이 왔다. 많은 팀들이 "우리도 이런 것이 필요하다"고 했고, 버터필드 팀은 피봇(Pivot)을 결정했다. 게임 사업을 접고 메시징 툴에 집중한 것이다.
 
-하지만 카카오톡은 1년 만에 가입자 1천만 명을 돌파했다. 비결은 단순했다: '무료 + 편리 + 빠름'. 세 가지를 다른 누구보다 잘 실행했다.
+2013년 베타로 출시된 슬랙은 첫날 8,000개 이상의 팀이 가입 신청을 했다. 이후 기업용 협업 시장에서 빠르게 성장해, 2021년 세일즈포스(Salesforce)가 약 277억 달러에 인수했다(공개된 인수 금액).
 
-2024년 카카오 그룹의 시가총액은 수십조 원에 달한다. 스마트폰 시대의 변화를 남들보다 빨리 읽고, 실행에 옮긴 결과다.
-
-청소년들에게 주는 교훈: 시장의 변화 앞에서는 경력이나 나이가 관계없다. 변화를 먼저 읽는 사람이 승자가 된다.`,
-    insight: '성공한 사람들은 변화를 두려워하지 않고 변화에 올라탄다.',
+슬랙 사례는 "원래 만들려던 것"이 실패해도 그 과정에서 얻은 것이 새로운 사업이 될 수 있음을 보여준다.`,
+    insight: '실패한 프로젝트에서 숨겨진 가치를 찾아라.',
     accent: '#F97316'
   },
 
-  // 섹션 15-16: 투자 인사이트
+  // ── SECTION 6: 글로벌 창업 생태계
   {
-    type: 'article', icon: '💎', category: 'INVESTMENT',
-    title: 'VC가 보는 스타트업 평가 기준 완전 공개',
-    subtitle: '시드부터 시리즈C까지 투자자들이 실제로 보는 것들',
-    body: `벤처 캐피털(VC)이 스타트업을 평가할 때 보는 기준은 단계마다 다르다. 이 기준을 이해하면 자신의 창업 방향을 더 명확하게 설정할 수 있다.
+    type: 'article', category: 'GLOBAL',
+    title: '실리콘밸리 생태계의 구조',
+    subtitle: '왜 실리콘밸리에서 스타트업이 집중적으로 탄생하는가',
+    body: `실리콘밸리(Silicon Valley)가 전 세계 스타트업의 중심이 된 데는 몇 가지 구조적 요인이 있다. 스탠퍼드 대학교와 UC버클리를 중심으로 한 기술 인재 풀, 1970~80년대부터 형성된 VC 생태계, 그리고 실패를 용인하는 문화가 복합적으로 작용했다.
 
-시드 단계 (팀과 아이디어): VC의 60%는 팀을 가장 중요하게 본다. "이 팀이 문제를 해결할 능력과 의지가 있는가?" 아이디어보다 실행 능력이 중요하다.
+Y Combinator(YC)는 2005년 폴 그레이엄(Paul Graham)이 창업한 액셀러레이터로, 에어비앤비, 드롭박스, 레딧, 스트라이프 등을 초기에 지원했다. YC의 표준 조건은 창업팀 지분 7%를 받고 일정 금액의 투자를 제공하는 것이다(구체적 금액은 변경됨).
 
-시리즈 A (제품과 성장): PMF(제품-시장 적합성)가 검증됐는지, 핵심 지표가 성장하고 있는지를 본다. MAU, 재방문율, NPS 등 데이터로 말해야 한다.
+스탠퍼드 대학교는 교수진과 학생들이 창업한 기업의 총 가치가 수조 달러에 달한다고 자체 보고서에서 밝혔다. HP, 구글, 야후, 시스코 모두 스탠퍼드와 연관이 있다.
 
-시리즈 B 이후 (규모와 수익성): 유닛 이코노믹스(Unit Economics)가 건강한가? 고객 획득 비용(CAC)보다 고객 생애 가치(LTV)가 높은가?
-
-한국 VC들이 최근 주목하는 분야: AI 기반 B2B SaaS, 헬스테크, 에듀테크, 클린테크, K-콘텐츠 플랫폼.
-
-청소년 창업가에게: 지금 당장 투자를 받으려 하지 말고, 투자받을 만한 팀이 되는 것에 집중하라.`,
-    insight: '투자자는 돈을 버는 방법을 찾는 사람이 아니라, 문제를 해결하는 사람에게 투자한다.',
-    accent: '#6366F1'
+한국의 스타트업 생태계는 강남구 테헤란로를 중심으로 형성돼 있으며, 중소벤처기업부 자료에 따르면 벤처투자 규모가 2021년 약 7.7조 원으로 역대 최고를 기록했다가 이후 조정됐다.`,
+    insight: '생태계는 혼자 만들 수 없다. 연결과 커뮤니티가 창업을 가능하게 한다.',
+    accent: '#06B6D4'
   },
   {
-    type: 'article', icon: '📊', category: 'INVESTMENT',
-    title: '스타트업 지분 구조 완전 이해 — 공동창업부터 투자까지',
-    subtitle: '지분율, 베스팅, 스톡옵션 — 창업팀이 반드시 알아야 할 개념들',
-    body: `지분(Equity)은 회사의 소유권이다. 처음 창업할 때 어떻게 지분을 나누느냐가 나중에 회사의 운명을 결정하는 경우가 많다.
+    type: 'article', category: 'GLOBAL',
+    title: '한국 스타트업 생태계 현황',
+    subtitle: '중기부·통계청 공개 데이터로 본 한국 창업 지형',
+    body: `중소벤처기업부가 발표한 공개 통계에 따르면, 한국의 신설 법인 수는 2022년 기준 약 13만 개 이상으로 역대 최고 수준을 기록했다.
 
-공동창업자 지분 분배 원칙: 기여도와 역할을 기반으로 명확히 나눠라. '사이좋게 반반'은 종종 갈등의 씨앗이 된다. CEO는 조금 더 많이 갖는 것이 일반적이다. 그리고 반드시 베스팅(Vesting) 조건을 붙여라.
+한국의 유니콘 기업(기업 가치 1조 원 이상 비상장 스타트업) 수는 2023년 기준 22개로, 중기부가 공개적으로 발표했다. 쿠팡, 크래프톤, 하이브 등은 이미 상장해 유니콘을 졸업했다.
 
-베스팅(Vesting)이란: 일정 기간 회사에 기여해야 지분이 완전히 자신의 것이 되는 제도다. 보통 4년 베스팅, 1년 클리프(Cliff)가 표준이다. 공동창업자가 1년 만에 나가면서 지분을 전부 가져가는 상황을 방지한다.
+청소년 창업에 대한 제도적 지원으로는 교육부의 창업교육 생태계 구축 사업, 창업진흥원의 청년창업사관학교, 각 대학의 창업지원단 등이 있다. 초·중·고 단계의 창업 교육 시수는 지속적으로 늘어나는 추세다.
 
-투자 후 희석(Dilution): VC에게 투자를 받으면 기존 주주의 지분율이 낮아진다. 하지만 파이가 커지면 낮아진 지분율도 절대 가치는 더 클 수 있다.`,
-    insight: '지분은 공평하게 나누는 것이 아니라, 기여도에 맞게 나누는 것이다.',
-    accent: '#6366F1'
+스타트업 생존율과 관련해, 중기부 데이터에 따르면 신설 기업의 5년 생존율은 업종별로 다르지만 평균 약 30% 수준으로, 창업 후 5년 안에 대부분이 폐업한다. 이는 글로벌 평균과 유사하다.`,
+    insight: '숫자를 알면 현실이 보이고, 현실을 알면 전략이 생긴다.',
+    accent: '#06B6D4'
   },
 
-  // 섹션 17-18: 마케팅 트렌드
+  // ── SECTION 7: 마케팅과 성장
   {
-    type: 'article', icon: '📱', category: 'MARKETING',
-    title: '2026 스타트업 마케팅 완전 가이드 — 비용 0원에서 시작하는 법',
-    subtitle: '유기적 성장(Organic Growth)의 시대, 콘텐츠가 최고의 마케팅이다',
-    body: `초기 스타트업에게 광고 예산은 없다. 그렇다면 어떻게 사용자를 모아야 할까?
+    type: 'article', category: 'GROWTH',
+    title: 'PMF — 제품-시장 적합성을 찾는 방법',
+    subtitle: 'Marc Andreessen이 정의한 스타트업 성공의 첫 번째 조건',
+    body: `PMF(Product-Market Fit)는 벤처 투자자 마크 앤드리슨(Marc Andreessen)이 2007년 블로그 포스트에서 처음 체계화한 개념이다. 그는 "PMF란 좋은 시장에서 그 시장을 만족시킬 수 있는 제품을 갖추는 것"이라고 정의했다.
 
-콘텐츠 마케팅: 블로그, 유튜브, 인스타그램에 가치 있는 콘텐츠를 꾸준히 올리면 검색 트래픽이 쌓인다. 단기보다 장기 관점이 필요하지만, 복리 효과가 있다.
+PMF를 발견했다는 신호는 주관적이지만 몇 가지 지표로 측정할 수 있다. 숀 엘리스(Sean Ellis) 테스트는 사용자에게 "이 제품을 더 이상 사용할 수 없다면 어떤 기분이겠냐?"고 묻고, "매우 실망할 것"이라는 응답이 40% 이상이면 PMF에 근접했다고 본다.
 
-커뮤니티 마케팅: 잠재 고객이 모인 커뮤니티(레딧, 디스코드, 오픈카톡방)에 진정성 있게 참여하라. 광고가 아니라 도움을 주는 방식으로.
+넷플릭스의 NPS(Net Promoter Score) 같은 지표도 PMF 측정에 활용된다. NPS는 "이 서비스를 지인에게 추천하겠냐?"는 단 하나의 질문으로 고객 충성도를 측정한다.
 
-입소문(Word of Mouth): 모든 성장 전략 중 가장 강력하다. 사용자가 자발적으로 추천하게 만들려면 '기대를 초과하는 경험'을 제공해야 한다.
-
-인플루언서 협업: 대형 인플루언서보다 마이크로 인플루언서(팔로워 1만~10만)가 비용 대비 효율이 높다. 타겟이 정확하고 신뢰도가 높기 때문이다.
-
-청소년 창업가의 마케팅 무기: 본인 자체가 스토리다. 10대 창업가의 도전 과정을 공유하면 자연스럽게 미디어와 커뮤니티의 관심을 받는다.`,
-    insight: '최고의 마케팅은 제품 자체가 마케팅이 되는 것이다.',
-    accent: '#8B5CF6'
-  },
-  {
-    type: 'article', icon: '🎨', category: 'MARKETING',
-    title: 'Z세대가 반응하는 브랜딩의 비밀',
-    subtitle: '진정성, 투명성, 사회적 가치 — Z세대는 무엇에 지갑을 여는가',
-    body: `Z세대(1997~2012년생)는 역사상 가장 까다로운 소비자 세대다. 광고를 불신하고, 브랜드의 진정성을 의심하며, 사회적 가치에 반하는 브랜드를 불매운동한다.
-
-Z세대가 브랜드를 선택하는 기준: 첫째, 진정성. 광고처럼 보이는 콘텐츠는 거른다. 둘째, 투명성. 제품이 어떻게 만들어지는지, 회사의 가치관이 무엇인지 알고 싶어한다. 셋째, 커뮤니티. 브랜드가 어떤 커뮤니티를 형성하는가.
-
-성공 사례 — 딱히(DDAKHI): 한국 Z세대 사이에서 바이럴된 패션 브랜드로, SNS에서의 진정성 있는 소통과 소비자 참여 마케팅으로 성장했다.
-
-틱톡의 부상: Z세대에게 틱톡은 검색 엔진이다. 제품을 검색할 때 구글보다 틱톡을 먼저 찾는다. 짧고 진정성 있는 영상 콘텐츠가 핵심이다.
-
-청소년 창업가에게: 당신이 Z세대라면 Z세대 마케팅의 전문가다. 자신의 감각을 믿어라.`,
-    insight: 'Z세대는 브랜드가 아닌 사람을 구매한다.',
-    accent: '#8B5CF6'
-  },
-
-  // 섹션 19-20: 인터뷰 섹션
-  {
-    type: 'article', icon: '🎤', category: 'INTERVIEW',
-    title: '"창업은 자신을 발견하는 여정입니다" — 대학생 창업가 3인 인터뷰',
-    subtitle: '학교와 창업을 병행하는 대학생 창업가들이 말하는 현실',
-    body: `세 명의 대학생 창업가를 만났다. 그들의 공통점은 하나 — 실패를 두려워하지 않는다는 것이다.
-
-이지은(22, 연세대 경영학과): "창업 동아리에서 처음 팀을 만들었어요. 첫 서비스는 3개월 만에 접었습니다. 하지만 그 3개월이 제 인생에서 가장 많이 배운 시기였어요."
-
-박민서(21, KAIST 전산학과): "기술을 가지고 있었지만 마케팅을 몰랐어요. 공대생이 비즈니스를 배우는 가장 빠른 방법은 직접 팔아보는 것이었습니다."
-
-김준혁(23, 홍익대 디자인학과): "디자이너가 창업을 하면 좋은 점은, 제품의 사용자 경험을 처음부터 내가 설계할 수 있다는 거예요. 하지만 개발자 찾는 게 제일 힘들었습니다."
-
-세 사람 모두 한 가지를 강조했다. "창업을 시작하기 전에 완벽하게 준비하려 하지 마세요. 시작하면서 배우는 것들이 훨씬 많습니다."`,
-    insight: '완벽한 타이밍은 없다. 지금 가진 것으로 시작하라.',
-    accent: '#10B981'
-  },
-  {
-    type: 'article', icon: '👥', category: 'INTERVIEW',
-    title: 'PACM 멘토단 특별 기고 — "청소년 창업가에게 전하는 말"',
-    subtitle: '현장에서 뛰는 창업가, 투자자, 경영인들의 솔직한 조언',
-    body: `PACM이 연결된 멘토들에게 청소년 창업가에게 전하고 싶은 한 마디를 물었다.
-
-"첫 번째 고객을 찾아라. 100명에게 거절당하기 전에 포기하지 마라. 101번째 사람이 당신의 첫 번째 고객이 될 수 있다." — 스타트업 창업자 A
-
-"창업팀에서 가장 중요한 것은 기술이나 아이디어가 아니라 팀원 간의 신뢰다. 힘든 순간에 서로를 믿을 수 있는가?" — 시리즈B 스타트업 CEO B
-
-"투자를 받는 것보다 수익을 내는 것을 목표로 삼아라. 수익이 있으면 투자자가 먼저 찾아온다." — VC 파트너 C
-
-"학교 공부와 창업을 대립으로 보지 마라. 학교에서 배우는 것들이 언젠가 창업에 도움이 된다. 경험은 쌓이는 것이다." — 성공한 청소년 창업 출신 기업인 D
-
-"실패를 숨기지 마라. 실패를 공개적으로 분석하고 공유하는 사람이 더 빠르게 성장한다." — 스타트업 액셀러레이터 대표 E`,
-    insight: '멘토의 말은 지름길을 보여주지만, 길을 걷는 것은 당신 몫이다.',
-    accent: '#10B981'
-  },
-
-  // 섹션 21-22: 미래 예측
-  {
-    type: 'article', icon: '🔮', category: 'FORECAST',
-    title: '2027 스타트업 생태계 예측 — AI가 분석한 다음 1년',
-    subtitle: '인사이트쉽 AI 엔진이 예측하는 내년 창업 생태계 TOP 5 트렌드',
-    body: `AI 추론: 현재 데이터를 기반으로 2027년 스타트업 생태계를 예측합니다. 불확실성이 높으므로 하나의 시나리오로 참고하십시오.
-
-트렌드 1 — AI 에이전트의 일상화: 단순 챗봇이 아닌, 실제로 업무를 처리하는 AI 에이전트가 스타트업 운영 비용을 50% 이상 줄일 것으로 예상됩니다.
-
-트렌드 2 — 소형화된 팀의 대형 영향력: 5인 미만 팀이 수십만 사용자를 보유하는 사례가 더 보편화될 가능성이 높습니다.
-
-트렌드 3 — 한국 스타트업의 동남아 진출 가속화: K-콘텐츠 붐을 기반으로 한 플랫폼 비즈니스가 동남아에서 성장할 것으로 예측됩니다.
-
-트렌드 4 — 교육 AI 시장의 폭발적 성장: 개인화 교육 수요가 증가하면서 에듀테크 시장이 전년 대비 40% 이상 성장할 것으로 보입니다.
-
-트렌드 5 — 청소년 창업 제도화: 더 많은 학교와 기관이 청소년 창업 프로그램을 도입할 것으로 예상됩니다.`,
-    insight: '미래를 예측하는 가장 좋은 방법은 직접 만드는 것이다.',
+PMF 이전에 스케일(확장)을 시도하는 것은 가장 흔한 스타트업 실패 원인 중 하나다. CB Insights의 스타트업 실패 원인 분석에서 "시장 니즈 없음"은 가장 빈번한 이유로 꼽힌다.`,
+    insight: 'PMF 없는 확장은 실패를 가속하는 것이다.',
     accent: '#EC4899'
   },
   {
-    type: 'article', icon: '🌱', category: 'FORECAST',
-    title: '청소년 창업 생태계의 미래 — 10년 후 한국은?',
-    subtitle: '2036년, 청소년 창업이 보편화된 세상을 상상해본다',
-    body: `2036년 한국 청소년 창업 생태계는 어떤 모습일까? 몇 가지 시나리오를 그려본다.
+    type: 'article', category: 'GROWTH',
+    title: '그로스 해킹의 원리',
+    subtitle: 'Sean Ellis가 만들고 드롭박스·에어비앤비가 실증한 성장 방법론',
+    body: `그로스 해킹(Growth Hacking)은 2010년 숀 엘리스(Sean Ellis)가 만든 용어다. 마케팅과 제품 개발을 결합해 빠른 실험을 통해 성장 동력을 찾는 방법론이다.
 
-낙관적 시나리오: 청소년 창업이 대학 입시만큼 중요한 선택지로 자리잡는다. 중고등학교 교육과정에 창업 교육이 정규 과목으로 포함되고, 청소년 스타트업 전용 펀드가 활성화된다. 한국에서 10대에 창업해 글로벌 유니콘이 된 사례가 나온다.
+에어비앤비의 그로스 해킹 사례는 업계에서 널리 인용된다. 공개된 바에 따르면, 초기 에어비앤비는 크레이그리스트(Craigslist)를 활용해 숙소 목록을 자동으로 두 플랫폼 모두에 올릴 수 있게 했다. 크레이그리스트의 방대한 사용자 기반을 레버리지한 것이다.
 
-현실적 시나리오: 청소년 창업 인식이 개선되지만 제도적 지원은 여전히 부족하다. 소수의 열정 있는 청소년들이 독자적으로 길을 만들어가는 상황이 지속된다.
+드롭박스는 추천 프로그램(Referral Program)으로 빠르게 성장했다. 기존 사용자가 친구를 초대하면 양쪽 모두 추가 저장 공간을 받는 방식이었다. 드롭박스 창업자 드루 휴스턴은 이 방법으로 15개월 만에 사용자가 10배 성장했다고 밝혔다.
 
-우리가 만들어야 할 미래: 인사이트쉽이 꿈꾸는 것은 청소년들이 정보의 격차 없이 도전할 수 있는 세상이다. 지금 여기서 시작한 작은 움직임이 10년 후 큰 변화가 된다.
-
-변화는 항상 소수의 열정적인 사람들로부터 시작됐다.`,
-    insight: '미래는 미리 정해진 것이 아니라 지금 우리가 선택으로 만들어가는 것이다.',
+AARRR 프레임워크(Acquisition, Activation, Retention, Revenue, Referral)는 그로스 해킹에서 활용하는 대표적인 성장 지표 구조다. 각 단계의 전환율을 측정하고 병목 구간을 개선하는 방식이다.`,
+    insight: '성장은 마케팅 예산이 아니라 창의적 실험에서 나온다.',
     accent: '#EC4899'
   },
 
-  // 섹션 23-24: 실전 가이드
+  // ── SECTION 8: 팀 빌딩
   {
-    type: 'article', icon: '🛠️', category: 'PRACTICAL GUIDE',
-    title: '창업 아이디어 검증 7단계 프레임워크',
-    subtitle: '사업을 시작하기 전, 아이디어가 실제로 통하는지 확인하는 방법',
-    body: `대부분의 창업 실패는 검증되지 않은 아이디어에서 시작된다. 7단계 프레임워크로 아이디어를 테스트하라.
+    type: 'article', category: 'TEAM',
+    title: '좋은 공동창업자를 찾는 방법',
+    subtitle: 'Y Combinator와 Paul Graham이 강조하는 팀 구성의 원칙',
+    body: `폴 그레이엄(Paul Graham)은 Y Combinator의 경험을 바탕으로 쓴 여러 에세이에서 공동창업자 선정이 스타트업의 가장 중요한 결정 중 하나라고 반복적으로 강조했다.
 
-1단계 — 문제 정의: 누가, 어떤 상황에서, 얼마나 자주 겪는 문제인가? 구체적으로 쓰라.
+YC의 데이터에 따르면 단독 창업자보다 2~3명의 공동창업팀이 더 높은 성공률을 보였다. 폴 그레이엄은 "혼자 창업하는 것은 신뢰 신호(Trust Signal)가 약하다"고 했다. 투자자 입장에서, 아무도 공동으로 사업하고 싶어 하지 않는 사람은 신뢰하기 어렵다는 것이다.
 
-2단계 — 시장 규모 추정: 이 문제를 겪는 사람이 몇 명인가? 그들이 해결에 얼마를 지불할 용의가 있는가?
+좋은 공동창업자의 조건으로 폴 그레이엄이 꼽은 것들: 서로 오랫동안 알고 지낸 사이(최소 1년 이상), 기술 역량의 상호 보완, 어려운 상황에서도 포기하지 않는 끈기, 그리고 솔직한 의견을 나눌 수 있는 관계.
 
-3단계 — 기존 대안 분석: 사람들이 지금 이 문제를 어떻게 해결하고 있는가? 왜 기존 해결책이 불완전한가?
-
-4단계 — 고객 인터뷰: 실제로 잠재 고객 10명을 만나라. 당신의 가정을 검증하라.
-
-5단계 — 랜딩 페이지 테스트: 아직 제품이 없어도 괜찮다. 랜딩 페이지를 만들고 관심 있는 사람들의 이메일을 받아라.
-
-6단계 — MVP 제작: 핵심 기능 하나만 가진 최소한의 제품을 만들어 테스트하라.
-
-7단계 — 지표 측정: 재방문율, 추천율, 지불 의향. 이 세 가지가 좋으면 PMF에 가까워진 것이다.`,
-    insight: '아이디어는 검증하기 전까지는 그냥 아이디어일 뿐이다.',
-    accent: '#F59E0B'
-  },
-  {
-    type: 'article', icon: '📝', category: 'PRACTICAL GUIDE',
-    title: '청소년이 지금 당장 할 수 있는 창업 준비 10가지',
-    subtitle: '대학교도, 자금도 없어도 지금 시작할 수 있는 것들',
-    body: `창업 준비는 나이나 자금과 상관없이 지금 당장 시작할 수 있다. 오늘부터 할 수 있는 10가지를 소개한다.
-
-1. 하루 30분, 관심 분야의 책과 아티클 읽기. 인사이트쉽 뉴스레터를 구독하는 것도 좋은 시작이다.
-
-2. 해결하고 싶은 문제 하나를 노트에 쓰고, 매주 업데이트하라.
-
-3. LinkedIn 프로필을 만들어라. 지금부터 온라인 정체성을 구축하라.
-
-4. 관심 분야의 커뮤니티에 참여하고 사람들을 만나라.
-
-5. 무료 온라인 코스(Coursera, edX, 유튜브)로 기초 기술을 배워라. 코딩이든 디자인이든 마케팅이든.
-
-6. 작은 프로젝트를 하나 완성하라. 완성품 하나가 미완성 10개보다 값지다.
-
-7. 잠재 고객이 될 수 있는 사람들에게 아이디어를 공유하고 솔직한 피드백을 받아라.
-
-8. 스타트업 행사, 해커톤에 참가하라. 비슷한 생각을 가진 사람들을 만날 수 있다.
-
-9. 멘토를 찾아라. PACM 커뮤니티에 접속하면 선배 창업가들과 연결될 수 있다.
-
-10. 오늘 바로 시작하라. 완벽한 타이밍은 없다.`,
-    insight: '준비는 시작과 동시에 이루어진다.',
-    accent: '#F59E0B'
-  },
-
-  // 섹션 25-26: 특별 기획
-  {
-    type: 'article', icon: '🌟', category: 'SPECIAL',
-    title: 'PACM이 꿈꾸는 미래 — Insightship 로드맵 공개',
-    subtitle: '2026년 하반기부터 2027년까지, 인사이트쉽이 준비하는 것들',
-    body: `인사이트쉽은 지금 막 걸음마를 떼기 시작한 플랫폼이다. 하지만 우리가 향하는 방향은 명확하다.
-
-2026년 하반기: 창업 챌린지 Season 1 완료 후 우수 아이디어 선정, 메인 커버스토리 게재. 기업 파트너십 첫 성사. 뉴스레터 구독자 100명 달성.
-
-2027년 상반기: PACM EDU 콘텐츠 100개 달성. 창업 멘토 매칭 서비스 베타 출시. 월간 활성 사용자 10,000명 목표.
-
-2027년 하반기: 모바일 앱 출시. 커뮤니티 실시간 대화 기능. 창업팀-기업 매칭 플랫폼 정식 서비스.
-
-2028년: 동남아 시장 진출. 영어/베트남어 서비스 추가. 청소년 창업 펀드 연결 프로그램.
-
-이 여정에서 가장 중요한 것은 하나다: 우리 플랫폼을 통해 실제로 꿈을 이룬 청소년 창업가가 나오는 것. 모든 기능, 모든 콘텐츠, 모든 파트너십은 그 목표를 위한 수단이다.`,
-    insight: '큰 꿈을 작은 목표들로 나누어라. 그리고 하나씩 이뤄나가라.',
+지분 분배에서 공통적으로 권장되는 것은 베스팅(Vesting) 조건이다. 4년 베스팅, 1년 클리프(Cliff)가 업계 표준이다. 공동창업자가 초기에 떠날 경우 지분 전체를 가져가지 못하도록 보호하는 장치다.`,
+    insight: '팀이 전략보다 중요하고, 실행력이 아이디어보다 중요하다.',
     accent: '#6366F1'
   },
   {
-    type: 'article', icon: '✉️', category: 'SPECIAL',
-    title: '편집장의 편지 — 창업가로서 살아간다는 것',
-    subtitle: 'Manager A from PACM Insightship',
-    body: `이 매거진을 읽고 있는 여러분에게.
+    type: 'article', category: 'TEAM',
+    title: '창업팀의 역할과 조직 문화',
+    subtitle: 'Netflix Culture Deck에서 배우는 초기 조직 문화 설계',
+    body: `넷플릭스 CEO 리드 헤이스팅스(Reed Hastings)와 패티 맥코드(Patty McCord)가 작성한 "넷플릭스 컬처 덱(Netflix Culture Deck)"은 2009년 공개된 이후 실리콘밸리에서 폭넓게 인용되는 문서다. 셰릴 샌드버그(Sheryl Sandberg)가 "실리콘밸리에서 나온 가장 중요한 문서"라고 평한 것으로 알려져 있다.
 
-창업가로 살아간다는 것은 매일 불확실성 속에서 결정을 내리는 일이다. 확신이 없는 상황에서 앞으로 나아가는 일이다.
+핵심 내용 중 하나는 "규칙 대신 맥락(Context, not Control)"이다. 규칙을 만들어 통제하는 대신, 직원들이 올바른 판단을 내릴 수 있도록 맥락과 목표를 공유하는 것이 더 효과적이라는 철학이다.
 
-이 매거진에 담긴 이야기들 — 성공한 창업가의 스토리, 실패에서 배운 교훈, 시장 분석, 경영 방법론 — 은 모두 한 가지를 말하고 있다. '시작하라'는 것이다.
+초기 스타트업의 조직 문화는 창업자들의 행동이 곧 문화가 된다. 에드거 샤인(Edgar Schein)의 조직문화 이론에 따르면, 문화는 명시적 선언보다 리더의 행동과 결정으로 전달된다.
 
-완벽한 아이디어가 필요하지 않다. 충분한 자금이 필요하지 않다. 학벌이 필요하지 않다. 필요한 것은 단 하나, 시작하려는 의지다.
-
-인사이트쉽은 청소년들이 정보와 격차 없이 도전할 수 있는 세상을 만들기 위해 존재한다. 이 매거진이 그 첫걸음에 작은 도움이 되기를 바란다.
-
-앞으로 매달 새로운 매거진으로 찾아올 것이다. 구독하고, 공유하고, 도전하라.
-
-— Manager A, PACM Insightship 경영지원팀`,
-    insight: '이 매거진이 당신의 창업 여정에 작은 나침반이 되길 바란다.',
+또 하나의 중요한 원칙은 채용 기준이다. 넷플릭스는 "나중에 같이 일하고 싶은 사람인가?"를 핵심 채용 질문으로 삼는다. 초기 팀의 문화적 밀도(Culture Density)가 이후 성장에 결정적 영향을 미친다.`,
+    insight: '문화는 선언이 아니라 매일의 결정이 만든다.',
     accent: '#6366F1'
   },
 
-  // 섹션 27: 뒷표지
+  // ── SECTION 9: 실전 가이드
+  {
+    type: 'article', category: 'PRACTICAL',
+    title: '비즈니스 모델 캔버스 활용법',
+    subtitle: 'Alexander Osterwalder의 9가지 블록으로 사업을 설계하라',
+    body: `비즈니스 모델 캔버스(Business Model Canvas)는 알렉산더 오스터왈더(Alexander Osterwalder)와 예스 피뇨어(Yves Pigneur)가 2010년 저서 『Business Model Generation』에서 소개한 프레임워크다.
+
+9가지 블록으로 구성된다. ①고객 세그먼트(Customer Segments), ②가치 제안(Value Propositions), ③채널(Channels), ④고객 관계(Customer Relationships), ⑤수익 구조(Revenue Streams), ⑥핵심 자원(Key Resources), ⑦핵심 활동(Key Activities), ⑧핵심 파트너십(Key Partnerships), ⑨비용 구조(Cost Structure).
+
+한 페이지에 사업 전체를 시각화할 수 있는 것이 핵심 장점이다. 팀원들과 공유하기 쉽고, 어떤 부분이 취약한지 한눈에 파악할 수 있다.
+
+중요한 것은 캔버스가 완성되면 실제로 가정(Assumption)을 검증하는 것이다. 특히 가치 제안과 고객 세그먼트가 실제로 맞는지 확인하는 고객 인터뷰가 필수적이다.`,
+    insight: '계획의 도구가 아닌 학습의 도구로 캔버스를 활용하라.',
+    accent: '#8B5CF6'
+  },
+  {
+    type: 'article', category: 'PRACTICAL',
+    title: '고객 인터뷰를 제대로 하는 법',
+    subtitle: 'Rob Fitzpatrick의 "The Mom Test"에서 배우는 핵심 원칙',
+    body: `롭 피츠패트릭(Rob Fitzpatrick)의 저서 『The Mom Test』(2013)는 창업자들이 고객 인터뷰에서 자주 저지르는 실수를 다룬다. 제목의 의미는 "엄마에게도 속을 수 있는 질문을 하지 마라"는 것이다.
+
+흔한 실수: "이런 앱이 있으면 쓰겠어요?" 같은 질문에 대부분의 사람들은 "네"라고 답하지만, 실제로 돈을 내지는 않는다.
+
+올바른 접근법: 미래 행동을 묻지 말고 과거 행동을 물어라. "마지막으로 이 문제를 겪은 게 언제였나요?", "지금 어떻게 해결하고 있나요?", "그 방법에서 가장 불편한 점은 무엇인가요?" 같은 질문이다.
+
+인터뷰에서 얻어야 할 것은 사실(Facts)과 행동 패턴(Behaviors)이다. "정말 어려운 문제예요!"라는 말보다 "저는 이 문제 때문에 매주 2시간을 허비합니다"가 훨씬 가치 있는 정보다.
+
+인터뷰 중에 아이디어를 설명하려는 충동을 억제하라. 듣는 것이 목적이다.`,
+    insight: '고객이 원하는 것을 묻지 말고, 고객이 하는 것을 관찰하라.',
+    accent: '#8B5CF6'
+  },
+
+  // ── SECTION 10: PACM & Insightship
+  {
+    type: 'article', category: 'ABOUT PACM',
+    title: 'PACM과 Insightship이 존재하는 이유',
+    subtitle: '청소년 창업 생태계의 정보 격차를 해소하기 위한 여정',
+    body: `PACM(피에이씨엠)은 청소년 창업 생태계를 지원하는 것을 목표로 설립된 회사다. 인사이트쉽(Insightship)은 PACM이 운영하는 청소년 창업 인사이트 플랫폼이다.
+
+인사이트쉽이 풀고자 하는 문제는 하나다: 창업에 필요한 정보와 연결이 특정 계층에게만 집중돼 있다는 것이다. 좋은 학교, 좋은 네트워크, 좋은 가정 환경을 가진 사람들은 이미 많은 정보와 연결을 갖고 있다. 그렇지 않은 청소년들을 위한 공간이 인사이트쉽이다.
+
+플랫폼에서 제공하는 것들: 국내외 창업 뉴스 AI 요약 서비스, 주간 창업 인사이트 뉴스레터, 창업자 커뮤니티, 기업-청소년 연결(PACM Connect), 창업 학습 콘텐츠(PACM EDU), 그리고 이 매거진.
+
+모든 서비스는 청소년을 포함해 누구나 무료로 접근할 수 있다. 이것이 인사이트쉽의 가장 중요한 원칙이다.`,
+    insight: '정보의 격차 없이 도전할 수 있는 세상 — 그것이 인사이트쉽이 만들고 싶은 세상이다.',
+    accent: '#6366F1'
+  },
+
+  // 뒷표지
   { type: 'backcover' }
 ]
 
-// ── 스타일
+// ── 스타일 (책 느낌)
 const STYLES = `
-  .mag-book { perspective: 2400px; }
-  .mag-spread { display: grid; grid-template-columns: 1fr 1fr; min-height: 600px; position: relative;
-    box-shadow: -8px 0 20px rgba(0,0,0,0.4), 8px 0 20px rgba(0,0,0,0.4), 0 20px 60px rgba(0,0,0,0.5);
-    border-radius: 0 8px 8px 0; }
-  .page-l { background: #0a0a0a; border-right: 1px solid #1a1a1a; border-radius: 8px 0 0 8px; padding: 52px 44px; position: relative; overflow: hidden; }
-  .page-r { background: #0e0e0e; border-radius: 0 8px 8px 0; padding: 52px 44px; position: relative; overflow: hidden; }
-  .spine-shadow { position: absolute; top: 0; bottom: 0; left: 0; width: 20px; background: linear-gradient(to right, rgba(0,0,0,0.5) 0%, transparent 100%); pointer-events: none; z-index: 2; }
-  .spine-line { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: linear-gradient(to bottom, transparent, #1a1a1a 20%, #1a1a1a 80%, transparent); transform: translateX(-50%); z-index: 1; pointer-events: none; }
-  .page-fade-in { animation: pgFade 0.45s cubic-bezier(0.4,0,0.2,1); }
-  @keyframes pgFade { from { opacity: 0; transform: rotateY(-6deg) translateX(-10px); } to { opacity: 1; transform: rotateY(0) translateX(0); } }
-  .pgnum { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #333; letter-spacing: 0.12em; }
-  .cat-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
-  .cat-label::after { content: ''; flex: 1; height: 1px; background: currentColor; opacity: 0.3; }
-  .article-title { font-family: var(--f-serif); font-size: clamp(17px, 2.2vw, 23px); font-weight: 800; line-height: 1.2; color: #f5f5f5; margin: 0 0 10px; }
-  .article-subtitle { font-size: 12px; color: #666; line-height: 1.6; margin: 0 0 18px; font-style: italic; }
-  .divider { width: 36px; height: 2px; border-radius: 1px; margin-bottom: 18px; }
-  .article-body { font-size: 13px; color: #999; line-height: 1.9; flex: 1; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 13; -webkit-box-orient: vertical; }
-  .insight-box { border-top: 1px solid #1e1e1e; padding-top: 14px; margin-top: auto; }
-  .insight-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 6px; }
-  .insight-text { font-size: 12px; color: #aaa; line-height: 1.6; font-style: italic; }
-  .dot-nav { display: flex; gap: 5px; align-items: center; }
-  .dot { border-radius: 50%; cursor: pointer; transition: all 0.3s; }
-  @media (max-width: 700px) {
+  .mag-spread {
+    display: grid; grid-template-columns: 1fr 1fr;
+    min-height: 580px; position: relative;
+    box-shadow: -6px 0 24px rgba(0,0,0,0.5), 8px 0 24px rgba(0,0,0,0.4), 0 24px 64px rgba(0,0,0,0.5);
+  }
+  .page-l {
+    background: #090909; border-right: 1px solid #161616;
+    border-radius: 8px 0 0 8px; padding: 52px 44px;
+    position: relative; overflow: hidden;
+  }
+  .page-r {
+    background: #0d0d0d; border-radius: 0 8px 8px 0;
+    padding: 52px 44px; position: relative; overflow: hidden;
+  }
+  .spine-shadow {
+    position: absolute; top: 0; bottom: 0; left: 0; width: 18px;
+    background: linear-gradient(to right, rgba(0,0,0,0.55), transparent);
+    pointer-events: none; z-index: 2;
+  }
+  .spine-center {
+    position: absolute; top: 0; bottom: 0; left: 50%;
+    width: 2px; transform: translateX(-50%);
+    background: linear-gradient(to bottom, transparent 0%, #181818 15%, #181818 85%, transparent 100%);
+    pointer-events: none; z-index: 1;
+  }
+  .pg-fade { animation: pgIn 0.4s cubic-bezier(0.4,0,0.2,1); }
+  @keyframes pgIn { from { opacity: 0; transform: rotateY(-5deg) translateX(-8px); } to { opacity: 1; transform: none; } }
+  .pgnum { font-family: 'JetBrains Mono',monospace; font-size: 10px; color: #2a2a2a; letter-spacing: 0.12em; margin-bottom: 20px; }
+  .cat-tag { font-family: 'JetBrains Mono',monospace; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
+  .cat-tag::after { content: ''; flex: 1; height: 1px; background: currentColor; opacity: 0.25; }
+  .art-title { font-family: var(--f-serif); font-size: clamp(16px,2vw,21px); font-weight: 800; line-height: 1.2; color: #f0f0f0; margin: 0 0 8px; }
+  .art-sub { font-size: 12px; color: #4a4a4a; line-height: 1.6; margin: 0 0 16px; font-style: italic; }
+  .divider { width: 32px; height: 2px; border-radius: 1px; margin-bottom: 16px; }
+  .art-body { font-size: 13px; color: #888; line-height: 1.9; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 14; -webkit-box-orient: vertical; flex: 1; }
+  .ins-box { border-top: 1px solid #161616; padding-top: 14px; margin-top: auto; }
+  .ins-label { font-family: 'JetBrains Mono',monospace; font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 5px; }
+  .ins-text { font-size: 12px; color: #888; line-height: 1.6; font-style: italic; }
+  @media (max-width: 680px) {
     .mag-spread { grid-template-columns: 1fr; }
-    .page-r, .spine-line { display: none; }
+    .page-r, .spine-center { display: none; }
     .page-l { border-radius: 8px; }
   }
 `
 
 export default function MagazinePage() {
   const [spread, setSpread] = useState(0)
-  const [animKey, setAnimKey] = useState(0)
-  const totalSpreads = Math.ceil(MAGAZINE_SECTIONS.length / 2)
+  const [key, setKey] = useState(0)
+  const total = Math.ceil(MAGAZINE_SECTIONS.length / 2)
 
   const go = useCallback((dir) => {
-    const next = dir === 'next' ? Math.min(spread + 1, totalSpreads - 1) : Math.max(spread - 1, 0)
+    const next = dir === 'next' ? Math.min(spread + 1, total - 1) : Math.max(spread - 1, 0)
     if (next === spread) return
     setSpread(next)
-    setAnimKey(k => k + 1)
-  }, [spread, totalSpreads])
+    setKey(k => k + 1)
+  }, [spread, total])
 
   useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'ArrowRight') go('next')
-      if (e.key === 'ArrowLeft') go('prev')
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    const fn = e => { if (e.key === 'ArrowRight') go('next'); if (e.key === 'ArrowLeft') go('prev') }
+    window.addEventListener('keydown', fn)
+    return () => window.removeEventListener('keydown', fn)
   }, [go])
 
-  const leftIdx = spread * 2
-  const rightIdx = spread * 2 + 1
-  const leftSection = MAGAZINE_SECTIONS[leftIdx]
-  const rightSection = MAGAZINE_SECTIONS[rightIdx]
+  const li = spread * 2
+  const ri = spread * 2 + 1
+  const ls = MAGAZINE_SECTIONS[li]
+  const rs = MAGAZINE_SECTIONS[ri]
 
-  const ArticlePage = ({ section, pageNum, side }) => {
-    if (!section) return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#2a2a2a' }}>
-        <BookOpen size={40} />
+  const Page = ({ s, pn, side }) => {
+    if (!s) return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+        <BookOpen size={36} color="#1a1a1a" />
       </div>
     )
-    if (section.type === 'cover') return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', position: 'relative' }}>
-        <div style={{ position: 'absolute', top: 0, right: 0, width: '160px', height: '160px', background: 'radial-gradient(circle at top right, rgba(99,102,241,0.12), transparent 70%)', pointerEvents: 'none' }} />
+    if (s.type === 'cover') return (
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        <div style={{ position: 'absolute', top: 0, right: 0, width: '140px', height: '140px', background: 'radial-gradient(circle at top right, rgba(99,102,241,0.1), transparent 70%)', pointerEvents: 'none' }} />
         <div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: '#6366F1', letterSpacing: '0.2em', marginBottom: '40px' }}>PACM × INSIGHTSHIP</div>
-          <div style={{ fontSize: '11px', color: '#333', fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.1em', marginBottom: '12px' }}>VOL.1 · 2026.03</div>
-          <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(32px,5vw,52px)', fontWeight: 900, lineHeight: 1.05, color: '#f5f5f5', margin: '0 0 20px', letterSpacing: '-0.02em' }}>
+          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: '#6366F1', letterSpacing: '0.2em', marginBottom: '36px' }}>PACM × INSIGHTSHIP</div>
+          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: '#252525', letterSpacing: '0.1em', marginBottom: '10px' }}>VOL.1 · 2026.03</div>
+          <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(30px,5vw,48px)', fontWeight: 900, lineHeight: 1.05, color: '#f0f0f0', margin: '0 0 18px', letterSpacing: '-0.02em' }}>
             창업의<br /><span style={{ color: '#6366F1' }}>모든 것</span>
           </h1>
-          <p style={{ fontSize: '13px', color: '#555', lineHeight: 1.7, maxWidth: '280px' }}>
-            청소년 창업 심층 인사이트<br />AI × 창업자 스토리 × 글로벌 트렌드<br />경제 × 경영 × 실전 가이드
+          <p style={{ fontSize: '13px', color: '#3a3a3a', lineHeight: 1.75, maxWidth: '260px' }}>
+            공개된 데이터와 검증된 이론으로<br />구성한 청소년 창업 인사이트
           </p>
         </div>
         <div>
-          <div style={{ width: '48px', height: '3px', background: '#6366F1', borderRadius: '2px', marginBottom: '24px' }} />
-          <div style={{ fontSize: '11px', color: '#2a2a2a', fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.8 }}>
-            56 PAGES · 28 SPREADS<br />
-            MONTHLY MAGAZINE<br />
-            INSIGHTSHIP.PACM.KR
+          <div style={{ width: '40px', height: '2px', background: '#6366F1', borderRadius: '1px', marginBottom: '20px' }} />
+          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: '#1e1e1e', lineHeight: 2 }}>
+            {MAGAZINE_SECTIONS.filter(s => s.type === 'article').length * 2} PAGES<br />
+            MONTHLY · INSIGHTSHIP.PACM.KR
           </div>
         </div>
       </div>
     )
-    if (section.type === 'backcover') return (
+    if (s.type === 'backcover') return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: '#6366F1', letterSpacing: '0.2em', marginBottom: '32px' }}>THANK YOU FOR READING</div>
-          <h2 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(22px,3vw,30px)', fontWeight: 800, color: '#f5f5f5', lineHeight: 1.25, marginBottom: '20px' }}>
-            다음 호에서<br />다시 만나요
-          </h2>
-          <p style={{ fontSize: '13px', color: '#555', lineHeight: 1.8 }}>
-            매달 새로운 창업 인사이트와<br />함께 돌아올게요.
-          </p>
+          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: '#6366F1', letterSpacing: '0.18em', marginBottom: '28px' }}>THANK YOU</div>
+          <h2 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(20px,3vw,28px)', fontWeight: 800, color: '#f0f0f0', lineHeight: 1.25, marginBottom: '16px' }}>다음 호에서<br />다시 만나요</h2>
+          <p style={{ fontSize: '13px', color: '#3a3a3a', lineHeight: 1.8 }}>매달 새로운 창업 인사이트와<br />함께 찾아옵니다.</p>
         </div>
         <div>
-          <div style={{ width: '100%', height: '1px', background: '#1a1a1a', marginBottom: '20px' }} />
-          <div style={{ fontSize: '11px', color: '#2a2a2a', fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.9 }}>
-            www.insightship.pacm.kr<br />
-            contact@pacm.kr<br />
-            © 2026 PACM Corp.
+          <div style={{ width: '100%', height: '1px', background: '#161616', marginBottom: '18px' }} />
+          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: '#1e1e1e', lineHeight: 2 }}>
+            www.insightship.pacm.kr<br />contact@pacm.kr<br />© 2026 PACM Corp.
           </div>
         </div>
       </div>
     )
-    // 목차 (커버 오른쪽)
-    if (side === 'right' && leftSection?.type === 'cover') return (
+    // 커버 오른쪽 = 목차
+    if (side === 'right' && ls?.type === 'cover') return (
       <div>
-        <div className="cat-label" style={{ color: '#6366F1' }}>CONTENTS</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {MAGAZINE_SECTIONS.filter(s => s.type === 'article').slice(0, 14).map((s, i) => (
-            <div key={i} style={{ display: 'flex', gap: '14px', cursor: 'pointer', alignItems: 'flex-start' }}
-              onClick={() => { setSpread(Math.floor(i / 2) + 1); setAnimKey(k => k + 1) }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', color: '#333', minWidth: '20px', paddingTop: '2px' }}>{String(i + 1).padStart(2, '0')}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '12px', color: '#ccc', fontWeight: 600, lineHeight: 1.35, marginBottom: '2px' }}>{s.title}</div>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', color: '#333' }}>{s.category} · p.{String((i + 1)).padStart(2, '0')}</div>
+        <div className="cat-tag" style={{ color: '#6366F1' }}>CONTENTS</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {MAGAZINE_SECTIONS.filter(x => x.type === 'article').map((x, i) => (
+            <div key={i} style={{ display: 'flex', gap: '12px', cursor: 'pointer', alignItems: 'flex-start' }}
+              onClick={() => { setSpread(Math.floor(i / 2) + 1); setKey(k => k + 1) }}>
+              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', color: '#252525', minWidth: '18px', paddingTop: '2px' }}>{String(i + 1).padStart(2, '0')}</span>
+              <div>
+                <div style={{ fontSize: '12px', color: '#aaa', fontWeight: 600, lineHeight: 1.35, marginBottom: '1px' }}>{x.title}</div>
+                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', color: '#2a2a2a' }}>{x.category}</div>
               </div>
             </div>
           ))}
         </div>
       </div>
     )
-    // 일반 아티클
+    // 일반 기사
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <div className="pgnum" style={{ marginBottom: '20px' }}>— {String(pageNum).padStart(2, '0')} —</div>
-        <div className="cat-label" style={{ color: section.accent || '#6366F1' }}>{section.icon} {section.category}</div>
-        <h2 className="article-title">{section.title}</h2>
-        <p className="article-subtitle">{section.subtitle}</p>
-        <div className="divider" style={{ background: section.accent || '#6366F1' }} />
-        <p className="article-body">{section.body}</p>
-        {section.insight && (
-          <div className="insight-box">
-            <div className="insight-label" style={{ color: section.accent || '#6366F1' }}>Insight</div>
-            <p className="insight-text">"{section.insight}"</p>
+        <div className="pgnum">{String(pn).padStart(2, '0')}</div>
+        <div className="cat-tag" style={{ color: s.accent }}>{s.category}</div>
+        <h2 className="art-title">{s.title}</h2>
+        <p className="art-sub">{s.subtitle}</p>
+        <div className="divider" style={{ background: s.accent }} />
+        <p className="art-body">{s.body}</p>
+        {s.insight && (
+          <div className="ins-box">
+            <div className="ins-label" style={{ color: s.accent }}>Insight</div>
+            <p className="ins-text">"{s.insight}"</p>
           </div>
         )}
       </div>
     )
   }
 
+  const articles = MAGAZINE_SECTIONS.filter(s => s.type === 'article')
+  const pageCount = articles.length * 2
+
   return (
     <div style={{ paddingBottom: '80px' }}>
       <style>{STYLES}</style>
 
       {/* 헤더 */}
-      <div style={{ padding: '32px 0 28px', borderBottom: '1px solid #1a1a1a', marginBottom: '40px' }}>
-        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#6366F1', letterSpacing: '0.18em', marginBottom: '8px' }}>PACM MAGAZINE · VOL.1 · 2026.03</div>
-        <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(24px,4vw,34px)', fontWeight: 700, marginBottom: '12px', lineHeight: 1.2 }}>
+      <div style={{ padding: '32px 0 28px', borderBottom: '1px solid #141414', marginBottom: '40px' }}>
+        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: '#6366F1', letterSpacing: '0.18em', marginBottom: '8px' }}>
+          PACM MAGAZINE · VOL.1 · 2026.03
+        </div>
+        <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(24px,4vw,34px)', fontWeight: 700, marginBottom: '10px', lineHeight: 1.2 }}>
           창업 매거진
         </h1>
-        <p style={{ color: '#555', fontSize: '14px', maxWidth: '540px', lineHeight: 1.8 }}>
-          창업자 스토리 · AI·경제·경영 트렌드 · 글로벌 인사이트 · 실전 가이드 — 56페이지
+        <p style={{ color: '#444', fontSize: '13px', maxWidth: '560px', lineHeight: 1.8 }}>
+          공개된 데이터와 검증된 이론만으로 구성했습니다 · {pageCount}페이지 · {total} 스프레드
         </p>
-        <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {['창업자 스토리', 'AI 트렌드', '경제 분석', '경영 인사이트', '글로벌', '실전 가이드'].map(tag => (
-            <span key={tag} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: '#333', border: '1px solid #1e1e1e', padding: '3px 10px', borderRadius: '4px' }}>{tag}</span>
+        <div style={{ marginTop: '12px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          {['창업 기초', 'AI × 창업', '경제·투자', '경영 방법론', '성공 사례', '글로벌', '성장', '팀 빌딩', '실전 가이드', 'PACM'].map(t => (
+            <span key={t} style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: '#252525', border: '1px solid #1a1a1a', padding: '3px 8px', borderRadius: '3px' }}>{t}</span>
           ))}
         </div>
       </div>
 
       {/* 책 뷰어 */}
-      <div className="mag-book">
-        <div key={animKey} className="page-fade-in" style={{ position: 'relative' }}>
-          {/* 책 아래 그림자 효과 */}
-          <div style={{ position: 'absolute', bottom: '-12px', left: '2%', right: '2%', height: '12px', background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.4) 0%, transparent 70%)', borderRadius: '50%', filter: 'blur(4px)', zIndex: 0 }} />
-
-          <div className="mag-spread" style={{ position: 'relative', zIndex: 1 }}>
-            <div className="spine-line" />
-
-            {/* 왼쪽 페이지 */}
+      <div>
+        {/* 책 그림자 */}
+        <div style={{ position: 'relative' }}>
+          <div style={{ position: 'absolute', bottom: '-10px', left: '3%', right: '3%', height: '10px', background: 'radial-gradient(ellipse, rgba(0,0,0,0.35), transparent 70%)', filter: 'blur(3px)' }} />
+          <div key={key} className="pg-fade mag-spread">
+            <div className="spine-center" />
             <div className="page-l">
               <div className="spine-shadow" />
-              <ArticlePage section={leftSection} pageNum={leftIdx + 1} side="left" />
+              <Page s={ls} pn={li + 1} side="left" />
             </div>
-
-            {/* 오른쪽 페이지 */}
             <div className="page-r">
-              <ArticlePage section={rightSection} pageNum={rightIdx + 1} side="right" />
+              <Page s={rs} pn={ri + 1} side="right" />
             </div>
           </div>
         </div>
-      </div>
 
-      {/* 네비게이션 */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '24px', padding: '0 4px' }}>
-        <button onClick={() => go('prev')} disabled={spread === 0}
-          className="btn btn-outline btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: spread === 0 ? 0.3 : 1 }}>
-          <ChevronLeft size={15} /> 이전
-        </button>
+        {/* 네비게이션 */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '20px' }}>
+          <button onClick={() => go('prev')} disabled={spread === 0}
+            className="btn btn-outline btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px', opacity: spread === 0 ? 0.25 : 1 }}>
+            <ChevronLeft size={14} /> 이전
+          </button>
 
-        {/* 페이지 닷 네비게이션 */}
-        <div className="dot-nav">
-          {Array.from({ length: totalSpreads }).map((_, i) => (
-            <div key={i} className="dot" onClick={() => { setSpread(i); setAnimKey(k => k + 1) }} style={{
-              width: i === spread ? '18px' : '5px', height: '5px',
-              background: i === spread ? '#6366F1' : '#222',
-              borderRadius: i === spread ? '3px' : '50%',
-            }} />
-          ))}
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: '#333', marginLeft: '8px' }}>
-            {spread * 2 + 1}–{Math.min(spread * 2 + 2, MAGAZINE_SECTIONS.length)} / {MAGAZINE_SECTIONS.length}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            {Array.from({ length: total }).map((_, i) => (
+              <div key={i} onClick={() => { setSpread(i); setKey(k => k + 1) }}
+                style={{ width: i === spread ? '16px' : '4px', height: '4px', borderRadius: i === spread ? '2px' : '50%', background: i === spread ? '#6366F1' : '#1e1e1e', cursor: 'pointer', transition: 'all 0.3s' }} />
+            ))}
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: '#252525', marginLeft: '10px' }}>
+              {spread * 2 + 1}–{Math.min(spread * 2 + 2, MAGAZINE_SECTIONS.length)} / {MAGAZINE_SECTIONS.length}
+            </span>
+          </div>
+
+          <button onClick={() => go('next')} disabled={spread >= total - 1}
+            className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '5px', opacity: spread >= total - 1 ? 0.25 : 1 }}>
+            다음 <ChevronRight size={14} />
+          </button>
         </div>
 
-        <button onClick={() => go('next')} disabled={spread >= totalSpreads - 1}
-          className="btn btn-primary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: spread >= totalSpreads - 1 ? 0.3 : 1 }}>
-          다음 <ChevronRight size={15} />
-        </button>
-      </div>
-
-      {/* 키보드 힌트 */}
-      <div style={{ textAlign: 'center', marginTop: '12px', fontFamily: "'JetBrains Mono', monospace", fontSize: '10px', color: '#2a2a2a' }}>
-        ← → 키보드로도 넘길 수 있어요
+        <div style={{ textAlign: 'center', marginTop: '10px', fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: '#1e1e1e' }}>
+          ← → 키보드로 넘기기
+        </div>
       </div>
     </div>
   )
