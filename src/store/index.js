@@ -35,11 +35,32 @@ export const useAuthStore = create(
       },
 
       fetchProfile: async (userId) => {
-        const { data } = await supabase
+        const { data: existing } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', userId)
           .maybeSingle()
+
+        // 소셜 로그인 신규 가입 시 프로필 자동 생성
+        if (!existing) {
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            const meta = user.user_metadata || {}
+            const email = user.email || ''
+            await supabase.from('profiles').upsert({
+              id: userId,
+              display_name: meta.full_name || meta.name || email.split('@')[0],
+              username: (meta.user_name || email.split('@')[0]).replace(/[^a-z0-9_]/gi,'_').toLowerCase(),
+              avatar_url: meta.avatar_url || meta.picture || '',
+              bio: '',
+            })
+            const { data: created } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+            if (created) set({ profile: created })
+          }
+          return
+        }
+
+        const data = existing
         if (data) {
           set({ profile: data })
           // 정지된 회원 체크
