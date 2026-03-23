@@ -396,7 +396,7 @@ def run_batch():
     H_r = {"apikey": SB_KEY, "Authorization": f"Bearer {SB_KEY}"}
     H_w = {**H_r, "Content-Type": "application/json", "Prefer": "return=minimal"}
     url = (f"{SB_URL}/rest/v1/articles?select=id,title,body,excerpt"
-           f"&or=(ai_summary.is.null,ai_summary.eq.%28%EC%9A%94%EC%95%BD+%EC%83%9D%EB%9E%B5%29)"
+           f"&or=(ai_summary.is.null,ai_summary.eq.%28%EC%9A%94%EC%95%BD%20%EC%83%9D%EB%9E%B5%29)"
            f"&status=eq.published&order=created_at.desc&limit=50")
     with urllib.request.urlopen(urllib.request.Request(url, headers=H_r), timeout=20) as r:
         arts = json.loads(r.read())

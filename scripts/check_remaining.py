@@ -19,7 +19,7 @@ try:
     # "(요약 생략)" 요약
     import urllib.parse
     req2 = urllib.request.Request(
-        f"{SB_URL}/rest/v1/articles?select=count&ai_summary=eq.%28%EC%9A%94%EC%95%BD+%EC%83%9D%EB%9E%B5%29&status=eq.published&category=eq.news",
+        f"{SB_URL}/rest/v1/articles?select=count&ai_summary=eq.%28%EC%9A%94%EC%95%BD%20%EC%83%9D%EB%9E%B5%29&status=eq.published&category=eq.news",
         headers=H
     )
     with urllib.request.urlopen(req2,timeout=10) as r:

@@ -74,7 +74,7 @@ def get_remaining():
         req = urllib.request.Request(
             SUPABASE_URL + "/rest/v1/articles"
             "?or=(ai_summary.is.null,"
-            "ai_summary.eq.%28%EC%9A%94%EC%95%BD+%EC%83%9D%EB%9E%B5%29)"
+            "ai_summary.eq.%28%EC%9A%94%EC%95%BD%20%EC%83%9D%EB%9E%B5%29)"
             "&status=eq.published&category=eq.news",
             headers={**H_R, "Prefer": "count=exact"}
         )
@@ -99,7 +99,7 @@ if remaining == 0:
 articles = supa_get(
     "/articles?status=eq.published&category=eq.news"
     "&or=(ai_summary.is.null,"
-    "ai_summary.eq.%28%EC%9A%94%EC%95%BD+%EC%83%9D%EB%9E%B5%29)"
+    "ai_summary.eq.%28%EC%9A%94%EC%95%BD%20%EC%83%9D%EB%9E%B5%29)"
     f"&select=id,title,body,excerpt&order=published_at.desc&limit={MAX_PER_RUN}"
 )
 print(f"이번 배치: {len(articles)}개")
