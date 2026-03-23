@@ -175,8 +175,16 @@ def supa_patch(article_id, data):
         f'{SUPABASE_URL}/rest/v1/articles?id=eq.{article_id}',
         data=payload, headers={**H, 'Prefer': 'return=minimal'}, method='PATCH'
     )
-    with urllib.request.urlopen(req, timeout=10) as r:
-        return r.status in (200, 204)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return r.status in (200, 204)
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode()[:200]
+        print(f'⚠️ PATCH 오류 {e.code}: {err_body}', file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f'⚠️ PATCH 예외: {e}', file=sys.stderr)
+        return False
 
 
 def get_remaining():
@@ -223,11 +231,15 @@ start = time.time()
 
 
 def process(a):
-    summary = summarize(a)
-    if summary:
-        ok = supa_patch(a['id'], {'ai_summary': summary})
-        return 'ok' if ok else 'fail'
-    return 'fail'
+    try:
+        summary = summarize(a)
+        if summary and len(summary) > 50:
+            ok = supa_patch(a['id'], {'ai_summary': summary})
+            return 'ok' if ok else 'fail'
+        return 'fail'
+    except Exception as e:
+        print(f'⚠️ process 오류 [{a.get("id","?")}]: {e}', file=sys.stderr)
+        return 'fail'
 
 with ThreadPoolExecutor(max_workers=WORKERS) as ex:
     futures = {ex.submit(process, a): a for a in articles}
