@@ -27,6 +27,10 @@ SERVICE_KEY   = os.environ['SUPABASE_SERVICE_KEY']
 GROQ_API_KEY  = os.environ.get('GROQ_API_KEY', '')
 GEMINI_KEY    = os.environ.get('GEMINI_API_KEY', '')  # 폴백용
 
+# 처리 설정
+MAX_PER_RUN = int(os.environ.get('BATCH_SIZE', '50'))   # 한 번에 처리할 기사 수
+WORKERS     = int(os.environ.get('MAX_WORKERS', '10'))  # 병렬 처리 스레드 수
+
 H = {'apikey': SERVICE_KEY, 'Authorization': f'Bearer {SERVICE_KEY}', 'Content-Type': 'application/json'}
 
 SYSTEM = """당신은 Insightship 뉴스 에디터입니다. 청소년 창업가를 위한 심층 뉴스 요약을 작성합니다.
