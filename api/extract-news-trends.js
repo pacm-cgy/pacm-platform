@@ -72,9 +72,11 @@ export default async function handler(req) {
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
 
   // 1) 오늘 + 어제 뉴스 카테고리별 수집량
+  // 주간 집계: 이번 주(7일) vs 지난 주(7~14일)
+  const twoWeeksAgo = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)
   let [todayNews, yNews] = await Promise.all([
-    fetch(`${SB_URL}/rest/v1/articles?status=eq.published&category=eq.news&published_at=gte.${today}&select=ai_category`, { headers: H }).then(r=>r.json()),
-    fetch(`${SB_URL}/rest/v1/articles?status=eq.published&category=eq.news&published_at=gte.${yesterday}&published_at=lt.${today}&select=ai_category`, { headers: H }).then(r=>r.json()),
+    fetch(`${SB_URL}/rest/v1/articles?status=eq.published&category=eq.news&created_at=gte.${weekAgo}&select=ai_category&limit=500`, { headers: H }).then(r=>r.json()),
+    fetch(`${SB_URL}/rest/v1/articles?status=eq.published&category=eq.news&created_at=gte.${twoWeeksAgo}&created_at=lt.${weekAgo}&select=ai_category&limit=500`, { headers: H }).then(r=>r.json()),
   ])
 
   // 오늘 뉴스 없으면 어제 데이터로 폴백 (KST 기준 이른 아침)
