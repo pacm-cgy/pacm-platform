@@ -337,7 +337,41 @@ export default function HomePage() {
         </a>
       </div>
 
-      {(!loadingArticles && todayInsight.length === 0) ? null : <section style={{ paddingTop: '52px' }}>
+      {/* ── Sparkship 연동 배너 */}
+      <section style={{ marginTop: '24px' }}>
+        <a href="https://www.sparkship.pacm.kr" target="_blank" rel="noopener noreferrer"
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: '16px', flexWrap: 'wrap',
+            background: 'linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(245,158,11,0.03) 100%)',
+            border: '1px solid rgba(245,158,11,0.25)', borderRadius: '12px',
+            padding: '18px 24px', textDecoration: 'none',
+          }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{
+              width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0,
+              background: 'linear-gradient(135deg, #F59E0B, #D97706)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px'
+            }}>⚡</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--c-paper)', marginBottom: '2px' }}>
+                Sparkship — 청소년 창업가 포트폴리오 플랫폼
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--c-muted)' }}>
+                나의 프로젝트를 세상에 공개하고 기업 스카우터에게 발견되세요
+              </div>
+            </div>
+          </div>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '5px',
+            padding: '8px 16px', borderRadius: '8px',
+            background: '#F59E0B', color: '#000',
+            fontWeight: 700, fontSize: '13px', flexShrink: 0, whiteSpace: 'nowrap'
+          }}>포트폴리오 등록 →</div>
+        </a>
+      </section>
+
+            {(!loadingArticles && todayInsight.length === 0) ? null : <section style={{ paddingTop: '52px' }}>
         <div className="section-header">
           <div className="section-title">오늘의 인사이트</div>
           <button className="btn btn-ghost" onClick={() => navigate('/insight')}>전체 보기 <ChevronRight size={13} /></button>
