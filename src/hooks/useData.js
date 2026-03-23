@@ -31,7 +31,8 @@ export function useArticles({ category, featured, limit = 10, page = 0 } = {}) {
       if (error) throw error
       return data
     },
-    staleTime: 5 * 60 * 1000, // 5분 캐시
+    staleTime: 3 * 60 * 1000, // 3분 캐시
+    gcTime: 10 * 60 * 1000,    // 10분 후 GC
   })
 }
 
@@ -44,7 +45,7 @@ export function useNewsArticles({ limit = 20, page = 0 } = {}) {
       const { data, error } = await supabase
         .from('articles')
         .select(`
-          id, title, slug, excerpt, ai_summary, cover_image, category,
+          id, title, slug, excerpt, cover_image, category,
           tags, read_time, published_at, source_name, source_url, ai_category,
           profiles!author_id (id, display_name)
         `)

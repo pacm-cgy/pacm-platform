@@ -280,3 +280,21 @@ export default function ProfilePage() {
     </div>
   )
 }
+
+
+// ── 계정 삭제 요청 (30일 비활성화)
+export function useAccountDelete() {
+  const { user } = useAuthStore()
+  return async (reason = '') => {
+    if (!user) throw new Error('로그인이 필요합니다')
+    const deleteAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    const { error } = await supabase.from('profiles').update({
+      status: 'deactivated',
+      deactivated_at: new Date().toISOString(),
+      delete_requested_at: new Date().toISOString(),
+      delete_scheduled_at: deleteAt,
+    }).eq('id', user.id)
+    if (error) throw error
+    return deleteAt
+  }
+}
