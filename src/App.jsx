@@ -109,10 +109,9 @@ export default function App() {
               @keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
               @keyframes slideInRight { from{transform:translateX(100%)} to{transform:translateX(0)} }
             `}</style>
-            <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="app-layout">
               <Header />
-              <main style={{ flex: 1 }}>
-                <div className="container">
+              <div className="main-content-area">
                   <Suspense fallback={<PageLoader />}>
                     <Routes>
                       <Route path="/"           element={<HomePage />} />
@@ -141,8 +140,7 @@ export default function App() {
                       <Route path="*"           element={<Navigate to="/404" replace />} />
                     </Routes>
                   </Suspense>
-                </div>
-              </main>
+              </div>
               <Footer />
             </div>
           </AppInit>

@@ -126,9 +126,6 @@ export default function Header() {
 
   return (
     <>
-      {/* 트렌드 티커 */}
-      <TrendTicker trends={trends} />
-
       {/* 사이드바 */}
       {!noSidebar && (
         <>

@@ -139,6 +139,7 @@ body {
 
 /* ── 트렌드 티커 (독창적 요소) */
 .ticker-wrap {
+  margin-left: var(--sidebar);
   width: 100%;
   overflow: hidden;
   background: var(--brand);
@@ -177,8 +178,23 @@ body {
 
 /* ── 레이아웃 (Grok 스타일 사이드바) */
 .app-layout {
-  display: flex;
+  display: block;
   min-height: 100vh;
+  background: var(--bg-0);
+}
+
+/* ── 메인 콘텐츠 영역 — 사이드바 너비만큼 들여쓰기 */
+.main-content-area {
+  margin-left: var(--sidebar);
+  min-height: calc(100vh - var(--nav-h));
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 768px) {
+  .main-content-area {
+    margin-left: 0;
+  }
 }
 
 .sidebar-nav {
@@ -928,6 +944,15 @@ body {
 /* ═══════════════════════════════════════════════════════════════════
    페이지 내부 레이아웃
    ═══════════════════════════════════════════════════════════════════ */
+
+/* ── 페이지 컨테이너 */
+.container {
+  width: 100%;
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
 .page-inner {
   max-width: var(--max-w);
   margin: 0 auto;
