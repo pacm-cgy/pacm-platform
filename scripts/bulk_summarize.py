@@ -126,7 +126,7 @@ start = time.time()
 def process(a):
     body = clean(a.get("body", "") or a.get("excerpt", "") or "")
     try:
-        summary = ai_summarize(a["title"], body)
+        summary = ai_summarize(a["title"], body, target_len=2000)
         if summary and len(summary) >= 30:
             return "ok" if supa_patch(a["id"], {"ai_summary": summary}) else "fail"
         return "fail"
