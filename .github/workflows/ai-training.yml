@@ -1,4 +1,4 @@
-name: AI 연구소 — 자체 AI 지속 학습 (매일 03:00 KST)
+name: PACM AI v3 — 완전 자체 AI 지속 학습 (매일 03:00 KST)
 
 on:
   schedule:
@@ -33,7 +33,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "=== Insightship AI v2 평가 시작 ==="
-          python3 scripts/insightship_ai_v2.py eval
+          python3 scripts/insightship_ai_v3.py eval
           echo "=================================="
 
       - name: "📚 [AI연구소] 실제 데이터로 지속 학습"
@@ -43,7 +43,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "=== 지속 학습 시작 (실제 요약 데이터 기반) ==="
-          python3 scripts/insightship_ai_v2.py train
+          python3 scripts/insightship_ai_v3.py train
           echo "=== 학습 완료 ==="
 
       - name: "⚡ [AI연구소] 미요약 기사 자체 AI 처리"
@@ -53,7 +53,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "=== 자체 AI v2 배치 요약 ==="
-          python3 scripts/insightship_ai_v2.py batch
+          python3 scripts/insightship_ai_v3.py batch
 
       - name: "💾 [AI연구소] 학습된 모델 커밋"
         run: |

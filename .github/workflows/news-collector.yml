@@ -32,8 +32,6 @@ jobs:
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
-          GROQ_API_KEY: ${{ vars.GROQ_API_KEY }}
-          GEMINI_API_KEY: ${{ vars.GEMINI_API_KEY }}
           BATCH_SIZE: "80"
           MAX_WORKERS: "20"
         run: |

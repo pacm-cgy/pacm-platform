@@ -1,4 +1,4 @@
-name: 누락+오류 요약 전체 재처리 (1회성)
+name: PACM AI v3 — 완전 자체 AI 재처리 (1회성)
 
 on:
   workflow_dispatch:
@@ -23,8 +23,6 @@ jobs:
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
-          GROQ_API_KEY: ${{ vars.GROQ_API_KEY }}
-          GEMINI_API_KEY: ${{ vars.GEMINI_API_KEY }}
           BATCH_SIZE: "100"
           MAX_WORKERS: "25"
         run: |
