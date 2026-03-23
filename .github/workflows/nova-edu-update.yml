@@ -1,0 +1,25 @@
+name: Nova — 월간 EDU 콘텐츠 생성 (매월 1일)
+
+on:
+  schedule:
+    - cron: '0 0 1 * *'
+  workflow_dispatch:
+
+jobs:
+  nova:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Nova EDU 콘텐츠 생성
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
+          GROQ_API_KEY: ${{ vars.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ vars.GEMINI_API_KEY }}
+        run: |
+          echo "=== Nova 콘텐츠 에디터 실행 ==="
+          python3 scripts/nova_edu_update.py
+          echo "=== 완료 ==="
