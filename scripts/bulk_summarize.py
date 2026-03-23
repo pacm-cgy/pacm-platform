@@ -24,17 +24,18 @@ GEMINI_KEY    = os.environ.get('GEMINI_API_KEY', '')  # 폴백용
 
 H = {'apikey': SERVICE_KEY, 'Authorization': f'Bearer {SERVICE_KEY}', 'Content-Type': 'application/json'}
 
-SYSTEM = """당신은 Insightship 뉴스 에디터입니다. 청소년 창업가를 위한 뉴스 요약을 작성합니다.
+SYSTEM = """당신은 Insightship 뉴스 에디터입니다. 청소년 창업가를 위한 심층 뉴스 요약을 작성합니다.
 규칙:
 - 인사말/서론 없이 핵심 내용으로 바로 시작
-- 분량: 반드시 400~600자 이내 (이 범위를 절대 초과하지 말 것)
-- ~입니다/~했습니다 경어체
+- 분량: 1,500~2,500자 수준으로 충분히 상세하게 작성
+- 배경·맥락·의미·시사점까지 포함한 심층 분석 제공
+- ~입니다/~했습니다/~됩니다 경어체
 - 어려운 용어는 괄호(  )로 설명
-- 수치·기업명·날짜 구체적으로 포함
-- 반드시 완전한 문장으로 마무리 (절대 끊기지 않게)
-- **볼드**, ## 마크다운 금지. 순수 텍스트만 출력
-- HTML 태그 절대 사용 금지
-- 500자에 도달하면 자연스럽게 마무리하고 중단"""
+- 수치·기업명·날짜·인물명 구체적으로 포함
+- 문단 구분은 빈 줄로 구분
+- 마지막 문장은 반드시 완전하게 마무리
+- **볼드**, ## 마크다운 절대 금지. 순수 텍스트만 출력
+- HTML 태그 절대 사용 금지"""
 
 
 def call_groq(title, text):
@@ -45,9 +46,9 @@ def call_groq(title, text):
         "model": "llama-3.3-70b-versatile",
         "messages": [
             {"role": "system", "content": SYSTEM},
-            {"role": "user", "content": f"제목: {title}\n본문: {text[:2000]}\n\n위 뉴스를 청소년 눈높이에 맞게 800~1000자로 요약하세요."}
+            {"role": "user", "content": f"제목: {title}\n본문: {text[:5000]}\n\n위 뉴스를 청소년 눈높이에 맞게 1,500~2,500자로 심층 요약하세요. 배경·맥락·의미·시사점을 포함하세요."}
         ],
-        "max_tokens": 1200,
+        "max_tokens": 3500,
         "temperature": 0.3,
     }).encode()
     req = urllib.request.Request(
@@ -75,8 +76,8 @@ def call_gemini(title, text):
     for model in ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-8b']:
         payload = json.dumps({
             'system_instruction': {'parts': [{'text': SYSTEM}]},
-            'contents': [{'role': 'user', 'parts': [{'text': f"제목: {title}\n본문: {text[:1500]}\n\n800~1000자 요약. 핵심 팩트로 바로 시작."}]}],
-            'generationConfig': {'maxOutputTokens': 1024, 'temperature': 0.2},
+            'contents': [{'role': 'user', 'parts': [{'text': f"제목: {title}\n본문: {text[:4000]}\n\n1,500~2,500자 심층 요약. 핵심 팩트로 바로 시작하되 배경과 시사점까지 포함하세요."}]}],
+            'generationConfig': {'maxOutputTokens': 4096, 'temperature': 0.2},
         }).encode()
         req = urllib.request.Request(
             f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_KEY}",
