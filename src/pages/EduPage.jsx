@@ -197,16 +197,100 @@ export default function EduPage() {
         </div>
       )}
 
-      {/* 챌린지 CTA */}
-      <div style={{ marginTop: '64px', background: 'linear-gradient(135deg, var(--c-indigo) 0%, #4f46e5 100%)', borderRadius: '12px', padding: '32px', textAlign: 'center' }}>
-        <div style={{ fontFamily: 'var(--f-serif)', fontSize: '22px', fontWeight: 700, color: '#fff', marginBottom: '8px' }}>
-          배운 것을 직접 실험해보세요
+      {/* ── PACM Academy 유도 배너 ── */}
+      <div style={{
+        marginTop: '48px',
+        background: 'linear-gradient(135deg, #0a0a1a 0%, #0f0f2e 50%, #1a1040 100%)',
+        border: '1px solid rgba(99,102,241,0.3)',
+        borderRadius: '4px', padding: '32px 36px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: '24px', flexWrap: 'wrap',
+        position: 'relative', overflow: 'hidden',
+      }}>
+        <div style={{
+          position: 'absolute', top: '-40px', right: '-40px',
+          width: '200px', height: '200px',
+          background: 'radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
+        <div style={{ zIndex: 1 }}>
+          <div style={{
+            fontFamily: 'var(--f-mono)', fontSize: '10px',
+            color: '#818cf8', letterSpacing: '2px', marginBottom: '10px',
+          }}>
+            PACM ACADEMY · 정규 과정
+          </div>
+          <div style={{ fontFamily: 'var(--f-serif)', fontSize: '20px', fontWeight: 700, color: '#f0ece0', marginBottom: '8px', lineHeight: 1.3 }}>
+            체계적인 창업 교육을 원하신다면
+          </div>
+          <div style={{ fontSize: '13px', color: '#a5b4fc', lineHeight: 1.6 }}>
+            무료 강좌부터 멘토링까지 — 단계별 커리큘럼으로 창업가를 완성합니다
+          </div>
+          <div style={{ display: 'flex', gap: '12px', marginTop: '14px', flexWrap: 'wrap' }}>
+            {['스타트업 기초 무료', '실전 창업 전략', '1:1 멘토링'].map(t => (
+              <span key={t} style={{
+                fontFamily: 'var(--f-mono)', fontSize: '10px',
+                color: '#818cf8', background: 'rgba(99,102,241,0.1)',
+                border: '1px solid rgba(99,102,241,0.2)',
+                padding: '3px 10px',
+              }}>{t}</span>
+            ))}
+          </div>
         </div>
-        <div style={{ color: '#c7d2fe', fontSize: '14px', marginBottom: '20px' }}>
-          PACM 창업 챌린지에 참여해서 아이디어를 현실로 만드세요
+        <button
+          onClick={() => window.open('https://www.academy.pacm.kr', '_blank')}
+          style={{
+            flexShrink: 0, zIndex: 1,
+            background: '#6366f1', color: '#fff',
+            border: 'none', cursor: 'pointer',
+            fontFamily: 'var(--f-mono)', fontSize: '12px',
+            fontWeight: 700, letterSpacing: '1px',
+            padding: '12px 24px',
+            transition: 'background 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = '#4f46e5'}
+          onMouseLeave={e => e.currentTarget.style.background = '#6366f1'}
+        >
+          Academy 바로가기 →
+        </button>
+      </div>
+
+      {/* ── 챌린지 CTA ── */}
+      <div style={{
+        marginTop: '16px',
+        background: 'linear-gradient(135deg, #1a0a00 0%, #2d1400 50%, #3d1a00 100%)',
+        border: '1px solid rgba(249,115,22,0.2)',
+        borderRadius: '4px', padding: '28px 36px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: '24px', flexWrap: 'wrap',
+      }}>
+        <div>
+          <div style={{
+            fontFamily: 'var(--f-mono)', fontSize: '10px',
+            color: '#fb923c', letterSpacing: '2px', marginBottom: '8px',
+          }}>SPARKSHIP · 포트폴리오</div>
+          <div style={{ fontFamily: 'var(--f-serif)', fontSize: '18px', fontWeight: 700, color: '#f0ece0', marginBottom: '6px' }}>
+            배운 것을 직접 실험해보세요
+          </div>
+          <div style={{ fontSize: '13px', color: '#fdba74' }}>
+            PACM 창업 챌린지에 참여해서 아이디어를 포트폴리오로 만드세요
+          </div>
         </div>
-        <button onClick={() => navigate('/community')} className="btn" style={{ background: 'var(--bg-1)', color: 'var(--c-indigo)', fontWeight: 700 }}>
-          창업 챌린지 참여하기 <ChevronRight size={14} style={{ verticalAlign: 'middle' }} />
+        <button
+          onClick={() => window.open('https://www.sparkship.pacm.kr', '_blank')}
+          style={{
+            flexShrink: 0,
+            background: '#f97316', color: '#000',
+            border: 'none', cursor: 'pointer',
+            fontFamily: 'var(--f-mono)', fontSize: '12px',
+            fontWeight: 700, letterSpacing: '1px',
+            padding: '12px 24px',
+            transition: 'background 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = '#ea6c04'}
+          onMouseLeave={e => e.currentTarget.style.background = '#f97316'}
+        >
+          Sparkship 바로가기 →
         </button>
       </div>
     </div>
