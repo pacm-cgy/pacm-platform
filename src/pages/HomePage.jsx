@@ -8,34 +8,58 @@ import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 
 // ── TREND CARD ────────────────────────────────────────────────────
+function MiniBarChart({ pct, color }) {
+  const bars = [0.3, 0.5, 0.45, 0.6, 0.4, 0.65, 0.55, 0.75, 0.8, Math.min(Math.abs(pct) / 100, 1)]
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '24px', marginTop: '8px' }}>
+      {bars.map((h, i) => (
+        <div key={i} style={{
+          flex: 1, height: `${Math.max(h * 100, 8)}%`,
+          background: i === bars.length - 1 ? color : `${color}44`,
+          borderRadius: '1px', transition: 'height 0.4s ease',
+        }} />
+      ))}
+    </div>
+  )
+}
+
 function TrendCard({ snapshot }) {
   if (!snapshot) return null
   const isUp = (snapshot.change_pct || 0) > 0
   const isDown = (snapshot.change_pct || 0) < 0
   const Icon = isUp ? TrendingUp : isDown ? TrendingDown : Minus
   const color = isUp ? 'var(--c-green)' : isDown ? 'var(--c-red)' : 'var(--c-muted)'
-  const ICONS = { ai_startup: 'AI', edutech: 'EDU', social: 'ECO', youth: 'UP' }
+  const barColor = isUp ? '#22c55e' : isDown ? '#ef4444' : '#6b7280'
+  const ICONS = { ai_startup: '🤖', edutech: '📚', social: '🌱', youth: '🚀' }
 
   return (
-    <div className="card" style={{ padding: '20px 22px', cursor: 'pointer', transition: 'var(--t-fast)' }}
+    <div className="card" style={{ padding: '18px 20px', cursor: 'pointer', transition: 'var(--t-fast)' }}
       onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-gray-1)'; e.currentTarget.style.borderColor = 'var(--c-gold)' }}
       onMouseLeave={e => { e.currentTarget.style.background = 'var(--c-card)'; e.currentTarget.style.borderColor = 'var(--c-border)' }}
     >
-      <div style={{ fontSize: '28px', marginBottom: '10px' }}>{ICONS[snapshot.category] || '—'}</div>
-      <div className="t-caption" style={{ marginBottom: '5px' }}>{snapshot.metric_name}</div>
-      <div style={{ fontFamily: 'var(--f-serif)', fontSize: '21px', fontWeight: 700, marginBottom: '5px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '8px' }}>
+        <span style={{ fontSize: '20px' }}>{ICONS[snapshot.category] || '📈'}</span>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '3px',
+          fontFamily: 'var(--f-mono)', fontSize: '10px', color,
+          background: isUp ? 'rgba(34,197,94,0.1)' : isDown ? 'rgba(239,68,68,0.1)' : 'rgba(107,114,128,0.1)',
+          padding: '2px 6px', borderRadius: '2px',
+        }}>
+          <Icon size={9} />
+          {Math.abs(snapshot.change_pct || 0).toFixed(1)}%
+        </div>
+      </div>
+      <div className="t-caption" style={{ marginBottom: '4px', fontSize: '10px' }}>{snapshot.metric_name}</div>
+      <div style={{ fontFamily: 'var(--f-serif)', fontSize: '20px', fontWeight: 700 }}>
         {snapshot.metric_unit === '억원' ? '₩' : ''}{Number(snapshot.metric_value).toLocaleString()}{snapshot.metric_unit !== '억원' ? snapshot.metric_unit : '억'}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'var(--f-mono)', fontSize: '11px', color }}>
-        <Icon size={11} />
-        {Math.abs(snapshot.change_pct || 0).toFixed(1)}%{' '}
-          {['AI분析','기술/IT','경제/창업','교육/창업','사회/창업','환경/에너지','헬스케어'].includes(snapshot.category)
-            ? '전일대비' : '전월대비'}
+      <MiniBarChart pct={snapshot.change_pct || 0} color={barColor} />
+      <div style={{ marginTop: '6px', fontFamily: 'var(--f-mono)', fontSize: '9px', color: 'var(--c-gray-5)' }}>
+        {['AI분석','기술/IT','경제/창업','교육/창업','사회/창업','환경/에너지','헬스케어'].includes(snapshot.category) ? '전일대비' : '전월대비'}
       </div>
     </div>
   )
 }
-
 // ── STORY CARD ────────────────────────────────────────────────────
 function StoryCard({ article, onClick }) {
   const author = article.profiles
@@ -96,7 +120,7 @@ function ProjectCard({ project, onClick }) {
   )
 }
 
-// ── NEWSLETTER ────────────────────────────────────────────────────
+// ── NEWSLETTER (v2 — 강화된 CTA + 혜택 강조) ────────────────────
 function Newsletter() {
   const [email, setEmail] = useState('')
   const [done, setDone] = useState(false)
@@ -109,29 +133,94 @@ function Newsletter() {
     catch (e) { setErr(e.message) }
   }
 
+  const BENEFITS = [
+    { icon: '📊', text: '매주 창업 트렌드 요약' },
+    { icon: '💡', text: '실전 창업 인사이트' },
+    { icon: '🚀', text: '기업·투자 기회 정보' },
+    { icon: '🎯', text: 'PACM 챌린지 알림' },
+  ]
+
   return (
-    <section style={{ background: 'var(--c-gray-1)', padding: '52px var(--pad-x)', border: '1px solid var(--c-border)', textAlign: 'center' }}>
-      <div className="t-eyebrow" style={{ marginBottom: '14px' }}>PACM WEEKLY</div>
-      <h2 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(22px, 4vw, 28px)', fontWeight: 700, marginBottom: '10px', lineHeight: 1.3 }}>
-        매주 월요일 아침,<br />창업 인사이트를 받아보세요
-      </h2>
-      <p style={{ color: 'var(--c-muted)', fontSize: '14px', maxWidth: '400px', margin: '0 auto 28px', lineHeight: 1.7 }}>
-        구독자들이 매주 받는 뉴스레터 — 트렌드, 인사이트, 기회가 담깁니다.
-      </p>
-      {done ? (
-        <div style={{ color: 'var(--c-green)', fontFamily: 'var(--f-serif)', fontSize: '16px' }}>
-          ✓ 구독이 완료되었습니다! 다음 발행일에 인사이트를 보내드릴게요.
+    <section style={{
+      background: 'linear-gradient(135deg, var(--c-gray-1) 0%, #0d0d1a 100%)',
+      padding: '64px var(--pad-x)',
+      border: '1px solid var(--c-border)',
+      position: 'relative', overflow: 'hidden',
+    }}>
+      {/* 배경 장식 */}
+      <div style={{
+        position: 'absolute', top: '-60px', right: '-60px',
+        width: '300px', height: '300px',
+        background: 'radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
+        <div style={{
+          display: 'inline-block',
+          background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)',
+          color: '#818cf8', fontFamily: 'var(--f-mono)', fontSize: '10px',
+          letterSpacing: '2px', padding: '4px 12px', marginBottom: '20px',
+        }}>
+          PACM WEEKLY · 무료 뉴스레터
         </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="newsletter-form" style={{ display: 'flex', gap: '2px', maxWidth: '420px', margin: '0 auto', flexWrap: 'wrap' }}>
-          <input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)}
-            placeholder="이메일 주소를 입력하세요" required style={{ flex: '1 1 200px' }} />
-          <button type="submit" className="btn btn-ink" disabled={subscribe.isPending} style={{ flexShrink: 0 }}>
-            {subscribe.isPending ? '처리 중...' : '무료 구독'}
-          </button>
-        </form>
-      )}
-      {err && <div style={{ color: 'var(--c-red)', fontSize: '12px', marginTop: '10px' }}>{err}</div>}
+        <h2 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(24px, 4vw, 32px)', fontWeight: 700, marginBottom: '12px', lineHeight: 1.25 }}>
+          창업가를 꿈꾸는 청소년이라면<br />
+          <span style={{ color: '#818cf8' }}>매주 월요일 아침을 여기서</span>
+        </h2>
+        <p style={{ color: 'var(--c-muted)', fontSize: '14px', maxWidth: '400px', margin: '0 auto 28px', lineHeight: 1.7 }}>
+          트렌드, 인사이트, 기업 기회까지 — 정보 격차 없이 도전할 수 있도록
+        </p>
+        {/* 혜택 4개 */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '32px' }}>
+          {BENEFITS.map(b => (
+            <div key={b.text} style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              background: 'rgba(255,255,255,0.04)', border: '1px solid var(--c-border)',
+              padding: '6px 12px', fontSize: '12px', color: 'var(--c-muted)',
+            }}>
+              <span>{b.icon}</span><span>{b.text}</span>
+            </div>
+          ))}
+        </div>
+        {done ? (
+          <div style={{
+            background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)',
+            color: 'var(--c-green)', fontFamily: 'var(--f-serif)', fontSize: '16px',
+            padding: '20px', textAlign: 'center',
+          }}>
+            ✓ 구독 완료! 다음 월요일 아침에 첫 인사이트가 도착합니다.
+          </div>
+        ) : (
+          <>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '0', maxWidth: '460px', margin: '0 auto', flexWrap: 'wrap', gap: '2px' }}>
+              <input
+                className="input" type="email" value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="이메일 주소를 입력하세요"
+                required
+                style={{ flex: '1 1 220px', borderRadius: '2px 0 0 2px', fontSize: '14px' }}
+              />
+              <button
+                type="submit" className="btn"
+                disabled={subscribe.isPending}
+                style={{
+                  flexShrink: 0, borderRadius: '0 2px 2px 0',
+                  background: '#6366f1', color: '#fff',
+                  fontFamily: 'var(--f-mono)', fontSize: '12px',
+                  fontWeight: 700, letterSpacing: '1px',
+                  padding: '0 20px', border: 'none', cursor: 'pointer',
+                }}
+              >
+                {subscribe.isPending ? '처리 중...' : '무료 구독하기 →'}
+              </button>
+            </form>
+            <div style={{ marginTop: '12px', fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gray-5)' }}>
+              스팸 없음 · 언제든 구독 해지 가능 · 매주 월요일 발송
+            </div>
+          </>
+        )}
+        {err && <div style={{ color: 'var(--c-red)', fontSize: '12px', marginTop: '10px' }}>{err}</div>}
+      </div>
     </section>
   )
 }
