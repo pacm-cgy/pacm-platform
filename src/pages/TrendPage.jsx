@@ -143,7 +143,7 @@ function TrendCard({ snapshot }) {
   const down = (snapshot.change_pct || 0) < 0
   const Icon  = up ? TrendingUp : down ? TrendingDown : Minus
   const color = up ? 'var(--c-green)' : down ? 'var(--c-red)' : 'var(--c-muted)'
-  const isNewsTrend = snapshot.source_name === '뉴스 트렌드 분석'
+  const isNewsTrend = snapshot.source === '뉴스 트렌드 분석'
 
   const whyPayload = {
     metric_name: snapshot.metric_name,
@@ -151,7 +151,7 @@ function TrendCard({ snapshot }) {
     metric_unit: snapshot.metric_unit,
     change_pct: snapshot.change_pct,
     category: snapshot.category,
-    source_name: snapshot.source_name,
+    source: snapshot.source,
   }
 
   return (
@@ -166,14 +166,13 @@ function TrendCard({ snapshot }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'var(--f-mono)', fontSize: '11px', color, marginBottom: '10px' }}>
           <Icon size={11} /> {Math.abs(snapshot.change_pct || 0).toFixed(1)}%{' '}
-            {['AI분석','기술/IT','경제/창업','교육/창업','사회/창업','환경/에너지','헬스케어'].includes(snapshot.category)
-              ? '전일대비' : '전월대비'}
+            {snapshot.compare_type || '전일대비'}
         </div>
-        {snapshot.source_name && (
+        {snapshot.source && (
           <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gray-5)', marginBottom: '12px', lineHeight: 1.4 }}>
             출처: {snapshot.source_url
-              ? <a href={snapshot.source_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--c-gray-6)', textDecoration: 'none' }} onMouseEnter={e => e.currentTarget.style.color='var(--c-gold)'} onMouseLeave={e => e.currentTarget.style.color='var(--c-gray-6)'}>{snapshot.source_name}</a>
-              : snapshot.source_name}
+              ? <a href={snapshot.source_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--c-gray-6)', textDecoration: 'none' }} onMouseEnter={e => e.currentTarget.style.color='var(--c-gray-6)'} onMouseLeave={e => e.currentTarget.style.color='var(--c-gray-5)'}>{snapshot.source}</a>
+              : snapshot.source}
           </div>
         )}
         <WhyButton
@@ -391,3 +390,4 @@ export default function TrendPage() {
     </div>
   )
 }
+
