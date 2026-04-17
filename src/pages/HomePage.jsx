@@ -29,12 +29,12 @@ function TrendCard({ snapshot }) {
   const isDown = (snapshot.change_pct || 0) < 0
   const Icon = isUp ? TrendingUp : isDown ? TrendingDown : Minus
   const color = isUp ? 'var(--c-green)' : isDown ? 'var(--c-red)' : 'var(--c-muted)'
-  const barColor = isUp ? '#22c55e' : isDown ? '#ef4444' : '#6b7280'
+  const barColor = isUp ? '#22c55e' : isDown ? 'var(--bw-400)' : '#6b7280'
   const ICONS = { ai_startup: '🤖', edutech: '📚', social: '🌱', youth: '🚀' }
 
   return (
     <div className="card" style={{ padding: '18px 20px', cursor: 'pointer', transition: 'var(--t-fast)' }}
-      onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-gray-1)'; e.currentTarget.style.borderColor = 'var(--c-gold)' }}
+      onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-gray-1)'; e.currentTarget.style.borderColor = 'var(--bw-200)' }}
       onMouseLeave={e => { e.currentTarget.style.background = 'var(--c-card)'; e.currentTarget.style.borderColor = 'var(--c-border)' }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '8px' }}>
@@ -67,7 +67,7 @@ function StoryCard({ article, onClick }) {
     <div className="card card-clickable" onClick={() => onClick?.(article)}
       style={{ padding: '24px', display: 'flex', gap: '18px', alignItems: 'flex-start' }}
     >
-      <div className="avatar avatar-lg" style={{ background: 'var(--c-gold-dim)', color: 'var(--c-gold)', border: '1px solid #f9731630', flexShrink: 0 }}>
+      <div className="avatar avatar-lg" style={{ background: 'var(--c-gold-dim)', color: 'var(--bw-200)', border: '1px solid #f9731630', flexShrink: 0 }}>
         {author?.avatar_url ? <img src={author.avatar_url} alt={author.display_name} /> : (author?.display_name?.[0] || 'A')}
       </div>
       <div style={{ minWidth: 0 }}>
@@ -90,7 +90,7 @@ function StoryCard({ article, onClick }) {
 // ── PROJECT CARD ──────────────────────────────────────────────────
 function ProjectCard({ project, onClick }) {
   const statusLabel = project.status === 'open' ? 'RECRUITING' : project.status === 'coming_soon' ? 'COMING SOON' : 'CLOSED'
-  const statusClass = project.status === 'open' ? 'badge-green' : project.status === 'coming_soon' ? 'badge-gold' : 'badge-gray'
+  const statusClass = project.status === 'open' ? 'badge-white' : project.status === 'coming_soon' ? 'badge-white' : 'badge-gray'
   const deadline = project.deadline ? format(new Date(project.deadline), 'M/d', { locale: ko }) : null
   const dDay = project.deadline ? Math.ceil((new Date(project.deadline) - new Date()) / 86400000) : null
 
@@ -114,7 +114,7 @@ function ProjectCard({ project, onClick }) {
       }}>{project.description}</div>
       <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '12px', borderTop: '1px solid var(--c-border)', fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--c-muted)' }}>
         <span>{deadline ? `마감 ${dDay > 0 ? `D-${dDay}` : '마감'} · ${deadline}` : '마감 미정'}</span>
-        <span style={{ color: 'var(--c-gold)' }}>지원 {project.applicant_count}명</span>
+        <span style={{ color: 'var(--bw-200)' }}>지원 {project.applicant_count}명</span>
       </div>
     </div>
   )
@@ -205,7 +205,7 @@ function Newsletter() {
                 disabled={subscribe.isPending}
                 style={{
                   flexShrink: 0, borderRadius: '0 2px 2px 0',
-                  background: '#6366f1', color: '#fff',
+                  background: 'var(--bw-800)', color: '#fff',
                   fontFamily: 'var(--f-mono)', fontSize: '12px',
                   fontWeight: 700, letterSpacing: '1px',
                   padding: '0 20px', border: 'none', cursor: 'pointer',
@@ -292,7 +292,7 @@ export default function HomePage() {
             }}>
               {activeNotice.title}
             </span>
-            <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-gold)', flexShrink:0, letterSpacing:'0.5px' }}>
+            <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--bw-200)', flexShrink:0, letterSpacing:'0.5px' }}>
               자세히 →
             </span>
           </div>
@@ -345,7 +345,7 @@ export default function HomePage() {
                     onMouseEnter={e => e.currentTarget.style.color = 'var(--c-paper)'}
                     onMouseLeave={e => e.currentTarget.style.color = 'var(--c-gray-6)'}
                   >
-                    <span style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gold)' }}>{String(i + 1).padStart(2, '0')}</span>
+                    <span style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--bw-200)' }}>{String(i + 1).padStart(2, '0')}</span>
                     {t}
                   </button>
                 ))}
@@ -359,7 +359,7 @@ export default function HomePage() {
       <section style={{ marginTop: '32px' }}>
         <a href="/community" style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: 'linear-gradient(135deg, var(--c-indigo) 0%, #4f46e5 100%)',
+          background: 'var(--bw-800) 0%, #4f46e5 100%)',
           borderRadius: '12px', padding: '20px 28px', textDecoration: 'none',
           border: '1px solid rgba(99,102,241,0.4)', gap: '16px',
           flexWrap: 'wrap'
@@ -402,7 +402,7 @@ export default function HomePage() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <div style={{ flex: 1, height: '4px', background: 'var(--c-border)', borderRadius: '2px', maxWidth: '200px' }}>
-                  <div style={{ width: `${Math.min(subCount, 100)}%`, height: '100%', background: 'var(--c-lime)', borderRadius: '2px', transition: 'width 0.5s' }} />
+                  <div style={{ width: `${Math.min(subCount, 100)}%`, height: '100%', background: 'var(--bw-white)', borderRadius: '2px', transition: 'width 0.5s' }} />
                 </div>
                 <span style={{ fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--c-muted)' }}>{subCount} / 100명</span>
               </div>
@@ -422,7 +422,7 @@ export default function HomePage() {
         <a href="/advertise" style={{ display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:'4px', width:'100%', minHeight:'80px', background:'var(--c-gray-1)', border:'1px dashed var(--c-gray-4)', textDecoration:'none', padding:'16px', boxSizing:'border-box' }}>
           <div style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--c-gray-5)', letterSpacing:'2px' }}>ADVERTISEMENT</div>
           <div style={{ fontFamily:'var(--f-sans)', fontSize:'13px', color:'var(--c-muted)', textAlign:'center' }}>이 공간에 광고를 게재하세요 — 청소년 창업가들에게 브랜드를 알리세요</div>
-          <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-gold)' }}>광고 문의 →</div>
+          <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--bw-200)' }}>광고 문의 →</div>
         </a>
       </div>
 
@@ -439,7 +439,7 @@ export default function HomePage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div style={{
               width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0,
-              background: 'linear-gradient(135deg, #F59E0B, #D97706)',
+              background: 'linear-gradient(135deg, var(--bw-200), #D97706)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px'
             }}>⚡</div>
             <div>
@@ -454,7 +454,7 @@ export default function HomePage() {
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: '5px',
             padding: '8px 16px', borderRadius: '8px',
-            background: '#F59E0B', color: '#000',
+            background: 'var(--bw-200)', color: '#000',
             fontWeight: 700, fontSize: '13px', flexShrink: 0, whiteSpace: 'nowrap'
           }}>포트폴리오 등록 →</div>
         </a>
@@ -499,7 +499,7 @@ export default function HomePage() {
                 <img src={magazineFeature.cover_image} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.3 }} />
               )}
               <div style={{ position: 'relative', zIndex: 1 }}>
-                <span style={{ background: 'var(--c-gold)', color: 'var(--c-ink)', fontFamily: 'var(--f-mono)', fontSize: '10px', fontWeight: 700, letterSpacing: '2px', padding: '4px 10px', marginBottom: '14px', display: 'inline-block' }}>COVER FEATURE</span>
+                <span style={{ background: 'var(--bw-white)', color: 'var(--c-ink)', fontFamily: 'var(--f-mono)', fontSize: '10px', fontWeight: 700, letterSpacing: '2px', padding: '4px 10px', marginBottom: '14px', display: 'inline-block' }}>COVER FEATURE</span>
                 <h2 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(20px, 3vw, 26px)', fontWeight: 700, lineHeight: 1.25, marginBottom: '10px' }}>{magazineFeature.title}</h2>
                 <p style={{ color: 'var(--c-gray-7)', fontSize: '13px', lineHeight: 1.65, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{magazineFeature.excerpt}</p>
               </div>
@@ -557,7 +557,7 @@ export default function HomePage() {
         <div style={{ background: 'var(--c-gray-1)', padding: '40px var(--pad-x)', border: '1px solid var(--c-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '24px', flexWrap: 'wrap' }}>
           <div>
             <h2 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(20px, 3vw, 26px)', fontWeight: 700, marginBottom: '8px' }}>
-              기업과 <span style={{ color: 'var(--c-gold)' }}>청소년 창업가</span>를 연결합니다
+              기업과 <span style={{ color: 'var(--bw-200)' }}>청소년 창업가</span>를 연결합니다
             </h2>
             <p style={{ color: 'var(--c-muted)', fontSize: '14px', maxWidth: '480px', lineHeight: 1.7 }}>
               실제 프로젝트를 통해 경험을 쌓고, 기업은 신선한 시각의 인재를 만납니다.
