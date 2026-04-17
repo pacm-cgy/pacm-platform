@@ -188,10 +188,10 @@ export default function ArticlePage() {
               {article.profiles?.display_name || 'Insightship 에디터'}
             </div>
             {article.profiles?.startup_name && (
-              <div style={{ fontSize:'11px', color:'var(--c-muted)' }}>{article.profiles.startup_name}</div>
+              <div style={{ fontSize:'11px', color:'var(--text-3)' }}>{article.profiles.startup_name}</div>
             )}
           </div>
-          <div style={{ display:'flex', gap:'12px', alignItems:'center', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--c-muted)', flexShrink:0 }}>
+          <div style={{ display:'flex', gap:'12px', alignItems:'center', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--text-3)', flexShrink:0 }}>
             {article.published_at && (
               <span>{format(new Date(article.published_at), 'yyyy.MM.dd', { locale: ko })}</span>
             )}
@@ -212,35 +212,68 @@ export default function ArticlePage() {
             {summary ? (
               <>
                 {/* AI 요약 배지 */}
-                <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'20px', padding:'10px 16px', background:'rgba(249,115,22,0.08)', border:'1px solid rgba(249,115,22,0.2)' }}>
-                  <span style={{ fontSize:'14px' }}>✨</span>
-                  <span style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--c-gold)', letterSpacing:'0.5px' }}>
-                    AI가 청소년 눈높이에 맞게 요약한 내용입니다
+                <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'24px', padding:'10px 16px', background:'var(--bw-900)', borderLeft:'2px solid var(--bw-white)' }}>
+                  <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--bw-white)', letterSpacing:'0.12em', textTransform:'uppercase' }}>
+                    INSIGHTSHIP AI v5 — 핵심 분석
                   </span>
                 </div>
 
-                {/* AI 요약 본문 (최대 2000자) */}
-                <div style={{ fontSize:'16px', lineHeight:1.95, color:'var(--c-gray-7)', letterSpacing:'-0.01em' }}>
-                  {summary.split('\n').map((para, i) =>
-                    para.trim()
-                      ? <p key={i} style={{ marginBottom:'18px' }}>{para}</p>
-                      : null
-                  )}
+                {/* AI v5 요약 본문 - What→Why→So What 구조 렌더링 */}
+                <div style={{ fontSize:'15px', lineHeight:1.95, color:'var(--text-2)', letterSpacing:'-0.01em' }}>
+                  {summary.split('\n').map((para, i) => {
+                    const t = para.trim()
+                    if (!t) return null
+                    // **섹션 헤더** 처리
+                    if (t.startsWith('**') && t.endsWith('**')) {
+                      const label = t.slice(2, -2)
+                      return (
+                        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--bw-500)', marginTop:'28px', marginBottom:'10px', paddingBottom:'6px', borderBottom:'1px solid var(--line-1)' }}>
+                          {label}
+                        </div>
+                      )
+                    }
+                    // *이탤릭* 메타 라인 (카테고리 태그)
+                    if (t.startsWith('*') && t.endsWith('*')) {
+                      return (
+                        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--bw-600)', marginTop:'24px', letterSpacing:'0.05em' }}>
+                          {t.slice(1, -1)}
+                        </div>
+                      )
+                    }
+                    // 이벤트 레이블 라인 (💰 · 도메인)
+                    if (t.includes(' · ') && i < 6) {
+                      return (
+                        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--bw-400)', marginBottom:'20px', letterSpacing:'0.05em' }}>
+                          {t}
+                        </div>
+                      )
+                    }
+                    // 불릿 항목
+                    if (t.startsWith('•')) {
+                      return (
+                        <div key={i} style={{ display:'flex', gap:'10px', marginBottom:'12px' }}>
+                          <span style={{ color:'var(--bw-500)', flexShrink:0 }}>—</span>
+                          <span>{t.slice(1).trim()}</span>
+                        </div>
+                      )
+                    }
+                    // 일반 단락
+                    return <p key={i} style={{ marginBottom:'14px' }}>{t}</p>
+                  })}
                 </div>
               </>
             ) : (
               /* 요약 없는 경우 - HTML 제거 후 안내 표시 */
               <div>
-                <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'20px', padding:'10px 16px', background:'rgba(99,102,241,0.08)', border:'1px solid rgba(99,102,241,0.2)' }}>
-                  <span style={{ fontSize:'14px' }}>⏳</span>
-                  <span style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'#818cf8', letterSpacing:'0.5px' }}>
-                    AI 요약이 곧 업데이트됩니다 — 원문 보기 버튼을 이용해 주세요
+                <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'20px', padding:'10px 16px', background:'var(--bw-900)', border:'1px solid var(--line-2)' }}>
+                  <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--bw-500)', letterSpacing:'0.12em', textTransform:'uppercase' }}>
+                    AI 분석 준비 중 — 잠시 후 업데이트됩니다
                   </span>
                 </div>
                 {(() => {
                   const raw = stripHtml(article.body || article.excerpt || '')
                   return raw ? (
-                    <div style={{ fontSize:'15px', lineHeight:1.85, color:'var(--c-gray-7)' }}>
+                    <div style={{ fontSize:'15px', lineHeight:1.85, color:'var(--text-2)' }}>
                       {raw.split('\n').map((para, i) =>
                         para.trim() ? <p key={i} style={{ marginBottom:'14px' }}>{para}</p> : null
                       )}
@@ -252,12 +285,12 @@ export default function ArticlePage() {
 
             {/* 원문 보기 버튼 */}
             {article.source_url && (
-              <div style={{ marginTop:'36px', padding:'20px 24px', background:'var(--c-gray-1)', border:'1px solid var(--c-border)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'16px', flexWrap:'wrap' }}>
+              <div style={{ marginTop:'36px', padding:'20px 24px', background:'var(--bw-900)', border:'1px solid var(--line-1)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'16px', flexWrap:'wrap' }}>
                 <div>
-                  <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-gold)', letterSpacing:'1.5px', marginBottom:'4px' }}>
+                  <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--bw-400)', letterSpacing:'1.5px', marginBottom:'4px' }}>
                     ORIGINAL SOURCE
                   </div>
-                  <div style={{ fontSize:'13px', color:'var(--c-muted)' }}>
+                  <div style={{ fontSize:'13px', color:'var(--text-3)' }}>
                     {article.source_name} — 원문 전체 읽기
                   </div>
                 </div>
@@ -274,7 +307,7 @@ export default function ArticlePage() {
           <>
             {article.cover_image && (
               <div style={{ marginBottom:'28px' }}>
-                <img src={article.cover_image} alt={article.title} style={{ width:'100%', border:'1px solid var(--c-border)' }}/>
+                <img src={article.cover_image} alt={article.title} style={{ width:'100%', border:'1px solid var(--line-1)' }}/>
               </div>
             )}
             <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(article.body || article.excerpt || '') }}/>
