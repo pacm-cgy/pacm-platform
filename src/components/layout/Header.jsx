@@ -195,7 +195,7 @@ export default function Header() {
                   <Link to="/profile" className="nav-item" onClick={() => setMobileOpen(false)}>
                     <User size={16} className="nav-item-icon" /> <span>프로필</span>
                   </Link>
-                  <button className="nav-item" onClick={handleLogout} style={{ color:'var(--rose)' }}>
+                  <button className="nav-item" onClick={handleLogout} style={{ color:'var(--bw-400)' }}>
                     <LogOut size={16} className="nav-item-icon" /> <span>로그아웃</span>
                   </button>
                 </>
@@ -244,7 +244,7 @@ export default function Header() {
                   width:36, height:36, borderRadius:'var(--r-md)',
                   background:'var(--brand-dim)', display:'flex',
                   alignItems:'center', justifyContent:'center',
-                  color:'var(--brand)', fontWeight:700, fontSize:14,
+                  color:'var(--bw-white)', fontWeight:700, fontSize:14,
                   fontFamily:'var(--f-mono)'
                 }}>
                   {(user.email?.[0] || 'U').toUpperCase()}
@@ -263,7 +263,7 @@ export default function Header() {
           <Bell size={16} color="var(--brand)" />
           <span className="notif-panel-title">알림</span>
           {unreadCount > 0 && (
-            <span className="badge badge-indigo" style={{ marginLeft:'auto' }}>{unreadCount}</span>
+            <span className="badge badge-white" style={{ marginLeft:'auto' }}>{unreadCount}</span>
           )}
           <button className="icon-btn" onClick={() => setNotifOpen(false)} style={{ marginLeft: unreadCount > 0 ? 8 : 'auto' }}>
             <X size={16} />
