@@ -5,6 +5,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  VERCEL_TOKEN: ${{ vars.VERCEL_TOKEN }}
+  VERCEL_ORG_ID: team_DJyDP6hZjv9D3y3BnW7W8sry
+  VERCEL_PROJECT_ID: prj_m7SNyydduLIrKv6yigVuoRnUZtUO
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -15,24 +20,22 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
 
       - name: Install dependencies
-        run: npm install
-
-      - name: Build
-        run: npm run build
-        env:
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: npm ci
 
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
-      - name: Deploy to Vercel (Production)
-        env:
-          VERCEL_TOKEN: ${{ vars.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: team_DJyDP6hZjv9D3y3BnW7W8sry
-          VERCEL_PROJECT_ID: prj_m7SNyydduLIrKv6yigVuoRnUZtUO
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+
+      - name: Build (vercel build)
+        run: vercel build --prod --token=$VERCEL_TOKEN
+
+      - name: Deploy prebuilt output
         run: |
-          vercel deploy --prod --prebuilt --token=$VERCEL_TOKEN --yes --force
-          echo "✅ Vercel 배포 완료"
+          vercel deploy --prod --prebuilt --token=$VERCEL_TOKEN --yes
+          echo "Done"
+
