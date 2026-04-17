@@ -11,17 +11,23 @@ const CATEGORY_LABELS = {
   magazine:'MAGAZINE', community:'COMMUNITY', opinion:'OPINION',
 }
 
-const CATEGORY_GRADIENTS = {
-  insight:   'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
-  story:     'linear-gradient(135deg, #0a0a0a 0%, #1a0a00 50%, #2d1200 100%)',
-  trend:     'linear-gradient(135deg, #0d1117 0%, #0d2137 50%, #0a3d62 100%)',
-  magazine:  'linear-gradient(135deg, #1a0a2e 0%, #2d1462 50%, #4a1982 100%)',
-  community: 'linear-gradient(135deg, #001a0d 0%, #003d1a 50%, #006629 100%)',
-  opinion:   'linear-gradient(135deg, #1a0000 0%, #3d0000 50%, #660000 100%)',
+const CATEGORY_BG = {
+  insight:   'var(--bw-900)',
+  story:     'var(--bw-800)',
+  trend:     'var(--bw-900)',
+  magazine:  'var(--bw-ink)',
+  community: 'var(--bw-800)',
+  opinion:   'var(--bw-900)',
 }
 
 const CATEGORY_ICONS = {
-  insight:   { icon: '💡', label: 'INSIGHT' },
+  insight:   { icon: '◆', label: 'INSIGHT' },
+  story:     { icon: '◇', label: 'STORY' },
+  trend:     { icon: '▲', label: 'TREND' },
+  magazine:  { icon: '■', label: 'MAGAZINE' },
+  community: { icon: '○', label: 'COMMUNITY' },
+  opinion:   { icon: '◉', label: 'OPINION' },
+},
   story:     { icon: '🎙️', label: 'STORY' },
   trend:     { icon: '📊', label: 'TREND' },
   magazine:  { icon: '📖', label: 'MAGAZINE' },
@@ -32,20 +38,20 @@ const CATEGORY_ICONS = {
 function CoverImage({ url, category, alt, title }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
-  const gradient = CATEGORY_GRADIENTS[category] || 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%)'
+  const bg = CATEGORY_BG[category] || 'var(--bw-900)'
   const catInfo = CATEGORY_ICONS[category] || { icon: '📄', label: 'ARTICLE' }
 
   return (
     <div style={{
       width: '100%', aspectRatio: '16/9', overflow: 'hidden',
-      position: 'relative', flexShrink: 0, background: gradient,
+      position: 'relative', flexShrink: 0, background: bg,
       transition: 'transform 0.3s ease',
     }}>
       {url && !error ? (
         <>
           {!loaded && (
             <div style={{
-              position: 'absolute', inset: 0, background: gradient,
+              position: 'absolute', inset: 0, background: bg,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               flexDirection: 'column', gap: '8px'
             }}>
@@ -125,7 +131,7 @@ export function ArticleCard({ article, onClick }) {
         <h3 style={{ fontFamily: 'var(--f-serif)', fontSize: '16px', fontWeight: 700, lineHeight: 1.4, flex: 1 }}>
           {article.title?.startsWith('[AI 정리본]') && (
             <span style={{
-              display: 'inline-block', background: 'var(--c-gold)', color: 'var(--c-ink)',
+              display: 'inline-block', background: 'var(--bw-white)', color: 'var(--bw-black)',
               fontFamily: 'var(--f-mono)', fontSize: '10px', fontWeight: 700,
               padding: '2px 6px', marginBottom: '6px', marginRight: '6px', verticalAlign: 'middle'
             }}>AI</span>
@@ -144,7 +150,7 @@ export function ArticleCard({ article, onClick }) {
             {article.source_url && (
               <a href={article.source_url} target="_blank" rel="noopener noreferrer"
                 onClick={e => e.stopPropagation()}
-                style={{ fontSize: '10px', color: 'var(--c-gold)', fontFamily: 'var(--f-mono)' }}>
+                style={{ fontSize: '10px', color: 'var(--bw-300)', fontFamily: 'var(--f-mono)' }}>
                 원문↗
               </a>
             )}
@@ -190,7 +196,7 @@ export function ArticleHero({ article, onClick }) {
       onClick={() => { if (onClick) return onClick(article); navigate(`/article/${article.slug}`) }}
       style={{ background: 'var(--c-card)', position: 'relative', overflow: 'hidden' }}
     >
-      <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', background: 'var(--c-gold)' }} />
+      <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', background: 'var(--bw-white)' }} />
       <div style={{ padding: '44px 44px 44px 52px' }}>
         <div className="t-eyebrow" style={{ marginBottom: '14px' }}>COVER STORY · {date}</div>
         <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: '32px', fontWeight: 700, lineHeight: 1.2, marginBottom: '16px' }}>
@@ -204,7 +210,7 @@ export function ArticleHero({ article, onClick }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           {article.read_time && (
             <span style={{
-              background: 'var(--c-gold)', color: 'var(--c-ink)',
+              background: 'var(--bw-white)', color: 'var(--bw-black)',
               fontFamily: 'var(--f-mono)', fontSize: '10px', fontWeight: 700, padding: '3px 8px'
             }}>{article.read_time} MIN READ</span>
           )}
