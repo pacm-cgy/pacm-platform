@@ -3,12 +3,20 @@ name: Deploy to Vercel
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Vercel Deploy
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Deploy to Vercel (Production)
+        env:
+          VERCEL_TOKEN: ${{ vars.VERCEL_TOKEN }}
         run: |
-          curl -s -X POST "https://api.vercel.com/v1/integrations/deploy/prj_m7SNyydduLIrKv6yigVuoRnUZtUO/Vxu5ebhhcp" || true
-          echo "Deploy triggered (hook may be expired - using direct API)"
+          vercel deploy --prod --token=$VERCEL_TOKEN --yes
+          echo "✅ Vercel 배포 완료"
