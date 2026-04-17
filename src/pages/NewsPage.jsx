@@ -6,9 +6,9 @@ import { ko } from 'date-fns/locale'
 import { supabase } from '../lib/supabase'
 
 const CATEGORY_COLORS = {
-  funding: '#D4AF37', ai: '#38bdf8', ai_startup: '#38bdf8', edutech: '#f97316',
-  youth: '#a78bfa', entrepreneurship: '#34d399', unicorn: '#f472b6',
-  climate: '#4ade80', health: '#fb7185', fintech: '#60a5fa', general: '#9ca3af',
+  funding: '#E8E8E4', ai: '#C8C8C0', ai_startup: '#C8C8C0', edutech: '#B0B0A8',
+  youth: '#989890', entrepreneurship: '#808078', unicorn: '#686860',
+  climate: '#505048', health: '#383830', fintech: '#202018', general: '#6B6B63',
 }
 const CATEGORY_KO = {
   funding: '투자/펀딩', ai: 'AI', ai_startup: 'AI', edutech: '에듀테크',
@@ -56,7 +56,7 @@ function NewsRow({ article, index }) {
     >
       {/* 색상 도트 */}
       <div style={{ flexShrink: 0, paddingTop: '7px' }}>
-        <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: catColor, opacity: 0.8 }} />
+        <div style={{ width: '6px', height: '6px', borderRadius: '0', background: 'var(--bw-white)', border: '1px solid var(--bw-600)', opacity: 0.9 }} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         {/* 제목 */}
@@ -72,7 +72,7 @@ function NewsRow({ article, index }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <span style={{
             fontFamily: 'var(--f-mono)', fontSize: '10px', letterSpacing: '0.3px',
-            color: catColor, padding: '1px 5px', border: `1px solid ${catColor}44`,
+            color: 'var(--bw-600)', padding: '1px 5px', border: '1px solid var(--bw-400)',
           }}>
             {catKo}
           </span>
