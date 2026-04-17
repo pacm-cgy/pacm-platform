@@ -11,12 +11,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
       - name: Deploy to Vercel (Production)
         env:
           VERCEL_TOKEN: ${{ vars.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: team_DJyDP6hZjv9D3y3BnW7W8sry
+          VERCEL_PROJECT_ID: prj_m7SNyydduLIrKv6yigVuoRnUZtUO
         run: |
-          vercel deploy --prod --token=$VERCEL_TOKEN --yes
+          vercel deploy --prod --prebuilt --token=$VERCEL_TOKEN --yes --force
           echo "✅ Vercel 배포 완료"
