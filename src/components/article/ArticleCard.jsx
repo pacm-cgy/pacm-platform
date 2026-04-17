@@ -27,19 +27,13 @@ const CATEGORY_ICONS = {
   magazine:  { icon: '■', label: 'MAGAZINE' },
   community: { icon: '○', label: 'COMMUNITY' },
   opinion:   { icon: '◉', label: 'OPINION' },
-},
-  story:     { icon: '🎙️', label: 'STORY' },
-  trend:     { icon: '📊', label: 'TREND' },
-  magazine:  { icon: '📖', label: 'MAGAZINE' },
-  community: { icon: '👥', label: 'COMMUNITY' },
-  opinion:   { icon: '✍️', label: 'OPINION' },
 }
 
 function CoverImage({ url, category, alt, title }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
   const bg = CATEGORY_BG[category] || 'var(--bw-900)'
-  const catInfo = CATEGORY_ICONS[category] || { icon: '📄', label: 'ARTICLE' }
+  const catInfo = CATEGORY_ICONS[category] || { icon: '□', label: 'ARTICLE' }
 
   return (
     <div style={{
