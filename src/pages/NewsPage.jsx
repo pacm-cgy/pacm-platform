@@ -38,7 +38,6 @@ function NewsRow({ article, index }) {
   const date = article.published_at
     ? format(new Date(article.published_at), 'M월 d일', { locale: ko })
     : ''
-  // catColor 제거 - BW 시스템
   const catKo = CATEGORY_KO[article.ai_category] || '뉴스'
   const cleanedTitle = cleanTitle(article.title)
 
