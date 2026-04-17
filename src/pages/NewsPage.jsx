@@ -38,7 +38,7 @@ function NewsRow({ article, index }) {
   const date = article.published_at
     ? format(new Date(article.published_at), 'M월 d일', { locale: ko })
     : ''
-  const catColor = CATEGORY_COLORS[article.ai_category] || '#9ca3af'
+  // catColor 제거 - BW 시스템
   const catKo = CATEGORY_KO[article.ai_category] || '뉴스'
   const cleanedTitle = cleanTitle(article.title)
 
@@ -47,11 +47,11 @@ function NewsRow({ article, index }) {
       onClick={() => navigate(`/article/${article.slug}`)}
       style={{
         display: 'flex', alignItems: 'flex-start', gap: '14px',
-        padding: '13px 0', borderBottom: '1px solid var(--c-border)',
+        padding: '13px 0', borderBottom: '1px solid var(--line-1)',
         cursor: 'pointer', transition: 'background 0.1s',
         margin: '0 -4px', padding: '13px 4px',
       }}
-      onMouseEnter={e => e.currentTarget.style.background = 'var(--c-gray-1)'}
+      onMouseEnter={e => e.currentTarget.style.background = 'var(--bw-900)'}
       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
     >
       {/* 색상 도트 */}
@@ -62,12 +62,25 @@ function NewsRow({ article, index }) {
         {/* 제목 */}
         <div style={{
           fontFamily: 'var(--f-serif)', fontSize: '15px', fontWeight: 600,
-          lineHeight: 1.55, color: 'var(--c-paper)', marginBottom: '5px',
+          lineHeight: 1.55, color: 'var(--bw-white)', marginBottom: '5px',
           overflow: 'hidden', textOverflow: 'ellipsis',
           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
         }}>
           {cleanedTitle}
         </div>
+        {/* AI 요약 미리보기 - 핵심 내용 첫 줄 */}
+        {article.ai_summary && (() => {
+          const lines = article.ai_summary.split('\n').filter(l => {
+            const t = l.trim()
+            return t && !t.startsWith('**') && !t.startsWith('*') && !t.startsWith('•') && !t.includes(' · ') && t.length > 20
+          })
+          const preview = lines[0] || ''
+          return preview ? (
+            <div style={{ fontSize:'12px', color:'var(--bw-400)', lineHeight:1.65, marginBottom:'6px', overflow:'hidden', textOverflow:'ellipsis', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical' }}>
+              {preview}
+            </div>
+          ) : null
+        })()}
         {/* 메타 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <span style={{
@@ -76,12 +89,17 @@ function NewsRow({ article, index }) {
           }}>
             {catKo}
           </span>
+          {article.ai_version && (
+            <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--bw-700)', letterSpacing:'0.05em' }}>
+              AI
+            </span>
+          )}
           {article.source_name && (
-            <span style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gray-5)' }}>
+            <span style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--bw-600)' }}>
               {article.source_name}
             </span>
           )}
-          <span style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gray-5)' }}>
+          <span style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--bw-600)' }}>
             {date}
           </span>
         </div>
@@ -92,8 +110,8 @@ function NewsRow({ article, index }) {
 
 function NewsRowSkeleton() {
   return (
-    <div style={{ padding: '13px 0', borderBottom: '1px solid var(--c-border)', display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
-      <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--c-gray-3)', flexShrink: 0, marginTop: '7px' }} />
+    <div style={{ padding: '13px 0', borderBottom: '1px solid var(--line-1)', display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+      <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--bw-700)', flexShrink: 0, marginTop: '7px' }} />
       <div style={{ flex: 1 }}>
         <div className="skeleton" style={{ height: '16px', width: '85%', marginBottom: '8px' }} />
         <div className="skeleton" style={{ height: '16px', width: '60%', marginBottom: '8px' }} />
@@ -134,7 +152,7 @@ export default function NewsPage() {
     try {
       let q = supabase
         .from('articles')
-        .select('id,title,slug,ai_category,source_name,published_at', { count: 'exact' })
+        .select('id,title,slug,ai_category,source_name,published_at,ai_summary,ai_version', { count: 'exact' })
         .eq('status', 'published')
         .not('source_name', 'is', null)
         .order('published_at', { ascending: false })
@@ -212,25 +230,25 @@ export default function NewsPage() {
   return (
     <div style={{ paddingBottom: '100px' }}>
       {/* 헤더 */}
-      <div style={{ padding: '28px 0 0', borderBottom: '1px solid var(--c-border)' }}>
+      <div style={{ padding: '28px 0 0', borderBottom: '1px solid var(--line-1)' }}>
         <div className="container">
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
             <div>
-              <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--brand)', letterSpacing: '3px', marginBottom: '6px' }}>
+              <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--bw-white)', letterSpacing: '3px', marginBottom: '6px' }}>
                 STARTUP NEWS
               </div>
               <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(20px,4vw,28px)', fontWeight: 700, marginBottom: '4px' }}>
                 창업 뉴스
               </h1>
-              <p style={{ fontSize: '13px', color: 'var(--c-muted)' }}>
+              <p style={{ fontSize: '13px', color: 'var(--bw-500)' }}>
                 국내외 스타트업·창업 생태계 최신 뉴스 — AI 요약으로 빠르게 읽기
               </p>
             </div>
             <button
               onClick={handleRefresh}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: '1px solid var(--c-border)', color: 'var(--c-muted)', padding: '8px 12px', cursor: 'pointer', fontFamily: 'var(--f-mono)', fontSize: '11px', transition: 'all 0.12s', flexShrink: 0 }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--brand)'; e.currentTarget.style.color = 'var(--brand)' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--c-border)'; e.currentTarget.style.color = 'var(--c-muted)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: '1px solid var(--line-1)', color: 'var(--bw-500)', padding: '8px 12px', cursor: 'pointer', fontFamily: 'var(--f-mono)', fontSize: '11px', transition: 'all 0.12s', flexShrink: 0 }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--bw-white)'; e.currentTarget.style.color = 'var(--bw-white)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--line-1)'; e.currentTarget.style.color = 'var(--bw-500)' }}
             >
               <RefreshCw size={12} className={isLoading ? 'spin' : ''} />
               새로고침
@@ -239,24 +257,24 @@ export default function NewsPage() {
 
           {/* 검색 */}
           <form onSubmit={handleSearch} style={{ marginBottom: '14px', position: 'relative' }}>
-            <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--c-border)', background: 'var(--c-gray-1)', transition: 'border-color 0.15s' }}
-              onFocusCapture={e => e.currentTarget.style.borderColor = 'var(--brand)'}
-              onBlurCapture={e => e.currentTarget.style.borderColor = 'var(--c-border)'}
+            <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--line-1)', background: 'var(--bw-900)', transition: 'border-color 0.15s' }}
+              onFocusCapture={e => e.currentTarget.style.borderColor = 'var(--bw-white)'}
+              onBlurCapture={e => e.currentTarget.style.borderColor = 'var(--line-1)'}
             >
-              <Search size={14} color="var(--c-gray-5)" style={{ marginLeft: '12px', flexShrink: 0 }} />
+              <Search size={14} color="var(--bw-500)" style={{ marginLeft: '12px', flexShrink: 0 }} />
               <input
                 ref={searchRef}
                 value={searchInput}
                 onChange={e => setSearchInput(e.target.value)}
                 placeholder="뉴스 검색..."
-                style={{ flex: 1, padding: '10px 10px', background: 'transparent', border: 'none', outline: 'none', fontSize: '14px', color: 'var(--c-paper)' }}
+                style={{ flex: 1, padding: '10px 10px', background: 'transparent', border: 'none', outline: 'none', fontSize: '14px', color: 'var(--bw-white)' }}
               />
               {searchInput && (
-                <button type="button" onClick={clearSearch} style={{ background: 'none', border: 'none', padding: '0 10px', cursor: 'pointer', color: 'var(--c-gray-5)', display: 'flex', alignItems: 'center' }}>
+                <button type="button" onClick={clearSearch} style={{ background: 'none', border: 'none', padding: '0 10px', cursor: 'pointer', color: 'var(--bw-500)', display: 'flex', alignItems: 'center' }}>
                   <X size={14} />
                 </button>
               )}
-              <button type="submit" style={{ background: 'var(--brand)', border: 'none', color: '#1a1814', padding: '10px 16px', cursor: 'pointer', fontFamily: 'var(--f-mono)', fontSize: '11px', letterSpacing: '0.5px', fontWeight: 700, flexShrink: 0, transition: 'opacity 0.12s' }}
+              <button type="submit" style={{ background: 'var(--bw-white)', border: 'none', color: 'var(--bw-black)', padding: '10px 16px', cursor: 'pointer', fontFamily: 'var(--f-mono)', fontSize: '11px', letterSpacing: '0.5px', fontWeight: 700, flexShrink: 0, transition: 'opacity 0.12s' }}
                 onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
                 onMouseLeave={e => e.currentTarget.style.opacity = '1'}
               >
@@ -275,8 +293,8 @@ export default function NewsPage() {
                   padding: '7px 14px', border: 'none', cursor: 'pointer',
                   fontFamily: 'var(--f-mono)', fontSize: '11px', letterSpacing: '0.3px',
                   whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.12s',
-                  background: activeFilter === f.value ? 'var(--brand)' : 'var(--c-gray-2)',
-                  color: activeFilter === f.value ? '#1a1814' : 'var(--c-muted)',
+                  background: activeFilter === f.value ? 'var(--bw-white)' : 'var(--bw-900)',
+                  color: activeFilter === f.value ? 'var(--bw-black)' : 'var(--bw-500)',
                   fontWeight: activeFilter === f.value ? 700 : 400,
                   borderBottom: activeFilter === f.value ? 'none' : '2px solid transparent',
                 }}
@@ -290,11 +308,11 @@ export default function NewsPage() {
 
       {/* 카운트 + 검색 상태 */}
       <div className="container" style={{ paddingTop: '14px', paddingBottom: '4px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <span style={{ fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--c-gray-5)' }}>
+        <span style={{ fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--bw-500)' }}>
           {searchQuery ? `"${searchQuery}" 검색 결과` : activeFilter !== '전체' ? `${activeFilter}` : '전체'} · {total.toLocaleString()}건
         </span>
         {searchQuery && (
-          <button onClick={clearSearch} style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--brand)', background: 'none', border: 'none', cursor: 'pointer', padding: '0', display: 'flex', alignItems: 'center', gap: '3px' }}>
+          <button onClick={clearSearch} style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--bw-white)', background: 'none', border: 'none', cursor: 'pointer', padding: '0', display: 'flex', alignItems: 'center', gap: '3px' }}>
             <X size={10} /> 검색 초기화
           </button>
         )}
@@ -303,9 +321,9 @@ export default function NewsPage() {
       {/* 뉴스 목록 */}
       <div className="container">
         {articles.length === 0 && !isLoading ? (
-          <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--c-muted)' }}>
+          <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--bw-500)' }}>
             <div style={{ fontSize: '32px', marginBottom: '12px' }}>🔍</div>
-            <div style={{ fontFamily: 'var(--f-serif)', fontSize: '15px', color: 'var(--c-paper)', marginBottom: '6px' }}>
+            <div style={{ fontFamily: 'var(--f-serif)', fontSize: '15px', color: 'var(--bw-white)', marginBottom: '6px' }}>
               {searchQuery ? '검색 결과가 없습니다' : '뉴스가 없습니다'}
             </div>
             <div style={{ fontSize: '13px' }}>
@@ -326,7 +344,7 @@ export default function NewsPage() {
         .spin { animation: spin 0.8s linear infinite }
         .news-filter-wrap::-webkit-scrollbar { display: none }
         .skeleton {
-          background: linear-gradient(90deg, var(--c-gray-2) 25%, var(--c-gray-3) 50%, var(--c-gray-2) 75%);
+          background: linear-gradient(90deg, var(--bw-800) 25%, var(--bw-700) 50%, var(--bw-800) 75%);
           background-size: 200% 100%;
           animation: shimmer 1.4s infinite;
           border-radius: 2px;
