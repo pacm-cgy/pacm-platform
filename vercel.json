@@ -90,18 +90,6 @@
     {
       "path": "/api/generate-report",
       "schedule": "0 23 * * 5"
-    },
-    {
-      "path": "/api/fetch-news",
-      "schedule": "0 */6 * * *"
-    },
-    {
-      "path": "/api/news-cleanup",
-      "schedule": "30 0 * * *"
-    },
-    {
-      "path": "/api/summarize-news",
-      "schedule": "0 1 * * *"
     }
   ],
   "buildCommand": "npm run build",
