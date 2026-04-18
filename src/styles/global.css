@@ -1189,3 +1189,87 @@ button { cursor: pointer; border: none; background: none; font: inherit; color: 
   color: var(--bw-white);
   border-bottom-color: var(--bw-white);
 }
+
+/* ══════════════════════════════════════════════════════════════
+   알림 패널
+   ══════════════════════════════════════════════════════════════ */
+.notif-panel {
+  position: fixed;
+  top: 96px; /* --nav-h */
+  right: 0;
+  width: 320px;
+  max-height: calc(100vh - 96px);
+  background: var(--bw-ink);
+  border-left: 1px solid var(--line-1);
+  border-bottom: 1px solid var(--line-1);
+  z-index: 180;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.22s cubic-bezier(.4,0,.2,1);
+  box-shadow: -8px 0 32px rgba(0,0,0,0.4);
+  border-radius: 0 0 0 var(--r-xl);
+}
+.notif-panel.open {
+  transform: translateX(0);
+}
+.notif-panel-hd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line-1);
+  flex-shrink: 0;
+}
+.notif-panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.notif-list {
+  overflow-y: auto;
+  flex: 1;
+}
+.notif-item {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line-1);
+  transition: background 0.1s;
+}
+.notif-item:hover { background: var(--bg-3); }
+.notif-item.unread { background: rgba(99,102,241,0.06); }
+.notif-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  width: 28px;
+  text-align: center;
+}
+.notif-content { flex: 1; min-width: 0; }
+.notif-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-1);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.notif-body {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+.notif-time {
+  font-size: 11px;
+  color: var(--text-4);
+  font-family: var(--f-mono);
+}
+.notif-dot {
+  position: absolute;
+  top: 6px; right: 6px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #6366F1;
+  border: 1px solid var(--bw-black);
+}
