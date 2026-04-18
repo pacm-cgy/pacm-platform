@@ -11,6 +11,16 @@ const CATEGORY_LABELS = {
   insight: 'INSIGHT', story: 'FOUNDER STORY', trend: 'TREND',
   magazine: 'MAGAZINE', community: 'COMMUNITY', opinion: 'OPINION', news: 'NEWS',
 }
+const ARTICLE_CATEGORY_COLOR = {
+  insight: '#818cf8', story: '#c4b5fd', trend: '#fb923c',
+  magazine: '#38bdf8', community: '#34d399', opinion: '#fb7185', news: '#9ca3af',
+}
+const ARTICLE_CATEGORY_BG = {
+  insight: 'rgba(99,102,241,0.12)', story: 'rgba(139,92,246,0.12)',
+  trend: 'rgba(249,115,22,0.12)', magazine: 'rgba(56,189,248,0.12)',
+  community: 'rgba(16,185,129,0.12)', opinion: 'rgba(244,63,94,0.12)',
+  news: 'rgba(156,163,175,0.12)',
+}
 const CATEGORY_COLORS = {
   funding: '#D4AF37', ai: '#38bdf8', ai_startup: '#38bdf8', edutech: '#f97316',
   youth: '#a78bfa', entrepreneurship: '#34d399', unicorn: '#f472b6',
@@ -110,12 +120,13 @@ export default function ArticlePage() {
       <div style={{ fontFamily:'var(--f-serif)', fontSize:'20px', marginBottom:'16px', color:'var(--c-paper)' }}>
         아티클을 찾을 수 없습니다
       </div>
-      <button className="btn btn-gold" onClick={() => navigate(-1)}>돌아가기</button>
+      <button className="btn" style={{ background:'#6366F1', color:'#fff', border:'none', padding:'8px 20px', cursor:'pointer' }} onClick={() => navigate(-1)}>돌아가기</button>
     </div>
   )
 
   const isNews = !!article.source_name
-  const catColor = CATEGORY_COLORS[article.ai_category] || 'var(--c-gold)'
+  const catColor = ARTICLE_CATEGORY_COLOR[article.category] || CATEGORY_COLORS[article.ai_category] || '#818cf8'
+  const catBgColor = ARTICLE_CATEGORY_BG[article.category] || 'rgba(99,102,241,0.12)'
 
   // AI 요약 최대 2000자 처리
   // HTML 태그 완전 제거 (excerpt/body 보호)
@@ -161,7 +172,7 @@ export default function ArticlePage() {
 
         {/* 카테고리 배지 */}
         <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'16px', flexWrap:'wrap' }}>
-          <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', letterSpacing:'2px', color:catColor, border:`1px solid ${catColor}`, padding:'3px 9px' }}>
+          <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', letterSpacing:'2px', color:catColor, background:catBgColor, border:`1px solid ${catColor}44`, padding:'3px 9px', borderRadius:'2px' }}>
             {CATEGORY_LABELS[article.category] || 'NEWS'}
           </span>
           {article.source_name && (
@@ -227,15 +238,15 @@ export default function ArticlePage() {
                     if (t.startsWith('**') && t.endsWith('**')) {
                       const label = t.slice(2, -2)
                       return (
-                        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--bw-500)', marginTop:'28px', marginBottom:'10px', paddingBottom:'6px', borderBottom:'1px solid var(--line-1)' }}>
-                          {label}
+                        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', letterSpacing:'0.15em', textTransform:'uppercase', color:'#6366F1', marginTop:'28px', marginBottom:'10px', paddingBottom:'6px', borderBottom:'1px solid rgba(99,102,241,0.2)', display:'flex', alignItems:'center', gap:'6px' }}>
+                          <span style={{ color:'#818cf8' }}>◆</span> {label}
                         </div>
                       )
                     }
                     // *이탤릭* 메타 라인 (카테고리 태그)
                     if (t.startsWith('*') && t.endsWith('*')) {
                       return (
-                        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--bw-600)', marginTop:'24px', letterSpacing:'0.05em' }}>
+                        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--bw-400)', marginTop:'24px', letterSpacing:'0.08em' }}>
                           {t.slice(1, -1)}
                         </div>
                       )
@@ -252,7 +263,7 @@ export default function ArticlePage() {
                     if (t.startsWith('•')) {
                       return (
                         <div key={i} style={{ display:'flex', gap:'10px', marginBottom:'12px' }}>
-                          <span style={{ color:'var(--bw-500)', flexShrink:0 }}>—</span>
+                          <span style={{ color:'#6366F1', flexShrink:0 }}>▸</span>
                           <span>{t.slice(1).trim()}</span>
                         </div>
                       )
