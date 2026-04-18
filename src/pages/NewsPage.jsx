@@ -6,9 +6,16 @@ import { ko } from 'date-fns/locale'
 import { supabase } from '../lib/supabase'
 
 const CATEGORY_COLORS = {
-  funding: '#E8E8E4', ai: '#C8C8C0', ai_startup: '#C8C8C0', edutech: '#B0B0A8',
-  youth: '#989890', entrepreneurship: '#808078', unicorn: '#686860',
-  climate: '#505048', health: '#383830', fintech: '#202018', general: '#6B6B63',
+  funding: '#F59E0B', ai: '#818cf8', ai_startup: '#818cf8', edutech: '#38bdf8',
+  youth: '#34d399', entrepreneurship: '#c4b5fd', unicorn: '#fb7185',
+  climate: '#86efac', health: '#67e8f9', fintech: '#fb923c', general: '#9CA3AF',
+}
+const CATEGORY_BG = {
+  funding: 'rgba(245,158,11,0.12)', ai: 'rgba(129,140,248,0.12)', ai_startup: 'rgba(129,140,248,0.12)',
+  edutech: 'rgba(56,189,248,0.12)', youth: 'rgba(52,211,153,0.12)',
+  entrepreneurship: 'rgba(196,181,253,0.12)', unicorn: 'rgba(251,113,133,0.12)',
+  climate: 'rgba(134,239,172,0.12)', health: 'rgba(103,232,249,0.12)',
+  fintech: 'rgba(251,146,60,0.12)', general: 'rgba(156,163,175,0.12)',
 }
 const CATEGORY_KO = {
   funding: '투자/펀딩', ai: 'AI', ai_startup: 'AI', edutech: '에듀테크',
@@ -53,9 +60,9 @@ function NewsRow({ article, index }) {
       onMouseEnter={e => e.currentTarget.style.background = 'var(--bw-900)'}
       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
     >
-      {/* 색상 도트 */}
+      {/* 카테고리 컬러 도트 */}
       <div style={{ flexShrink: 0, paddingTop: '7px' }}>
-        <div style={{ width: '6px', height: '6px', borderRadius: '0', background: 'var(--bw-white)', border: '1px solid var(--bw-600)', opacity: 0.9 }} />
+        <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: CATEGORY_COLORS[article.ai_category] || 'var(--bw-400)', opacity: 0.9 }} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         {/* 제목 */}
@@ -84,7 +91,11 @@ function NewsRow({ article, index }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <span style={{
             fontFamily: 'var(--f-mono)', fontSize: '10px', letterSpacing: '0.3px',
-            color: 'var(--bw-600)', padding: '1px 5px', border: '1px solid var(--bw-400)',
+            color: CATEGORY_COLORS[article.ai_category] || 'var(--bw-400)',
+            background: CATEGORY_BG[article.ai_category] || 'transparent',
+            padding: '1px 6px',
+            border: `1px solid ${CATEGORY_COLORS[article.ai_category] || 'var(--bw-600)'}44`,
+            borderRadius: '2px',
           }}>
             {catKo}
           </span>
@@ -292,10 +303,10 @@ export default function NewsPage() {
                   padding: '7px 14px', border: 'none', cursor: 'pointer',
                   fontFamily: 'var(--f-mono)', fontSize: '11px', letterSpacing: '0.3px',
                   whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.12s',
-                  background: activeFilter === f.value ? 'var(--bw-white)' : 'var(--bw-900)',
-                  color: activeFilter === f.value ? 'var(--bw-black)' : 'var(--bw-500)',
+                  background: activeFilter === f.value ? 'rgba(99,102,241,0.15)' : 'var(--bw-900)',
+                  color: activeFilter === f.value ? '#a5b4fc' : 'var(--bw-500)',
                   fontWeight: activeFilter === f.value ? 700 : 400,
-                  borderBottom: activeFilter === f.value ? 'none' : '2px solid transparent',
+                  borderBottom: activeFilter === f.value ? '2px solid #6366F1' : '2px solid transparent',
                 }}
               >
                 {f.label}
