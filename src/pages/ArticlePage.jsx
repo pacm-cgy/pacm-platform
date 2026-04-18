@@ -259,7 +259,7 @@ export default function ArticlePage() {
   }
 
   const summary = article.ai_summary
-    ? article.ai_summary.slice(0, 2000)
+    ? article.ai_summary
     : null
 
   return (
