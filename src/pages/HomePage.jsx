@@ -28,7 +28,7 @@ function TrendCard({ snapshot }) {
   const isUp = (snapshot.change_pct || 0) > 0
   const isDown = (snapshot.change_pct || 0) < 0
   const Icon = isUp ? TrendingUp : isDown ? TrendingDown : Minus
-  const color = isUp ? 'var(--c-green)' : isDown ? 'var(--c-red)' : 'var(--c-muted)'
+  const color = isUp ? '#22C55E' : isDown ? '#EF4444' : 'var(--bw-500)'
   const barColor = isUp ? '#22c55e' : isDown ? 'var(--bw-400)' : '#6b7280'
   const ICONS = { ai_startup: '🤖', edutech: '📚', social: '🌱', youth: '🚀' }
 
@@ -42,7 +42,7 @@ function TrendCard({ snapshot }) {
         <div style={{
           display: 'flex', alignItems: 'center', gap: '3px',
           fontFamily: 'var(--f-mono)', fontSize: '10px', color,
-          background: isUp ? 'rgba(34,197,94,0.1)' : isDown ? 'rgba(239,68,68,0.1)' : 'rgba(107,114,128,0.1)',
+          background: isUp ? 'rgba(34,197,94,0.15)' : isDown ? 'rgba(239,68,68,0.15)' : 'rgba(107,114,128,0.1)',
           padding: '2px 6px', borderRadius: '2px',
         }}>
           <Icon size={9} />
@@ -142,7 +142,7 @@ function Newsletter() {
 
   return (
     <section style={{
-      background: 'linear-gradient(135deg, var(--c-gray-1) 0%, #0d0d1a 100%)',
+      background: 'linear-gradient(135deg, #0f0f1a 0%, #1a1025 100%)',
       padding: '64px var(--pad-x)',
       border: '1px solid var(--c-border)',
       position: 'relative', overflow: 'hidden',
@@ -151,14 +151,14 @@ function Newsletter() {
       <div style={{
         position: 'absolute', top: '-60px', right: '-60px',
         width: '300px', height: '300px',
-        background: 'radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%)',
         pointerEvents: 'none',
       }} />
       <div style={{ position: 'relative', zIndex: 1, maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
         <div style={{
           display: 'inline-block',
-          background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)',
-          color: '#818cf8', fontFamily: 'var(--f-mono)', fontSize: '10px',
+          background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)',
+          color: '#a5b4fc', fontFamily: 'var(--f-mono)', fontSize: '10px',
           letterSpacing: '2px', padding: '4px 12px', marginBottom: '20px',
         }}>
           PACM WEEKLY · 무료 뉴스레터
@@ -184,8 +184,8 @@ function Newsletter() {
         </div>
         {done ? (
           <div style={{
-            background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)',
-            color: 'var(--c-green)', fontFamily: 'var(--f-serif)', fontSize: '16px',
+            background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.4)',
+            color: '#22C55E', fontFamily: 'var(--f-serif)', fontSize: '16px',
             padding: '20px', textAlign: 'center',
           }}>
             ✓ 구독 완료! 다음 월요일 아침에 첫 인사이트가 도착합니다.
@@ -205,7 +205,7 @@ function Newsletter() {
                 disabled={subscribe.isPending}
                 style={{
                   flexShrink: 0, borderRadius: '0 2px 2px 0',
-                  background: 'var(--bw-800)', color: '#fff',
+                  background: '#6366F1', color: '#fff',
                   fontFamily: 'var(--f-mono)', fontSize: '12px',
                   fontWeight: 700, letterSpacing: '1px',
                   padding: '0 20px', border: 'none', cursor: 'pointer',
@@ -280,7 +280,7 @@ export default function HomePage() {
         <div
           onClick={() => navigate(`/community/${activeNotice.id}`)}
           style={{
-            background: 'rgba(249,115,22,0.1)', borderBottom: '1px solid rgba(249,115,22,0.25)',
+            background: 'rgba(249,115,22,0.12)', borderBottom: '1px solid rgba(249,115,22,0.35)',
             padding: '10px 0', cursor: 'pointer', userSelect: 'none',
           }}
         >
@@ -359,14 +359,14 @@ export default function HomePage() {
       <section style={{ marginTop: '32px' }}>
         <a href="/community" style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: 'var(--bw-800) 0%, #4f46e5 100%)',
+          background: 'linear-gradient(135deg, #3730a3 0%, #4f46e5 100%)',
           borderRadius: '12px', padding: '20px 28px', textDecoration: 'none',
-          border: '1px solid rgba(99,102,241,0.4)', gap: '16px',
+          border: '1px solid rgba(99,102,241,0.5)', gap: '16px',
           flexWrap: 'wrap'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div style={{
-              background: 'rgba(255,255,255,0.15)', borderRadius: '8px',
+              background: 'rgba(255,255,255,0.18)', borderRadius: '8px',
               padding: '8px 12px', fontFamily: 'var(--f-mono)', fontSize: '11px',
               color: '#c7d2fe', letterSpacing: '0.1em', whiteSpace: 'nowrap'
             }}>CHALLENGE S1</div>
@@ -374,13 +374,13 @@ export default function HomePage() {
               <div style={{ fontFamily: 'var(--f-serif)', fontSize: '17px', fontWeight: 700, color: '#fff', marginBottom: '3px' }}>
                 🚀 PACM 창업 챌린지 — "AI로 학교 문제 해결하기"
               </div>
-              <div style={{ fontFamily: 'var(--f-sans)', fontSize: '12px', color: '#c7d2fe' }}>
+              <div style={{ fontFamily: 'var(--f-sans)', fontSize: '13px', color: '#c7d2fe', opacity: 0.9 }}>
                 4월 20일까지 · 우수 아이디어 메인 게재 · 대표 직접 피드백
               </div>
             </div>
           </div>
           <div style={{
-            background: 'var(--bg-1)', color: 'var(--c-indigo)', borderRadius: '6px',
+            background: 'rgba(99,102,241,0.1)', color: '#818cf8', borderRadius: '6px',
             padding: '8px 16px', fontFamily: 'var(--f-mono)', fontSize: '12px',
             fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0
           }}>참여하기 →</div>
@@ -402,7 +402,7 @@ export default function HomePage() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <div style={{ flex: 1, height: '4px', background: 'var(--c-border)', borderRadius: '2px', maxWidth: '200px' }}>
-                  <div style={{ width: `${Math.min(subCount, 100)}%`, height: '100%', background: 'var(--bw-white)', borderRadius: '2px', transition: 'width 0.5s' }} />
+                  <div style={{ width: `${Math.min(subCount, 100)}%`, height: '100%', background: '#6366F1'ar(--bw-white)', borderRadius: '2px', transition: 'width 0.5s' }} />
                 </div>
                 <span style={{ fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--c-muted)' }}>{subCount} / 100명</span>
               </div>
@@ -432,14 +432,14 @@ export default function HomePage() {
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             gap: '16px', flexWrap: 'wrap',
-            background: 'linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(245,158,11,0.03) 100%)',
-            border: '1px solid rgba(245,158,11,0.25)', borderRadius: '12px',
+            background: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(245,158,11,0.05) 100%)',
+            border: '1px solid rgba(245,158,11,0.35)', borderRadius: '8px',
             padding: '18px 24px', textDecoration: 'none',
           }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div style={{
               width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0,
-              background: 'linear-gradient(135deg, var(--bw-200), #D97706)',
+              background: 'linear-gradient(135deg, #F59E0B, #D97706)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px'
             }}>⚡</div>
             <div>
