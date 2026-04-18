@@ -541,7 +541,6 @@ def update_summary(article_id, summary, domain):
     data = json.dumps({
         "ai_summary": summary,
         "ai_category": domain,
-        "ai_processed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }).encode()
     req = urllib.request.Request(url, data=data, headers={
         "apikey":cfg["key"],"Authorization":f"Bearer {cfg['key']}",
