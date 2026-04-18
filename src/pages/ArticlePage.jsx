@@ -27,6 +27,113 @@ const CATEGORY_COLORS = {
   climate: '#4ade80', health: '#fb7185', fintech: '#60a5fa', general: '#9ca3af',
 }
 
+function parseBold(text) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/)
+  if (parts.length === 1) return text
+  return parts.map((p, i) => {
+    if (p.startsWith('**') && p.endsWith('**')) {
+      return <strong key={i} style={{ color:'var(--bw-white)', fontWeight:700 }}>{p.slice(2,-2)}</strong>
+    }
+    return p
+  })
+}
+
+function renderV7Summary(text) {
+  if (!text) return null
+  const lines = text.split('\n')
+  const elements = []
+  let i = 0
+  while (i < lines.length) {
+    const t = lines[i].trim()
+
+    // 메타 라인 [길이: N자] 숨김
+    if (t.startsWith('[길이:') || t.startsWith('[커버리지:')) { i++; continue }
+
+    // HR 구분선
+    if (t === '---') {
+      elements.push(<hr key={i} style={{ border:'none', borderTop:'1px solid var(--line-1)', margin:'28px 0' }}/>)
+      i++; continue
+    }
+
+    // 빈 줄
+    if (!t) { i++; continue }
+
+    // 이벤트·도메인 레이블 (💰 투자 유치 · 투자·금융)
+    if (i < 4 && /[💰🏛️🚀🤝🔬👤📊📰]/.test(t) && t.includes(' · ')) {
+      elements.push(
+        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--bw-400)', marginBottom:'20px', letterSpacing:'0.06em', display:'flex', alignItems:'center', gap:'6px' }}>
+          {t}
+        </div>
+      )
+      i++; continue
+    }
+
+    // 💡 심층 개념 헤더 (이모지로 시작하는 섹션 제목)
+    if (/^[💡📚📈🚀💭]/.test(t) && !t.startsWith('•')) {
+      elements.push(
+        <div key={i} style={{ fontFamily:'var(--f-serif)', fontSize:'17px', fontWeight:700, color:'var(--bw-white)', margin:'32px 0 16px', paddingBottom:'10px', borderBottom:'1px solid var(--line-1)' }}>
+          {t}
+        </div>
+      )
+      i++; continue
+    }
+
+    // **볼드 전체 헤더** (** 로 시작하고 끝나는 라인)
+    if (t.startsWith('**') && t.endsWith('**') && t.length > 4) {
+      const label = t.slice(2, -2)
+      elements.push(
+        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', letterSpacing:'0.14em', textTransform:'uppercase', color:'var(--bw-white)', opacity:0.7, marginTop:'28px', marginBottom:'12px', display:'flex', alignItems:'center', gap:'8px' }}>
+          <span style={{ display:'inline-block', width:'16px', height:'1px', background:'currentColor' }}/>
+          {label}
+        </div>
+      )
+      i++; continue
+    }
+
+    // → 화살표 인사이트 라인
+    if (t.startsWith('→')) {
+      elements.push(
+        <div key={i} style={{ display:'flex', gap:'10px', marginBottom:'14px', padding:'10px 14px', background:'rgba(255,255,255,0.03)', borderLeft:'2px solid rgba(255,255,255,0.15)' }}>
+          <span style={{ color:'var(--bw-white)', opacity:0.5, flexShrink:0, fontFamily:'var(--f-mono)', fontSize:'12px', marginTop:'2px' }}>→</span>
+          <span style={{ color:'var(--text-2)', lineHeight:1.8 }}>{parseBold(t.slice(1).trim())}</span>
+        </div>
+      )
+      i++; continue
+    }
+
+    // • 불릿
+    if (t.startsWith('•')) {
+      elements.push(
+        <div key={i} style={{ display:'flex', gap:'10px', marginBottom:'10px', paddingLeft:'4px' }}>
+          <span style={{ color:'var(--bw-400)', flexShrink:0, marginTop:'5px', fontSize:'8px' }}>■</span>
+          <span style={{ color:'var(--text-2)', lineHeight:1.8 }}>{parseBold(t.slice(1).trim())}</span>
+        </div>
+      )
+      i++; continue
+    }
+
+    // *이탤릭* 메타 (ai: insightship-v7 ...)
+    if (t.startsWith('*') && t.endsWith('*') && !t.startsWith('**')) {
+      elements.push(
+        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--bw-500)', marginTop:'20px', letterSpacing:'0.08em' }}>
+          {t.slice(1,-1)}
+        </div>
+      )
+      i++; continue
+    }
+
+    // 일반 단락
+    elements.push(
+      <p key={i} style={{ marginBottom:'16px', lineHeight:1.95, color:'var(--text-2)' }}>
+        {parseBold(t)}
+      </p>
+    )
+    i++
+  }
+  return elements
+}
+
+
 function renderMarkdown(text) {
   if (!text) return ''
   return text.split('\n').map(line => {
@@ -225,52 +332,13 @@ export default function ArticlePage() {
                 {/* AI 요약 배지 */}
                 <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'24px', padding:'10px 16px', background:'var(--bw-900)', borderLeft:'2px solid var(--bw-white)' }}>
                   <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--bw-white)', letterSpacing:'0.12em', textTransform:'uppercase' }}>
-                    INSIGHTSHIP AI v5 — 핵심 분석
+                    INSIGHTSHIP AI v7 — 교육 콘텐츠
                   </span>
                 </div>
 
-                {/* AI v5 요약 본문 - What→Why→So What 구조 렌더링 */}
-                <div style={{ fontSize:'15px', lineHeight:1.95, color:'var(--text-2)', letterSpacing:'-0.01em' }}>
-                  {summary.split('\n').map((para, i) => {
-                    const t = para.trim()
-                    if (!t) return null
-                    // **섹션 헤더** 처리
-                    if (t.startsWith('**') && t.endsWith('**')) {
-                      const label = t.slice(2, -2)
-                      return (
-                        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', letterSpacing:'0.15em', textTransform:'uppercase', color:'#6366F1', marginTop:'28px', marginBottom:'10px', paddingBottom:'6px', borderBottom:'1px solid rgba(99,102,241,0.2)', display:'flex', alignItems:'center', gap:'6px' }}>
-                          <span style={{ color:'#818cf8' }}>◆</span> {label}
-                        </div>
-                      )
-                    }
-                    // *이탤릭* 메타 라인 (카테고리 태그)
-                    if (t.startsWith('*') && t.endsWith('*')) {
-                      return (
-                        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--bw-400)', marginTop:'24px', letterSpacing:'0.08em' }}>
-                          {t.slice(1, -1)}
-                        </div>
-                      )
-                    }
-                    // 이벤트 레이블 라인 (💰 · 도메인)
-                    if (t.includes(' · ') && i < 6) {
-                      return (
-                        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--bw-400)', marginBottom:'20px', letterSpacing:'0.05em' }}>
-                          {t}
-                        </div>
-                      )
-                    }
-                    // 불릿 항목
-                    if (t.startsWith('•')) {
-                      return (
-                        <div key={i} style={{ display:'flex', gap:'10px', marginBottom:'12px' }}>
-                          <span style={{ color:'#6366F1', flexShrink:0 }}>▸</span>
-                          <span>{t.slice(1).trim()}</span>
-                        </div>
-                      )
-                    }
-                    // 일반 단락
-                    return <p key={i} style={{ marginBottom:'14px' }}>{t}</p>
-                  })}
+                {/* AI v7 교육 콘텐츠 렌더러 */}
+                <div style={{ fontSize:'15px', lineHeight:1.95, letterSpacing:'-0.01em' }}>
+                  {renderV7Summary(summary)}
                 </div>
               </>
             ) : (

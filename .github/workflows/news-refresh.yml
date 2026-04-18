@@ -1,4 +1,4 @@
-name: Insightship 뉴스 자동 수집·정리·AI요약 (매 6시간)
+name: Insightship 뉴스 자동 수집·스크래핑·AI v7 교육 콘텐츠 생성 (매 6시간)
 
 on:
   schedule:
@@ -10,12 +10,12 @@ on:
         required: true
         default: 'full'
         type: choice
-        options: [fetch, cleanup, summarize, full]
+        options: [fetch, scrape, summarize, cleanup, full, reprocess]
 
 jobs:
   news-pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -26,7 +26,7 @@ jobs:
           python-version: '3.x'
 
       - name: "🗑️ [정리] 3일 초과 뉴스 삭제"
-        if: ${{ github.event.inputs.action != 'fetch' && github.event.inputs.action != 'summarize' }}
+        if: ${{ github.event.inputs.action == 'cleanup' || github.event.inputs.action == 'full' || github.event.inputs.action == '' }}
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
@@ -46,7 +46,7 @@ jobs:
           cutoff = time.strftime('%Y-%m-%dT00:00:00Z', time.gmtime(time.time() - 3 * 86400))
           print(f"삭제 기준일: {cutoff} 이전 기사")
 
-          del_url = f"{SB_URL}/rest/v1/articles?published_at=lt.{cutoff}&id=gt.0"
+          del_url = f"{SB_URL}/rest/v1/articles?published_at=lt.{cutoff}&source_name=not.is.null&id=gt.0"
           req = urllib.request.Request(del_url, headers={**H, 'Prefer': 'return=minimal'})
           req.method = 'DELETE'
           try:
@@ -57,7 +57,7 @@ jobs:
           EOF
 
       - name: "📡 [수집] 최신 뉴스 수집 (Google News RSS)"
-        if: ${{ github.event.inputs.action != 'cleanup' && github.event.inputs.action != 'summarize' }}
+        if: ${{ github.event.inputs.action == 'fetch' || github.event.inputs.action == 'full' || github.event.inputs.action == '' }}
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
@@ -67,16 +67,36 @@ jobs:
           python3 scripts/collect_news.py
           echo "=== 수집 완료 $(date '+%H:%M:%S') ==="
 
-      - name: "🧠 [AI v5] 미처리 기사 요약 처리"
-        if: ${{ github.event.inputs.action != 'fetch' && github.event.inputs.action != 'cleanup' }}
+      - name: "🔍 [스크래핑] 원문 본문 추출 (URL → body 저장)"
+        if: ${{ github.event.inputs.action == 'scrape' || github.event.inputs.action == 'full' || github.event.inputs.action == '' }}
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          echo "=== AI 요약 시작 $(date '+%H:%M:%S') ==="
-          python3 scripts/insightship_ai_v5.py process
-          echo "=== AI 요약 완료 $(date '+%H:%M:%S') ==="
+          echo "=== 본문 스크래핑 시작 $(date '+%H:%M:%S') ==="
+          python3 scripts/scrape_body.py
+          echo "=== 스크래핑 완료 $(date '+%H:%M:%S') ==="
 
-      - name: "📊 수집 결과 요약"
+      - name: "🧠 [AI v7] 교육 콘텐츠 생성 (미처리 기사)"
+        if: ${{ github.event.inputs.action == 'summarize' || github.event.inputs.action == 'full' || github.event.inputs.action == '' }}
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          echo "✅ 뉴스 파이프라인 완료: $(date '+%Y-%m-%d %H:%M KST')"
+          echo "=== AI v7 교육 콘텐츠 생성 시작 $(date '+%H:%M:%S') ==="
+          python3 scripts/insightship_ai_v7.py process
+          echo "=== 완료 $(date '+%H:%M:%S') ==="
+
+      - name: "🔄 [재처리] 전체 기사 v7로 재생성"
+        if: ${{ github.event.inputs.action == 'reprocess' }}
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "=== AI v7 전체 재처리 시작 $(date '+%H:%M:%S') ==="
+          python3 scripts/insightship_ai_v7.py reprocess
+          echo "=== 재처리 완료 $(date '+%H:%M:%S') ==="
+
+      - name: "📊 파이프라인 완료"
+        run: |
+          echo "✅ Insightship 뉴스 파이프라인 완료: $(date '+%Y-%m-%d %H:%M KST')"
