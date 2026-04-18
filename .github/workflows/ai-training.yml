@@ -33,7 +33,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "=== Insightship AI v5 성능 평가 ==="
-          python3 scripts/insightship_ai_v5.py eval
+          python3 scripts/insightship_ai_v6.py eval
           echo "===================================="
 
       - name: "🧠 [AI v5] 적응형 학습률 온라인 학습"
@@ -43,7 +43,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "=== v5 지속 학습 시작 (What→Why→So What) ==="
-          python3 scripts/insightship_ai_v5.py train
+          python3 scripts/insightship_ai_v6.py train
           echo "=== 학습 완료 ==="
 
       - name: "⚡ [AI v5] 미처리 기사 배치 요약 + 이벤트 분류"
@@ -53,7 +53,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "=== v5 배치 처리: 이벤트 분류 + 인과관계 분석 + 청소년 해설 ==="
-          python3 scripts/insightship_ai_v5.py process
+          python3 scripts/insightship_ai_v6.py process
           echo "=== 배치 완료 ==="
 
       - name: "💾 [AI v5] 학습 모델 자동 커밋"
