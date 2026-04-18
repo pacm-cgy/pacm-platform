@@ -1,0 +1,83 @@
+name: Supabase DB 테이블 초기화
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: '실행 확인 (yes 입력)'
+        required: true
+        default: 'no'
+
+jobs:
+  setup-db:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.confirm == 'yes' }}
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python 환경 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: "🗄️ weekly_reports + trends 테이블 생성"
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          python3 - <<'PYEOF'
+          import os, urllib.request, json
+
+          url_base = os.environ.get('SUPABASE_URL', '')
+          key = os.environ.get('SUPABASE_SERVICE_KEY', '')
+
+          if not url_base or not key:
+              print("❌ 환경변수 없음")
+              exit(1)
+
+          # Supabase SQL API
+          sql_url = f"{url_base}/rest/v1/rpc/exec_sql"
+          
+          # weekly_reports 테이블 확인
+          check_url = f"{url_base}/rest/v1/weekly_reports?limit=1"
+          req = urllib.request.Request(check_url, headers={
+              "apikey": key, "Authorization": f"Bearer {key}"
+          })
+          try:
+              with urllib.request.urlopen(req, timeout=10) as r:
+                  print("✅ weekly_reports 테이블 이미 존재")
+          except urllib.error.HTTPError as e:
+              if e.code == 404:
+                  print("❌ weekly_reports 테이블 없음 — Supabase SQL Editor에서 수동 실행 필요")
+              else:
+                  print(f"weekly_reports 확인: {e.code}")
+
+          # trends 테이블 확인
+          check_url2 = f"{url_base}/rest/v1/trends?limit=1"
+          req2 = urllib.request.Request(check_url2, headers={
+              "apikey": key, "Authorization": f"Bearer {key}"
+          })
+          try:
+              with urllib.request.urlopen(req2, timeout=10) as r:
+                  print("✅ trends 테이블 이미 존재")
+          except urllib.error.HTTPError as e:
+              if e.code == 404:
+                  print("❌ trends 테이블 없음 — Supabase SQL Editor에서 수동 실행 필요")
+              else:
+                  print(f"trends 확인: {e.code}")
+
+          print("\n📋 다음 SQL을 Supabase SQL Editor에서 실행해주세요:")
+          print("supabase/migrations/20260419_weekly_reports.sql")
+          print("supabase/migrations/20260419_trends.sql")
+          PYEOF
+
+      - name: "📊 AI v8 reprocess 트리거 (최근 200건)"
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "=== AI v8 reprocess 시작 ==="
+          python3 scripts/insightship_ai_v8.py reprocess
+          echo "=== 완료 ==="
