@@ -8,6 +8,104 @@ import { supabase } from '../lib/supabase'
 import { useToggleBookmark, useIsBookmarked } from '../hooks/useData'
 import { useAuthStore } from '../store'
 
+// ─── 자체 마크다운 렌더러 (외부 의존성 없음) ────────────────────
+// v6 AI 요약 롱폼 스타일에 최적화
+function parseBold(text, k) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/)
+  if (parts.length === 1) return text
+  return parts.map((p, idx) => {
+    if (p.startsWith('**') && p.endsWith('**')) {
+      return <strong key={`bold-${k}-${idx}`} style={{ color: 'var(--text-1)', fontWeight: 700 }}>{p.slice(2,-2)}</strong>
+    }
+    return p
+  })
+}
+
+function renderAISummary(text) {
+  if (!text) return null
+  const lines = text.split('\n')
+  const elements = []
+  let key = 0
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const t = line.trim()
+    if (!t) continue
+
+    // 구분선
+    if (t === '---') {
+      elements.push(<hr key={key++} style={{ border:'none', borderTop:'1px solid var(--line-2)', margin:'32px 0' }} />)
+      continue
+    }
+
+    // 불릿 (• 또는 -)
+    if (t.startsWith('• ') || (t.startsWith('- ') && !t.startsWith('--'))) {
+      const c = t.slice(2)
+      elements.push(
+        <div key={key++} style={{ display:'flex', gap:'10px', marginBottom:'12px' }}>
+          <span style={{ color:'var(--text-3)', flexShrink:0, lineHeight:'1.9' }}>•</span>
+          <span style={{ fontSize:'15px', lineHeight:1.85, color:'var(--text-2)' }}>{parseBold(c, key)}</span>
+        </div>
+      )
+      continue
+    }
+
+    // 화살표 인사이트 (→)
+    if (t.startsWith('→ ')) {
+      const c = t.slice(2)
+      elements.push(
+        <div key={key++} style={{ display:'flex', gap:'12px', marginBottom:'14px', padding:'14px 18px', background:'var(--bg-2)', borderLeft:'3px solid var(--bw-500)', borderRadius:'var(--r-md)' }}>
+          <span style={{ color:'var(--bw-400)', flexShrink:0, fontWeight:700, lineHeight:1.8 }}>→</span>
+          <span style={{ fontSize:'14px', lineHeight:1.85, color:'var(--text-2)' }}>{parseBold(c, key)}</span>
+        </div>
+      )
+      continue
+    }
+
+    // 이탤릭 (*text*) — meta나 마무리 문장
+    if (t.startsWith('*') && t.endsWith('*') && !t.startsWith('**')) {
+      const c = t.slice(1, -1)
+      // meta 태그
+      if (c.startsWith('ai:')) {
+        elements.push(
+          <div key={key++} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--text-4)', marginTop:'8px', letterSpacing:'0.5px' }}>{c}</div>
+        )
+      } else {
+        elements.push(
+          <p key={key++} style={{ fontSize:'14px', lineHeight:1.8, color:'var(--text-3)', fontStyle:'italic', marginBottom:'8px' }}>{c}</p>
+        )
+      }
+      continue
+    }
+
+    // **굵은 헤더** 줄 (단독)
+    if (t.startsWith('**') && t.endsWith('**') && t.length > 4) {
+      const c = t.slice(2, -2)
+      elements.push(
+        <h3 key={key++} style={{ fontFamily:'var(--f-sans)', fontSize:'14px', fontWeight:700, color:'var(--text-1)', marginBottom:'12px', marginTop:'4px', letterSpacing:'0.3px', textTransform:'none' }}>{c}</h3>
+      )
+      continue
+    }
+
+    // 이벤트 레이블 줄 (이모지로 시작)
+    if (/^[💰🚀📋🤝🔬👤📊📰📈💡]/.test(t)) {
+      elements.push(
+        <div key={key++} style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--text-3)', letterSpacing:'1px', marginBottom:'20px', marginTop:'4px' }}>{t}</div>
+      )
+      continue
+    }
+
+    // 일반 단락
+    elements.push(
+      <p key={key++} style={{ fontSize:'16px', lineHeight:1.95, color:'var(--text-1)', marginBottom:'16px' }}>{parseBold(t, key)}</p>
+    )
+  }
+
+  return <div style={{ fontFamily:'var(--f-sans)' }}>{elements}</div>
+}
+
+
+
 function useNewsArticle(slug) {
   return useQuery({
     queryKey: ['news-detail', slug],
@@ -153,10 +251,8 @@ export default function NewsDetailPage() {
         <div style={{ marginBottom: '48px' }}>
           {/* AI 요약 표시 (구분선 없이 자연스럽게) */}
           {article.ai_summary && article.ai_summary.length >= 100 ? (
-            <div style={{ fontSize: '16px', lineHeight: 1.9, color: 'var(--c-paper)' }}>
-              {article.ai_summary.split('\n').filter(p => p.trim()).map((para, i) => (
-                <p key={i} style={{ marginBottom: '18px' }}>{para}</p>
-              ))}
+            <div>
+              {renderAISummary(article.ai_summary)}
             </div>
           ) : (
             // ai_summary 없으면 원문 본문 (클렌징된)
