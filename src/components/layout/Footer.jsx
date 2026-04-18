@@ -5,11 +5,11 @@ export default function Footer() {
   const year = new Date().getFullYear()
 
   return (
-    <footer style={{ background: 'var(--c-ink)', color: 'var(--c-paper)', marginTop: '64px', borderTop: '1px solid var(--c-gray-3)' }}>
+    <footer style={{ background: 'var(--bw-ink)', color: 'var(--bw-white)', marginTop: '64px', borderTop: '1px solid var(--bw-800)' }}>
       <div className="container" style={{ padding: '48px var(--pad-x) 28px' }}>
 
         {/* 상단 그리드 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '40px', paddingBottom: '36px', borderBottom: '1px solid var(--c-gray-3)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '40px', paddingBottom: '36px', borderBottom: '1px solid var(--bw-800)' }}>
 
           {/* 브랜드 */}
           <div>
@@ -23,7 +23,7 @@ export default function Footer() {
             </svg>
               <div>
                 <div style={{ fontFamily: 'var(--f-sans)', fontWeight: 800, fontSize: '14px', letterSpacing: '1.5px', color: 'var(--c-paper)' }}>
-                  INSIGHT<span style={{ color: 'var(--c-gold)' }}>SHIP</span>
+                  INSIGHT<span style={{ color: '#F59E0B' }}>SHIP</span>
                 </div>
                 <div style={{ fontFamily: 'var(--f-sans)', fontSize: '10px', fontWeight: 500, color: '#9A978F', letterSpacing: '0.3px', marginTop: '3px' }}>청소년 창업 플랫폼</div>
               </div>
@@ -34,7 +34,7 @@ export default function Footer() {
             <div style={{ fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--c-gray-5)', lineHeight: 2 }}>
               운영: PACM<br />
               기업 파트너십 문의<br />
-              <a href="mailto:contact@pacm.kr" style={{ color: 'var(--c-gold)', textDecoration: 'none' }}>contact@pacm.kr</a>
+              <a href="mailto:contact@pacm.kr" style={{ color: '#F59E0B', textDecoration: 'none' }}>contact@pacm.kr</a>
             </div>
           </div>
 
@@ -60,7 +60,7 @@ export default function Footer() {
             ]},
           ].map(col => (
             <div key={col.title}>
-              <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gold)', letterSpacing: '2px', marginBottom: '16px' }}>
+              <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: '#818cf8', letterSpacing: '2px', marginBottom: '16px' }}>
                 {col.title}
               </div>
               {col.links.map(l => (
@@ -89,7 +89,7 @@ export default function Footer() {
           justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px',
           fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--c-gray-5)',
         }}>
-          <div>© {year} <span style={{ color: 'var(--c-gold)' }}>INSIGHTSHIP</span> by PACM. All rights reserved.</div>
+          <div>© {year} <span style={{ color: '#F59E0B' }}>INSIGHTSHIP</span> by PACM. All rights reserved.</div>
           <div style={{ display: 'flex', gap: '20px' }}>
             <button onClick={() => navigate('/privacy')} style={{ background:'none',border:'none',color:'var(--c-gray-5)',cursor:'pointer',fontSize:'11px',fontFamily:'var(--f-mono)',transition:'color 0.15s',padding:0 }}
               onMouseEnter={e=>e.target.style.color='var(--c-paper)'} onMouseLeave={e=>e.target.style.color='var(--c-gray-5)'}>개인정보처리방침</button>
