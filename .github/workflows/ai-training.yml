@@ -1,4 +1,4 @@
-name: Insightship AI v5 — 심층 이해 기반 요약 엔진 (매일 KST 03:00)
+name: Insightship AI v6 — 롱폼 스토리텔링 요약 엔진 (매일 KST 03:00)
 
 on:
   schedule:
@@ -27,39 +27,39 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: "📊 [AI v5] 현재 모델 성능 평가 (ROUGE-L + Coverage)"
+      - name: "📊 [AI v6] 현재 모델 성능 평가 (ROUGE-L + Coverage)"
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          echo "=== Insightship AI v5 성능 평가 ==="
+          echo "=== Insightship AI v6 성능 평가 ==="
           python3 scripts/insightship_ai_v6.py eval
           echo "===================================="
 
-      - name: "🧠 [AI v5] 적응형 학습률 온라인 학습"
+      - name: "🧠 [AI v6] 적응형 학습률 온라인 학습"
         if: ${{ github.event.inputs.mode != 'eval' }}
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          echo "=== v5 지속 학습 시작 (What→Why→So What) ==="
+          echo "=== v6 지속 학습 시작 (What→Why→So What) ==="
           python3 scripts/insightship_ai_v6.py train
           echo "=== 학습 완료 ==="
 
-      - name: "⚡ [AI v5] 미처리 기사 배치 요약 + 이벤트 분류"
+      - name: "⚡ [AI v6] 미처리 기사 배치 요약 + 이벤트 분류"
         if: ${{ github.event.inputs.mode == 'process' || github.event.inputs.mode == 'full' || github.event_name == 'schedule' }}
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          echo "=== v5 배치 처리: 이벤트 분류 + 인과관계 분석 + 청소년 해설 ==="
+          echo "=== v6 배치 처리: 이벤트 분류 + 인과관계 분석 + 청소년 해설 ==="
           python3 scripts/insightship_ai_v6.py process
           echo "=== 배치 완료 ==="
 
-      - name: "💾 [AI v5] 학습 모델 자동 커밋"
+      - name: "💾 [AI v6] 학습 모델 자동 커밋"
         run: |
-          git config user.name "Insightship AI Lab v5"
+          git config user.name "Insightship AI Lab v6"
           git config user.email "ai-lab@insightship.pacm.kr"
-          git add scripts/pacm_ai_model_v5.json || true
-          git diff --staged --quiet || git commit -m "🧠 AI v5 모델 자동업데이트 $(date '+%Y-%m-%d')"
+          git add scripts/pacm_ai_model_v6.json || true
+          git diff --staged --quiet || git commit -m "🧠 AI v6 모델 자동업데이트 $(date '+%Y-%m-%d')"
           git push || echo "변경 없음"
