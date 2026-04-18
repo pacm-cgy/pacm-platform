@@ -12,12 +12,21 @@ const CATEGORY_LABELS = {
 }
 
 const CATEGORY_BG = {
-  insight:   'var(--bw-900)',
-  story:     'var(--bw-800)',
-  trend:     'var(--bw-900)',
-  magazine:  'var(--bw-ink)',
-  community: 'var(--bw-800)',
-  opinion:   'var(--bw-900)',
+  insight:   'linear-gradient(135deg,#1e1b4b 0%,#312e81 100%)',
+  story:     'linear-gradient(135deg,#1e1427 0%,#2e1065 100%)',
+  trend:     'linear-gradient(135deg,#1c0f00 0%,#431407 100%)',
+  magazine:  'linear-gradient(135deg,#082f49 0%,#0c4a6e 100%)',
+  community: 'linear-gradient(135deg,#022c22 0%,#064e3b 100%)',
+  opinion:   'linear-gradient(135deg,#200a12 0%,#4c0519 100%)',
+}
+
+const CATEGORY_COLOR = {
+  insight:   '#818cf8',
+  story:     '#c4b5fd',
+  trend:     '#fb923c',
+  magazine:  '#38bdf8',
+  community: '#34d399',
+  opinion:   '#fb7185',
 }
 
 const CATEGORY_ICONS = {
@@ -29,11 +38,22 @@ const CATEGORY_ICONS = {
   opinion:   { icon: '◉', label: 'OPINION' },
 }
 
+const CATEGORY_COLOR = {
+  insight:   '#818cf8',
+  story:     '#c4b5fd',
+  trend:     '#fb923c',
+  magazine:  '#38bdf8',
+  community: '#34d399',
+  opinion:   '#fb7185',
+}
+
 function CoverImage({ url, category, alt, title }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
   const bg = CATEGORY_BG[category] || 'var(--bw-900)'
   const catInfo = CATEGORY_ICONS[category] || { icon: '□', label: 'ARTICLE' }
+
+  const catColor = CATEGORY_COLOR[category] || 'rgba(255,255,255,0.5)'
 
   return (
     <div style={{
@@ -49,8 +69,8 @@ function CoverImage({ url, category, alt, title }) {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               flexDirection: 'column', gap: '8px'
             }}>
-              <span style={{ fontSize: '28px', opacity: 0.6 }}>{catInfo.icon}</span>
-              <span style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: 'rgba(255,255,255,0.3)', letterSpacing: '2px' }}>
+              <span style={{ fontSize: '28px', color: catColor, opacity: 0.8 }}>{catInfo.icon}</span>
+              <span style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: catColor, opacity: 0.5, letterSpacing: '2px' }}>
                 {catInfo.label}
               </span>
             </div>
@@ -71,12 +91,12 @@ function CoverImage({ url, category, alt, title }) {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           flexDirection: 'column', gap: '10px', padding: '16px',
         }}>
-          <span style={{ fontSize: '32px', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.5))' }}>
+          <span style={{ fontSize: '36px', color: catColor, filter: 'drop-shadow(0 2px 12px rgba(0,0,0,0.6))' }}>
             {catInfo.icon}
           </span>
           <span style={{
             fontFamily: 'var(--f-mono)', fontSize: '9px',
-            color: 'rgba(255,255,255,0.35)', letterSpacing: '3px',
+            color: catColor, opacity: 0.6, letterSpacing: '3px',
           }}>
             {catInfo.label}
           </span>
@@ -121,7 +141,7 @@ export function ArticleCard({ article, onClick }) {
     >
       <CoverImage url={article.cover_image} category={article.category} alt={article.title} title={article.title} />
       <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column', gap: '7px' }}>
-        <div className="t-eyebrow">{CATEGORY_LABELS[article.category] || article.category}</div>
+        <div className="t-eyebrow" style={{ color: CATEGORY_COLOR[article.category] || 'var(--bw-400)' }}>{CATEGORY_LABELS[article.category] || article.category}</div>
         <h3 style={{ fontFamily: 'var(--f-serif)', fontSize: '16px', fontWeight: 700, lineHeight: 1.4, flex: 1 }}>
           {article.title?.startsWith('[AI 정리본]') && (
             <span style={{
