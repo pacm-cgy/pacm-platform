@@ -162,7 +162,7 @@ export default function NewsPage() {
     try {
       let q = supabase
         .from('articles')
-        .select('id,title,slug,ai_category,source_name,published_at,ai_summary,ai_version', { count: 'exact' })
+        .select('id,title,slug,ai_category,source_name,published_at,ai_summary', { count: 'exact' })
         .eq('status', 'published')
         .not('source_name', 'is', null)
         .order('published_at', { ascending: false })
