@@ -94,7 +94,7 @@ function NewsRow({ article, index }) {
             color: CATEGORY_COLORS[article.ai_category] || 'var(--bw-400)',
             background: CATEGORY_BG[article.ai_category] || 'transparent',
             padding: '1px 6px',
-            border: `1px solid ${CATEGORY_COLORS[article.ai_category] || 'var(--bw-600)'}44`,
+            border: `1px solid ${(CATEGORY_COLORS[article.ai_category] || '#6B6B6B')}66`,
             borderRadius: '2px',
           }}>
             {catKo}
