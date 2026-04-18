@@ -402,7 +402,7 @@ export default function HomePage() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <div style={{ flex: 1, height: '4px', background: 'var(--c-border)', borderRadius: '2px', maxWidth: '200px' }}>
-                  <div style={{ width: `${Math.min(subCount, 100)}%`, height: '100%', background: '#6366F1'ar(--bw-white)', borderRadius: '2px', transition: 'width 0.5s' }} />
+                  <div style={{ width: `${Math.min(subCount, 100)}%`, height: '100%', background: '#6366F1', borderRadius: '2px', transition: 'width 0.5s' }} />
                 </div>
                 <span style={{ fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--c-muted)' }}>{subCount} / 100명</span>
               </div>
