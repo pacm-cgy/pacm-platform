@@ -455,3 +455,38 @@ export function useNewsTrends() {
     refetchInterval: 60 * 60 * 1000,
   })
 }
+
+// ── WEEKLY REPORTS ────────────────────────────────────────────────
+export function useWeeklyReports(limit = 12) {
+  return useQuery({
+    queryKey: ['weekly_reports', limit],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('weekly_reports')
+        .select('*')
+        .order('week_start', { ascending: false })
+        .limit(limit)
+      if (error) return []
+      return data || []
+    },
+    staleTime: 60 * 60 * 1000, // 1시간 캐시
+  })
+}
+
+// ── TRENDS TABLE ──────────────────────────────────────────────────
+export function useWeeklyTrends(limit = 4) {
+  return useQuery({
+    queryKey: ['weekly_trends', limit],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('trends')
+        .select('*')
+        .eq('period_type', 'weekly')
+        .order('period_start', { ascending: false })
+        .limit(limit)
+      if (error) return []
+      return data || []
+    },
+    staleTime: 60 * 60 * 1000,
+  })
+}

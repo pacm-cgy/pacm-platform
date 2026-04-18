@@ -1,0 +1,44 @@
+name: Insightship 주간 보고서 + 트렌드 트래커 자동 생성
+
+on:
+  schedule:
+    - cron: '0 21 * * 0'  # 매주 일요일 KST 06:00 (UTC 21:00)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '실행 모드'
+        required: true
+        default: 'generate'
+        type: choice
+        options: [generate, backfill]
+
+jobs:
+  weekly-analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python 환경 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: "📊 주간 보고서 생성"
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "=== 주간 보고서 생성 시작 ==="
+          python3 scripts/generate_weekly_report.py ${{ github.event.inputs.mode || 'generate' }}
+          echo "=== 완료 ==="
+
+      - name: "📈 트렌드 트래커 업데이트"
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "=== 트렌드 트래커 업데이트 시작 ==="
+          python3 scripts/generate_trends.py ${{ github.event.inputs.mode || 'generate' }}
+          echo "=== 완료 ==="

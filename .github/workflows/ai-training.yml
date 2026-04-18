@@ -1,4 +1,4 @@
-name: Insightship AI v7 — 롱폼 교육 콘텐츠 생성 엔진 (매일 KST 03:00)
+name: Insightship AI v8 — 맞춤형 교육 콘텐츠 엔진 (매일 KST 03:00)
 
 on:
   schedule:
@@ -15,7 +15,7 @@ on:
 jobs:
   ai-lab:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
@@ -37,24 +37,24 @@ jobs:
           python3 scripts/scrape_body.py
           echo "=== 스크래핑 완료 ==="
 
-      - name: "⚡ [AI v7] 미처리 기사 교육 콘텐츠 생성"
+      - name: "⚡ [AI v8] 미처리 기사 교육 콘텐츠 생성"
         if: ${{ github.event.inputs.mode == 'process' || github.event.inputs.mode == '' }}
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          echo "=== AI v7 교육 콘텐츠 생성 시작 ==="
-          python3 scripts/insightship_ai_v7.py process
+          echo "=== AI v8 교육 콘텐츠 생성 시작 ==="
+          python3 scripts/insightship_ai_v8.py process
           echo "=== 완료 ==="
 
-      - name: "🔄 [AI v7] 전체 재처리"
+      - name: "🔄 [AI v8] 전체 재처리"
         if: ${{ github.event.inputs.mode == 'reprocess' }}
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          echo "=== AI v7 전체 재처리 시작 ==="
-          python3 scripts/insightship_ai_v7.py reprocess
+          echo "=== AI v8 전체 재처리 시작 ==="
+          python3 scripts/insightship_ai_v8.py reprocess
           echo "=== 재처리 완료 ==="
 
       - name: "📊 [평가] 콘텐츠 품질 체크"
@@ -63,29 +63,23 @@ jobs:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          python3 - <<'EOF'
+          python3 - <<'PYEOF'
           import urllib.request, json, os
           url_base = os.environ.get('SUPABASE_URL','')
           key = os.environ.get('SUPABASE_SERVICE_KEY','')
           if not url_base or not key:
               print("환경변수 없음")
               exit(0)
-          url = f"{url_base}/rest/v1/articles?select=id,title,ai_summary&status=eq.published&source_name=not.is.null&order=published_at.desc&limit=20"
+          url = f"{url_base}/rest/v1/articles?select=id,title,ai_summary&status=eq.published&order=published_at.desc&limit=20"
           req = urllib.request.Request(url, headers={"apikey":key,"Authorization":f"Bearer {key}"})
           data = json.loads(urllib.request.urlopen(req,timeout=15).read())
+          v8_count = sum(1 for a in data if 'insightship-v8' in (a.get('ai_summary') or ''))
           v7_count = sum(1 for a in data if 'insightship-v7' in (a.get('ai_summary') or ''))
           total = len(data)
-          print(f"최근 20개 중 v7 처리: {v7_count}/{total}")
+          print(f"최근 {total}개 중 v8 처리: {v8_count} | v7: {v7_count}")
           lengths = [len(a.get('ai_summary') or '') for a in data if a.get('ai_summary')]
           if lengths:
               print(f"평균 길이: {sum(lengths)//len(lengths)}자 | 최대: {max(lengths)}자 | 최소: {min(lengths)}자")
-          EOF
-
-      - name: "💾 모델 파일 자동 커밋"
-        if: ${{ github.event.inputs.mode != 'eval' }}
-        run: |
-          git config user.name "Insightship AI Lab v7"
-          git config user.email "ai@insightship.pacm.kr"
-          git add scripts/pacm_ai_model_v7.json || true
-          git diff --staged --quiet || git commit -m "🧠 AI v7 모델 자동업데이트 $(date '+%Y-%m-%d')"
-          git push || true
+          inference_count = sum(1 for a in data if '🔮 AI 추론 분석' in (a.get('ai_summary') or ''))
+          print(f"추론 섹션 포함: {inference_count}/{total}")
+          PYEOF
