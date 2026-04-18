@@ -38,15 +38,6 @@ const CATEGORY_ICONS = {
   opinion:   { icon: '◉', label: 'OPINION' },
 }
 
-const CATEGORY_COLOR = {
-  insight:   '#818cf8',
-  story:     '#c4b5fd',
-  trend:     '#fb923c',
-  magazine:  '#38bdf8',
-  community: '#34d399',
-  opinion:   '#fb7185',
-}
-
 function CoverImage({ url, category, alt, title }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
