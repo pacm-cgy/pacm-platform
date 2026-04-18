@@ -69,7 +69,7 @@
   --f-mono:    'JetBrains Mono', monospace;
 
   /* ── 레이아웃 */
-  --nav-h:   60px;
+  --nav-h:   96px;
   --sidebar: 220px;
   --max-w:   1280px;
 
@@ -259,32 +259,16 @@ button { cursor: pointer; border: none; background: none; font: inherit; color: 
 .layout {
   display: flex;
   min-height: 100vh;
-  padding-top: var(--nav-h);
-}
-
-.sidebar {
-  width: var(--sidebar);
-  flex-shrink: 0;
-  position: fixed;
-  top: var(--nav-h);
-  left: 0;
-  bottom: 0;
-  background: var(--bw-ink);
-  border-right: 1px solid var(--line-1);
-  overflow-y: auto;
-  z-index: 40;
 }
 
 .main-content {
   flex: 1;
-  margin-left: var(--sidebar);
   min-width: 0;
   padding: 32px;
 }
 
 @media (max-width: 768px) {
-  .sidebar { display: none; }
-  .main-content { margin-left: 0; padding: 16px; }
+  .main-content { padding: 16px; }
 }
 
 /* ══════════════════════════════════════════════════════════════

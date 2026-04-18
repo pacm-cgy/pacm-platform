@@ -2,38 +2,22 @@ import { useState, useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Home, TrendingUp, BookOpen, Users, GraduationCap, Newspaper,
-  Search, Bell, User, Menu, X, MessageSquare, Zap, BarChart2,
-  ChevronRight, Pencil, LogOut, Settings, Star, Globe
+  Search, Bell, User, Menu, X, MessageSquare, Zap, Star, Globe, LogOut
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../store'
 
-const NAV_SECTIONS = [
-  {
-    label: 'DISCOVER',
-    items: [
-      { id: 'home',      path: '/',          icon: Home,        label: '홈' },
-      { id: 'insight',   path: '/insight',   icon: Zap,         label: '인사이트',   badge: 'NEW' },
-      { id: 'news',      path: '/news',      icon: Newspaper,   label: '뉴스 피드' },
-      { id: 'trend',     path: '/trend',     icon: TrendingUp,  label: '트렌드' },
-    ]
-  },
-  {
-    label: 'LEARN',
-    items: [
-      { id: 'edu',       path: '/edu',       icon: GraduationCap, label: '창업 교육' },
-      { id: 'magazine',  path: '/magazine',  icon: BookOpen,    label: '매거진' },
-      { id: 'story',     path: '/story',     icon: Star,        label: '창업 스토리' },
-    ]
-  },
-  {
-    label: 'CONNECT',
-    items: [
-      { id: 'community', path: '/community', icon: Users,       label: '커뮤니티' },
-      { id: 'messages',  path: '/messages',  icon: MessageSquare, label: '메시지', notif: true },
-      { id: 'connect',   path: '/connect',   icon: Globe,       label: '파트너십' },
-    ]
-  },
+const NAV_ITEMS = [
+  { id: 'home',      path: '/',          icon: Home,           label: '홈' },
+  { id: 'insight',   path: '/insight',   icon: Zap,            label: '인사이트', badge: 'NEW' },
+  { id: 'news',      path: '/news',      icon: Newspaper,      label: '뉴스' },
+  { id: 'trend',     path: '/trend',     icon: TrendingUp,     label: '트렌드' },
+  { id: 'edu',       path: '/edu',       icon: GraduationCap,  label: '교육' },
+  { id: 'magazine',  path: '/magazine',  icon: BookOpen,       label: '매거진' },
+  { id: 'story',     path: '/story',     icon: Star,           label: '스토리' },
+  { id: 'community', path: '/community', icon: Users,          label: '커뮤니티' },
+  { id: 'messages',  path: '/messages',  icon: MessageSquare,  label: '메시지', notif: true },
+  { id: 'connect',   path: '/connect',   icon: Globe,          label: '파트너십' },
 ]
 
 // 실시간 트렌드 티커
@@ -64,8 +48,8 @@ export default function Header() {
 
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notifOpen, setNotifOpen]   = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery]           = useState('')
+  const [searchActive, setSearchActive] = useState(false)
   const [trends, setTrends]         = useState([])
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount]     = useState(0)
@@ -75,13 +59,17 @@ export default function Header() {
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
 
   useEffect(() => {
+    setMobileOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
     loadTrends()
     if (user) loadNotifications()
   }, [user])
 
   useEffect(() => {
-    if (searchOpen) setTimeout(() => searchRef.current?.focus(), 100)
-  }, [searchOpen])
+    if (searchActive) setTimeout(() => searchRef.current?.focus(), 100)
+  }, [searchActive])
 
   async function loadTrends() {
     try {
@@ -116,162 +104,303 @@ export default function Header() {
     e.preventDefault()
     if (query.trim()) {
       navigate(`/news?q=${encodeURIComponent(query.trim())}`)
-      setSearchOpen(false)
+      setSearchActive(false)
       setQuery('')
     }
   }
 
-  // 공개 경로는 사이드바 없이
   const noSidebar = ['/login', '/signup', '/terms', '/privacy'].includes(location.pathname)
+  if (noSidebar) return null
 
   return (
     <>
-      {/* 사이드바 */}
-      {!noSidebar && (
-        <>
-          {/* 모바일 오버레이 */}
-          {mobileOpen && (
-            <div
-              style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', zIndex:99 }}
-              onClick={() => setMobileOpen(false)}
-            />
-          )}
+      {/* ── 메인 헤더 바 ── */}
+      <header style={{
+        position: 'sticky', top: 0, zIndex: 200,
+        background: 'rgba(6,6,6,0.95)', backdropFilter: 'blur(20px)',
+        borderBottom: '1px solid var(--line-1)',
+      }}>
+        {/* 상단 로고 + 액션 행 */}
+        <div style={{
+          display: 'flex', alignItems: 'center',
+          height: 56, padding: '0 20px', gap: 12,
+        }}>
+          {/* 로고 */}
+          <Link to="/" style={{
+            fontWeight: 900, fontSize: 18, letterSpacing: '-0.04em',
+            color: 'var(--bw-white)', textDecoration: 'none', flexShrink: 0,
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            INSIGHT<span style={{ color: '#F59E0B' }}>SHIP</span>
+          </Link>
 
-          <nav className={`sidebar-nav${mobileOpen ? ' mobile-open' : ''}`}>
-            {/* 로고 */}
-            <div className="sidebar-logo">
-              <Link to="/" onClick={() => setMobileOpen(false)}>
-                <div className="sidebar-logo-text">Insightship</div>
-                <div className="sidebar-logo-sub">BY PACM</div>
+          {/* 검색바 (데스크탑 inline) */}
+          <form onSubmit={handleSearch} style={{
+            flex: 1, maxWidth: 360, marginLeft: 16,
+            display: searchActive ? 'flex' : 'none',
+          }} className="header-search-form">
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: 'var(--bw-900)', border: '1px solid var(--line-2)',
+              borderRadius: 8, padding: '6px 12px', width: '100%',
+            }}>
+              <Search size={14} color="var(--text-4)" />
+              <input
+                ref={searchRef}
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="뉴스, 인사이트 검색..."
+                onBlur={() => !query && setSearchActive(false)}
+                style={{
+                  background: 'none', border: 'none', outline: 'none',
+                  fontSize: 13, color: 'var(--text-1)', width: '100%',
+                }}
+              />
+            </div>
+          </form>
+
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
+            {/* 검색 토글 */}
+            <button
+              className="icon-btn"
+              onClick={() => setSearchActive(!searchActive)}
+              style={{ color: searchActive ? 'var(--bw-white)' : 'var(--text-3)' }}
+            >
+              <Search size={17} />
+            </button>
+
+            {/* 알림 */}
+            <button
+              className="icon-btn"
+              onClick={() => setNotifOpen(!notifOpen)}
+              style={{ position: 'relative' }}
+            >
+              <Bell size={17} />
+              {unreadCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: 6, right: 6,
+                  width: 7, height: 7, borderRadius: '50%',
+                  background: '#6366F1', border: '1px solid var(--bw-black)',
+                }} />
+              )}
+            </button>
+
+            {/* 사용자 */}
+            {user ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Link to="/profile" style={{
+                  width: 32, height: 32, borderRadius: 8,
+                  background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#818cf8', fontWeight: 700, fontSize: 13,
+                  textDecoration: 'none', fontFamily: 'var(--f-mono)',
+                }}>
+                  {(user.email?.[0] || 'U').toUpperCase()}
+                </Link>
+                <button
+                  className="icon-btn"
+                  onClick={handleLogout}
+                  title="로그아웃"
+                  style={{ color: 'var(--text-4)' }}
+                >
+                  <LogOut size={15} />
+                </button>
+              </div>
+            ) : (
+              <Link to="/login" className="btn btn-primary btn-sm" style={{ fontSize: 12 }}>
+                로그인
               </Link>
+            )}
+
+            {/* 모바일 햄버거 */}
+            <button
+              className="icon-btn hdr-mobile-only"
+              onClick={() => setMobileOpen(!mobileOpen)}
+              style={{ marginLeft: 4 }}
+            >
+              {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
+          </div>
+        </div>
+
+        {/* ── 탭 네비게이션 행 (데스크탑) ── */}
+        <nav className="hdr-tab-nav hdr-desktop-only">
+          {NAV_ITEMS.map(item => {
+            const Icon = item.icon
+            const active = isActive(item.path)
+            return (
+              <Link
+                key={item.id}
+                to={item.path}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '0 14px', height: 38,
+                  fontSize: 13, fontWeight: active ? 600 : 400,
+                  color: active ? 'var(--bw-white)' : 'var(--text-4)',
+                  textDecoration: 'none', position: 'relative',
+                  borderBottom: active ? '2px solid #6366F1' : '2px solid transparent',
+                  transition: 'color .15s, border-color .15s',
+                  whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--text-2)' }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--text-4)' }}
+              >
+                <Icon size={13} />
+                {item.label}
+                {item.badge && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, padding: '1px 4px',
+                    borderRadius: 4, background: '#6366F1', color: '#fff',
+                    lineHeight: 1.4, letterSpacing: '0.03em',
+                  }}>{item.badge}</span>
+                )}
+                {item.notif && unreadCount > 0 && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, padding: '1px 5px',
+                    borderRadius: 9999, background: '#F43F5E', color: '#fff',
+                    lineHeight: 1.4,
+                  }}>{unreadCount}</span>
+                )}
+              </Link>
+            )
+          })}
+        </nav>
+      </header>
+
+      {/* ── 모바일 드로어 ── */}
+      {mobileOpen && (
+        <>
+          <div
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 300 }}
+            onClick={() => setMobileOpen(false)}
+          />
+          <div style={{
+            position: 'fixed', top: 0, left: 0, bottom: 0, width: 260,
+            background: 'var(--bw-ink)', borderRight: '1px solid var(--line-1)',
+            zIndex: 310, display: 'flex', flexDirection: 'column',
+            overflowY: 'auto',
+          }}>
+            {/* 드로어 헤더 */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '16px 16px 12px',
+              borderBottom: '1px solid var(--line-1)',
+            }}>
+              <span style={{ fontWeight: 900, fontSize: 16, letterSpacing: '-0.03em' }}>
+                INSIGHT<span style={{ color: '#F59E0B' }}>SHIP</span>
+              </span>
+              <button className="icon-btn" onClick={() => setMobileOpen(false)}>
+                <X size={18} />
+              </button>
             </div>
 
-            {/* 검색 (사이드바 내) */}
-            <div style={{ padding:'12px 10px', borderBottom:'1px solid var(--line-1)' }}>
+            {/* 검색 */}
+            <div style={{ padding: '12px 12px 8px' }}>
               <form onSubmit={handleSearch}>
-                <div className="search-bar" style={{ width:'100%', borderRadius:'var(--r-md)' }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: 'var(--bw-900)', border: '1px solid var(--line-1)',
+                  borderRadius: 8, padding: '8px 12px',
+                }}>
                   <Search size={13} color="var(--text-4)" />
                   <input
-                    ref={searchRef}
                     value={query}
                     onChange={e => setQuery(e.target.value)}
                     placeholder="검색..."
-                    style={{ fontSize:'13px' }}
+                    style={{
+                      background: 'none', border: 'none', outline: 'none',
+                      fontSize: 13, color: 'var(--text-1)', width: '100%',
+                    }}
                   />
                 </div>
               </form>
             </div>
 
-            {/* 네비게이션 */}
-            {NAV_SECTIONS.map(section => (
-              <div key={section.label} className="sidebar-section">
-                <div className="sidebar-label">{section.label}</div>
-                {section.items.map(item => {
-                  const Icon = item.icon
-                  const active = isActive(item.path)
-                  return (
-                    <Link
-                      key={item.id}
-                      to={item.path}
-                      className={`nav-item${active ? ' active' : ''}`}
-                      onClick={() => setMobileOpen(false)}
-                    >
-                      <Icon size={16} className="nav-item-icon" />
-                      <span>{item.label}</span>
-                      {item.badge && <span className="nav-badge">{item.badge}</span>}
-                      {item.notif && unreadCount > 0 && (
-                        <span className="nav-badge">{unreadCount}</span>
-                      )}
-                    </Link>
-                  )
-                })}
-              </div>
-            ))}
-
-            {/* 하단 사용자 */}
-            <div style={{ marginTop:'auto', padding:'12px 10px', borderTop:'1px solid var(--line-1)' }}>
-              {user ? (
-                <>
-                  <Link to="/profile" className="nav-item" onClick={() => setMobileOpen(false)}>
-                    <User size={16} className="nav-item-icon" /> <span>프로필</span>
+            {/* 메뉴 항목 */}
+            <div style={{ flex: 1, padding: '4px 8px' }}>
+              {NAV_ITEMS.map(item => {
+                const Icon = item.icon
+                const active = isActive(item.path)
+                return (
+                  <Link
+                    key={item.id}
+                    to={item.path}
+                    onClick={() => setMobileOpen(false)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 12px', borderRadius: 8, marginBottom: 2,
+                      fontSize: 14, fontWeight: active ? 600 : 400,
+                      color: active ? 'var(--bw-white)' : 'var(--text-3)',
+                      background: active ? 'rgba(99,102,241,0.12)' : 'transparent',
+                      textDecoration: 'none', transition: 'all .1s',
+                    }}
+                  >
+                    <Icon size={16} color={active ? '#818cf8' : 'var(--text-4)'} />
+                    {item.label}
+                    {item.badge && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, padding: '1px 4px',
+                        borderRadius: 4, background: '#6366F1', color: '#fff',
+                        lineHeight: 1.4, marginLeft: 'auto',
+                      }}>{item.badge}</span>
+                    )}
+                    {item.notif && unreadCount > 0 && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, padding: '1px 6px',
+                        borderRadius: 9999, background: '#F43F5E', color: '#fff',
+                        lineHeight: 1.4, marginLeft: 'auto',
+                      }}>{unreadCount}</span>
+                    )}
                   </Link>
-                  <button className="nav-item" onClick={handleLogout} style={{ color:'var(--bw-400)' }}>
-                    <LogOut size={16} className="nav-item-icon" /> <span>로그아웃</span>
-                  </button>
-                </>
+                )
+              })}
+            </div>
+
+            {/* 하단 */}
+            <div style={{ padding: '12px', borderTop: '1px solid var(--line-1)' }}>
+              {user ? (
+                <button
+                  onClick={() => { handleLogout(); setMobileOpen(false) }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                    padding: '10px 12px', borderRadius: 8, fontSize: 14,
+                    color: 'var(--text-4)', background: 'none', border: 'none', cursor: 'pointer',
+                  }}
+                >
+                  <LogOut size={15} />
+                  로그아웃
+                </button>
               ) : (
-                <Link to="/login" className="btn btn-primary btn-sm" style={{ width:'100%', justifyContent:'center' }}>
+                <Link
+                  to="/login"
+                  onClick={() => setMobileOpen(false)}
+                  className="btn btn-primary btn-sm"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
                   로그인
                 </Link>
               )}
             </div>
-          </nav>
+          </div>
         </>
       )}
 
-      {/* 상단 바 */}
-      {!noSidebar && (
-        <header className="top-bar" style={{ marginLeft: noSidebar ? 0 : 'var(--sidebar)' }}>
-          {/* 모바일 햄버거 */}
-          <button
-            className="icon-btn"
-            onClick={() => setMobileOpen(!mobileOpen)}
-            style={{ display:'none' }}
-            id="mobile-menu-btn"
-          >
-            {mobileOpen ? <X size={18} /> : <Menu size={18} />}
-          </button>
-
-          {/* 현재 페이지 타이틀 */}
-          <div className="top-bar-title" style={{ display:'none' }} id="page-title">
-            Insightship
-          </div>
-
-          <div className="top-bar-right">
-            {/* 알림 */}
-            <button
-              className="icon-btn"
-              onClick={() => setNotifOpen(!notifOpen)}
-            >
-              <Bell size={17} />
-              {unreadCount > 0 && <span className="notif-dot" />}
-            </button>
-
-            {/* 사용자 아바타 */}
-            {user ? (
-              <Link to="/profile" className="icon-btn" style={{ overflow:'hidden', padding:0 }}>
-                <div style={{
-                  width:36, height:36, borderRadius:'var(--r-md)',
-                  background:'var(--brand-dim)', display:'flex',
-                  alignItems:'center', justifyContent:'center',
-                  color:'var(--bw-white)', fontWeight:700, fontSize:14,
-                  fontFamily:'var(--f-mono)'
-                }}>
-                  {(user.email?.[0] || 'U').toUpperCase()}
-                </div>
-              </Link>
-            ) : (
-              <Link to="/login" className="btn btn-primary btn-sm">로그인</Link>
-            )}
-          </div>
-        </header>
-      )}
-
-      {/* 알림 패널 */}
+      {/* ── 알림 패널 ── */}
       <div className={`notif-panel${notifOpen ? ' open' : ''}`}>
         <div className="notif-panel-hd">
           <Bell size={16} color="var(--brand)" />
           <span className="notif-panel-title">알림</span>
           {unreadCount > 0 && (
-            <span className="badge badge-white" style={{ marginLeft:'auto' }}>{unreadCount}</span>
+            <span className="badge badge-white" style={{ marginLeft: 'auto' }}>{unreadCount}</span>
           )}
-          <button className="icon-btn" onClick={() => setNotifOpen(false)} style={{ marginLeft: unreadCount > 0 ? 8 : 'auto' }}>
+          <button className="icon-btn" onClick={() => setNotifOpen(false)}
+            style={{ marginLeft: unreadCount > 0 ? 8 : 'auto' }}>
             <X size={16} />
           </button>
         </div>
         <div className="notif-list">
           {notifications.length === 0 ? (
-            <div style={{ padding:'32px', textAlign:'center', color:'var(--text-3)', fontSize:14 }}>
+            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-3)', fontSize: 14 }}>
               새로운 알림이 없습니다
             </div>
           ) : notifications.map(n => (
@@ -290,16 +419,29 @@ export default function Header() {
       </div>
       {notifOpen && (
         <div
-          style={{ position:'fixed', inset:0, zIndex:150 }}
+          style={{ position: 'fixed', inset: 0, zIndex: 150 }}
           onClick={() => setNotifOpen(false)}
         />
       )}
 
-      {/* 모바일 CSS */}
       <style>{`
+        .hdr-tab-nav {
+          display: flex;
+          overflow-x: auto;
+          padding: 0 8px;
+          border-top: 1px solid var(--line-1);
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .hdr-tab-nav::-webkit-scrollbar { display: none; }
+
         @media (max-width: 768px) {
-          #mobile-menu-btn { display: flex !important; }
-          #page-title { display: block !important; }
+          .hdr-desktop-only { display: none !important; }
+          .hdr-mobile-only  { display: inline-flex !important; }
+        }
+        @media (min-width: 769px) {
+          .hdr-mobile-only { display: none !important; }
+          .hdr-desktop-only { display: flex !important; }
         }
       `}</style>
     </>
