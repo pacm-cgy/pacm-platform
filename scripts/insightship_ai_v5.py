@@ -487,12 +487,25 @@ def summarize(title: str, body: str, target_len: int = 2500) -> str:
             lines.append(apply_terms(ws))
         lines.append("")
 
-    # [창업가 시사점] - So What
-    sowhat = infer_sowhat(domain, event_type, title)
-    lines.append("**창업가 시사점**")
-    lines.append("")
-    lines.append(sowhat)
-    lines.append("")
+    # [창업가 시사점] - So What (본문에서 추출)
+    # 본문에서 시사점/교훈/전망 관련 문장 우선 추출
+    sowhat_keywords = ["시사점","교훈","전망","주목","중요","핵심","의미","변화","기회",
+                       "예상","전략","방향","필요","제안","권고","전환","주요","강점","특징"]
+    sowhat_sents = []
+    for s in sents:
+        if any(kw in s for kw in sowhat_keywords) and len(s) > 20:
+            sowhat_sents.append(s)
+    # 없으면 후반부 문장 사용
+    if not sowhat_sents:
+        tail = sents[max(0, len(sents)-3):]
+        sowhat_sents = [s for s in tail if len(s) > 20]
+    
+    if sowhat_sents:
+        lines.append("**주요 포인트**")
+        lines.append("")
+        for s in sowhat_sents[:2]:
+            lines.append(apply_terms(s))
+        lines.append("")
 
     # 카테고리 태그
     cat = detect_category(title, body)
