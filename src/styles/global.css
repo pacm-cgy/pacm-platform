@@ -111,6 +111,37 @@
   --c-gray-8:   var(--bw-200);
   --c-surface:  var(--bw-900);
   --c-overlay:  var(--bw-800);
+
+  /* ── 포인트 컬러 (카테고리·강조·상태) */
+  --pt-indigo:     #6366F1;
+  --pt-indigo-lt:  rgba(99,102,241,0.15);
+  --pt-indigo-dim: rgba(99,102,241,0.08);
+  --pt-violet:     #8B5CF6;
+  --pt-emerald:    #10B981;
+  --pt-emerald-lt: rgba(16,185,129,0.15);
+  --pt-rose:       #F43F5E;
+  --pt-rose-lt:    rgba(244,63,94,0.15);
+  --pt-amber:      #F59E0B;
+  --pt-amber-lt:   rgba(245,158,11,0.15);
+  --pt-sky:        #0EA5E9;
+  --pt-sky-lt:     rgba(14,165,233,0.15);
+  --pt-lime:       #84CC16;
+  --pt-lime-lt:    rgba(132,204,22,0.15);
+  --pt-orange:     #F97316;
+  --pt-orange-lt:  rgba(249,115,22,0.15);
+
+  /* ── 카테고리 컬러 */
+  --cat-insight:    #6366F1;
+  --cat-story:      #8B5CF6;
+  --cat-trend:      #F97316;
+  --cat-magazine:   #0EA5E9;
+  --cat-community:  #10B981;
+  --cat-opinion:    #F43F5E;
+
+  /* ── 상태 컬러 */
+  --c-green:  #22C55E;
+  --c-red:    #EF4444;
+  --c-yellow: #EAB308;
 }
 
 /* ── 다크 모드 (기본 BW와 동일 — 다크 우선 설계) */
@@ -412,28 +443,44 @@ button { cursor: pointer; border: none; background: none; font: inherit; color: 
    배지 & 태그
    ══════════════════════════════════════════════════════════════ */
 .badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 2px 8px;
   font-family: var(--f-mono);
   font-size: 0.625rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  border-radius: 0;
+  border-radius: var(--r-sm);
   border: 1px solid var(--line-2);
   color: var(--bw-400);
   background: transparent;
 }
 
+/* 기본 BW 배지 */
 .badge-white {
   border-color: var(--bw-white);
   color: var(--bw-white);
 }
-
 .badge-filled {
   background: var(--bw-white);
   color: var(--bw-black);
   border-color: var(--bw-white);
 }
+
+/* 카테고리 컬러 배지 */
+.badge-insight   { background: var(--pt-indigo-lt);  color: var(--pt-indigo);   border-color: rgba(99,102,241,0.3); }
+.badge-story     { background: rgba(139,92,246,0.15); color: var(--pt-violet);   border-color: rgba(139,92,246,0.3); }
+.badge-trend     { background: var(--pt-orange-lt);  color: var(--pt-orange);   border-color: rgba(249,115,22,0.3); }
+.badge-magazine  { background: var(--pt-sky-lt);     color: var(--pt-sky);      border-color: rgba(14,165,233,0.3); }
+.badge-community { background: var(--pt-emerald-lt); color: var(--pt-emerald);  border-color: rgba(16,185,129,0.3); }
+.badge-opinion   { background: var(--pt-rose-lt);    color: var(--pt-rose);     border-color: rgba(244,63,94,0.3); }
+
+/* 상태 배지 */
+.badge-green  { background: rgba(34,197,94,0.12);  color: #22C55E; border-color: rgba(34,197,94,0.3); }
+.badge-red    { background: rgba(239,68,68,0.12);   color: #EF4444; border-color: rgba(239,68,68,0.3); }
+.badge-yellow { background: rgba(234,179,8,0.12);   color: #EAB308; border-color: rgba(234,179,8,0.3); }
+.badge-indigo { background: var(--pt-indigo-lt);    color: var(--pt-indigo); border-color: rgba(99,102,241,0.3); }
 
 /* ══════════════════════════════════════════════════════════════
    구분선
