@@ -5,9 +5,9 @@ export default function PrivacyPage() {
   const navigate = useNavigate()
   return (
     <div style={{ paddingBottom: '80px' }}>
-      <div style={{ borderBottom: '1px solid var(--c-gray-3)', padding: '14px 0' }}>
+      <div style={{ borderBottom: '1px solid var(--b1)', padding: '14px 0' }}>
         <div className="container">
-          <button onClick={() => navigate(-1)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', color: 'var(--c-muted)', fontSize: '13px', fontFamily: 'var(--f-mono)', cursor: 'pointer' }}>
+          <button onClick={() => navigate(-1)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', color: 'var(--t3)', fontSize: '13px', fontFamily: 'var(--f-mono)', cursor: 'pointer' }}>
             <ArrowLeft size={14} /> 돌아가기
           </button>
         </div>
@@ -15,16 +15,16 @@ export default function PrivacyPage() {
       <div className="container" style={{ maxWidth: '800px', margin: '0 auto', padding: '48px var(--pad-x)' }}>
         <div className="t-eyebrow" style={{ marginBottom: '8px' }}>LEGAL</div>
         <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(24px,4vw,32px)', fontWeight: 700, marginBottom: '8px' }}>개인정보처리방침</h1>
-        <div style={{ fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--c-muted)', marginBottom: '40px' }}>시행일: 2026년 1월 1일 | 버전: 1.0</div>
+        <div style={{ fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--t3)', marginBottom: '40px' }}>시행일: 2026년 1월 1일 | 버전: 1.0</div>
 
-        <div style={{ background: 'var(--c-gray-2)', border: '1px solid var(--c-gold)', padding: '20px 24px', marginBottom: '40px' }}>
-          <p style={{ fontFamily: 'var(--f-sans)', fontSize: '14px', color: 'var(--c-paper)', lineHeight: 1.8 }}>
+        <div style={{ background: 'var(--bg3)', border: '1px solid var(--amber)', padding: '20px 24px', marginBottom: '40px' }}>
+          <p style={{ fontFamily: 'var(--f-sans)', fontSize: '14px', color: 'var(--t1)', lineHeight: 1.8 }}>
             피에이씨엠(PACM)은 개인정보보호법 등 관련 법령을 준수하며, 이용자의 개인정보를 소중히 보호합니다.<br />
-            문의: <a href="mailto:contact@pacm.kr" style={{ color: 'var(--c-gold)' }}>contact@pacm.kr</a>
+            문의: <a href="mailto:contact@pacm.kr" style={{ color: 'var(--amber)' }}>contact@pacm.kr</a>
           </p>
         </div>
 
-        <div style={{ fontFamily: 'var(--f-sans)', fontSize: '15px', lineHeight: 1.9, color: 'var(--c-paper)' }}>
+        <div style={{ fontFamily: 'var(--f-sans)', fontSize: '15px', lineHeight: 1.9, color: 'var(--t1)' }}>
           {[
             { title: '1. 수집하는 개인정보 항목', content: `필수항목: 이메일 주소, 닉네임(표시명)\n선택항목: 학교명, 지역, 소개글, 프로필 이미지, 스타트업명\n자동수집: IP 주소, 쿠키, 서비스 이용 기록, 접속 로그` },
             { title: '2. 개인정보 수집 목적', content: `• 회원 가입 및 서비스 제공\n• 커뮤니티 기능 운영\n• 뉴스레터 발송 (동의한 경우)\n• 서비스 개선 및 통계 분석\n• 불법 이용 방지 및 보안` },
@@ -36,10 +36,10 @@ export default function PrivacyPage() {
             { title: '8. 개인정보 보호 책임자', content: `운영사: 피에이씨엠(PACM)\n사업자등록번호: 891-45-01385\n문의: contact@pacm.kr` },
           ].map((section, i) => (
             <div key={i} style={{ marginBottom: '36px' }}>
-              <h2 style={{ fontFamily: 'var(--f-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--c-paper)', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid var(--c-gray-3)' }}>
+              <h2 style={{ fontFamily: 'var(--f-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--t1)', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid var(--b1)' }}>
                 {section.title}
               </h2>
-              <p style={{ color: 'var(--c-muted)', whiteSpace: 'pre-line', fontSize: '14px', lineHeight: 1.9 }}>
+              <p style={{ color: 'var(--t3)', whiteSpace: 'pre-line', fontSize: '14px', lineHeight: 1.9 }}>
                 {section.content}
               </p>
             </div>

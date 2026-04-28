@@ -52,7 +52,7 @@ function useComments(postId) {
 }
 
 const TYPE_LABELS = { free:'자유', question:'질문', recruit:'팀원모집', feedback:'피드백', notice:'공지' }
-const TYPE_COLORS = { free:'var(--c-muted)', question:'#60A5FA', recruit:'var(--c-gold)', feedback:'#34D399', notice:'var(--c-red)' }
+const TYPE_COLORS = { free:'var(--t3)', question:'#60A5FA', recruit:'var(--amber)', feedback:'#34D399', notice:'var(--rose)' }
 
 function CommentItem({ comment, onReply, onLike, onDelete, onReport, currentUserId, depth=0 }) {
   const [showReply, setShowReply] = useState(false)
@@ -69,7 +69,7 @@ function CommentItem({ comment, onReply, onLike, onDelete, onReport, currentUser
 
   return (
     <div style={{ marginLeft: depth > 0 ? '28px' : '0', marginBottom:'2px' }}>
-      <div style={{ padding:'14px 0', borderBottom:'1px solid var(--c-border)' }}>
+      <div style={{ padding:'14px 0', borderBottom:'1px solid var(--b1)' }}>
         <div style={{ display:'flex', gap:'10px' }}>
           <div className="avatar" style={{ width:'28px', height:'28px', fontSize:'11px', flexShrink:0 }}>
             {comment.profiles?.avatar_url ? <img src={comment.profiles.avatar_url} alt=""/> : comment.profiles?.display_name?.[0]||'U'}
@@ -77,32 +77,32 @@ function CommentItem({ comment, onReply, onLike, onDelete, onReport, currentUser
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'6px' }}>
               <span style={{ fontSize:'13px', fontWeight:600 }}>{comment.profiles?.display_name||'익명'}</span>
-              <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-gray-5)' }}>{date}</span>
-              {depth > 0 && <CornerDownRight size={11} color="var(--c-gray-5)"/>}
+              <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--t4)' }}>{date}</span>
+              {depth > 0 && <CornerDownRight size={11} color="var(--t4)"/>}
             </div>
-            <div style={{ fontSize:'14px', lineHeight:1.7, color:'var(--c-paper)', whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
+            <div style={{ fontSize:'14px', lineHeight:1.7, color:'var(--t1)', whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
               {comment.body}
             </div>
             {/* 액션 버튼 */}
             <div style={{ display:'flex', gap:'12px', marginTop:'8px' }}>
               <button onClick={handleLike}
-                style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'4px', fontFamily:'var(--f-mono)', fontSize:'11px', color: liked ? 'var(--c-red)' : 'var(--c-gray-5)', padding:0 }}>
+                style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'4px', fontFamily:'var(--f-mono)', fontSize:'11px', color: liked ? 'var(--rose)' : 'var(--t4)', padding:0 }}>
                 <Heart size={12} fill={liked?'currentColor':'none'}/> {(comment.like_count||0) + (liked?1:0)}
               </button>
               {depth === 0 && (
                 <button onClick={() => setShowReply(s=>!s)}
-                  style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'4px', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--c-gray-5)', padding:0 }}>
+                  style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'4px', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--t4)', padding:0 }}>
                   <CornerDownRight size={12}/> 답글
                 </button>
               )}
               {isAuthor ? (
                 <button onClick={() => onDelete(comment.id)}
-                  style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'4px', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--c-red)', padding:0, marginLeft:'auto' }}>
+                  style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'4px', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--rose)', padding:0, marginLeft:'auto' }}>
                   <Trash2 size={11}/> 삭제
                 </button>
               ) : currentUserId && (
                 <button onClick={() => onReport && onReport(comment.id)}
-                  style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'4px', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--c-gray-5)', padding:0, marginLeft:'auto' }}>
+                  style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:'4px', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--t4)', padding:0, marginLeft:'auto' }}>
                   <Flag size={11}/> 신고
                 </button>
               )}
@@ -113,9 +113,9 @@ function CommentItem({ comment, onReply, onLike, onDelete, onReport, currentUser
                 <input value={replyText} onChange={e=>setReplyText(e.target.value)}
                   placeholder="답글을 입력하세요..." maxLength={2000}
                   onKeyDown={e => { if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); onReply(comment.id, replyText); setReplyText(''); setShowReply(false) } }}
-                  style={{ flex:1, padding:'7px 10px', background:'var(--c-gray-2)', border:'1px solid var(--c-border)', color:'var(--c-paper)', fontSize:'13px', fontFamily:'var(--f-sans)', outline:'none' }}/>
+                  style={{ flex:1, padding:'7px 10px', background:'var(--bg3)', border:'1px solid var(--b1)', color:'var(--t1)', fontSize:'13px', fontFamily:'var(--f-sans)', outline:'none' }}/>
                 <button onClick={() => { onReply(comment.id, replyText); setReplyText(''); setShowReply(false) }}
-                  style={{ padding:'7px 12px', background:'var(--c-gold)', border:'none', cursor:'pointer' }}>
+                  style={{ padding:'7px 12px', background:'var(--amber)', border:'none', cursor:'pointer' }}>
                   <Send size={13} color="#000"/>
                 </button>
               </div>
@@ -259,10 +259,10 @@ export default function PostDetailPage() {
           <div className="modal">
             <div className="modal-header">
               <div className="modal-title">신고하기</div>
-              <button onClick={() => setShowReport(null)} style={{ background:'none', border:'none', fontSize:'18px', cursor:'pointer', color:'var(--c-muted)' }}>✕</button>
+              <button onClick={() => setShowReport(null)} style={{ background:'none', border:'none', fontSize:'18px', cursor:'pointer', color:'var(--t3)' }}>✕</button>
             </div>
             <div className="modal-body" style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
-              <p style={{ fontSize:'13px', color:'var(--c-muted)', lineHeight:1.6 }}>
+              <p style={{ fontSize:'13px', color:'var(--t3)', lineHeight:1.6 }}>
                 부적절한 내용을 신고해주세요. 관리자가 검토 후 처리합니다.
               </p>
               <div>
@@ -270,7 +270,7 @@ export default function PostDetailPage() {
                 <textarea value={reportReason} onChange={e=>setReportReason(e.target.value)}
                   placeholder="신고 사유를 구체적으로 입력해주세요 (스팸, 욕설, 불법 정보 등)"
                   rows={4} maxLength={500} className="input" style={{ resize:'vertical', minHeight:'100px' }}/>
-                <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-gray-5)', marginTop:'4px', textAlign:'right' }}>
+                <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--t4)', marginTop:'4px', textAlign:'right' }}>
                   {reportReason.length}/500
                 </div>
               </div>
@@ -284,9 +284,9 @@ export default function PostDetailPage() {
           </div>
         </div>
       )}
-      <div style={{ borderBottom:'1px solid var(--c-gray-3)', padding:'14px 0' }}>
+      <div style={{ borderBottom:'1px solid var(--bg4)', padding:'14px 0' }}>
         <div className="container">
-          <button onClick={() => navigate('/community')} style={{ display:'flex', alignItems:'center', gap:'8px', background:'none', border:'none', color:'var(--c-muted)', fontSize:'13px', fontFamily:'var(--f-mono)', cursor:'pointer' }}>
+          <button onClick={() => navigate('/community')} style={{ display:'flex', alignItems:'center', gap:'8px', background:'none', border:'none', color:'var(--t3)', fontSize:'13px', fontFamily:'var(--f-mono)', cursor:'pointer' }}>
             <ArrowLeft size={14}/> 커뮤니티
           </button>
         </div>
@@ -296,14 +296,14 @@ export default function PostDetailPage() {
         {/* 헤더 */}
         <div style={{ marginBottom:'24px' }}>
           <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'12px' }}>
-            <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', padding:'2px 8px', border:'1px solid', borderColor:TYPE_COLORS[post.post_type]||'var(--c-border)', color:TYPE_COLORS[post.post_type]||'var(--c-muted)' }}>
+            <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', padding:'2px 8px', border:'1px solid', borderColor:TYPE_COLORS[post.post_type]||'var(--b1)', color:TYPE_COLORS[post.post_type]||'var(--t3)' }}>
               {TYPE_LABELS[post.post_type]||post.post_type}
             </span>
-            {post.is_pinned && <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', padding:'2px 8px', border:'1px solid var(--c-red)', color:'var(--c-red)' }}>📌 고정</span>}
+            {post.is_pinned && <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', padding:'2px 8px', border:'1px solid var(--rose)', color:'var(--rose)' }}>📌 고정</span>}
           </div>
           <h1 style={{ fontFamily:'var(--f-serif)', fontSize:'clamp(20px,3.5vw,28px)', fontWeight:700, lineHeight:1.3, marginBottom:'16px' }}>{post.title}</h1>
 
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', paddingBottom:'20px', borderBottom:'1px solid var(--c-gray-3)', flexWrap:'wrap', gap:'10px' }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', paddingBottom:'20px', borderBottom:'1px solid var(--bg4)', flexWrap:'wrap', gap:'10px' }}>
             <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
               <div className="avatar avatar-sm" onClick={() => navigate(`/profile/${post.profiles?.id}`)} style={{ cursor:'pointer' }}>
                 {post.profiles?.avatar_url ? <img src={post.profiles.avatar_url} alt=""/> : post.profiles?.display_name?.[0]||'U'}
@@ -312,18 +312,18 @@ export default function PostDetailPage() {
                 <div style={{ fontSize:'14px', fontWeight:600, cursor:'pointer' }} onClick={() => navigate(`/profile/${post.profiles?.id}`)}>
                   {post.profiles?.display_name||'익명'}
                 </div>
-                <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-muted)' }}>{date}</div>
+                <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--t3)' }}>{date}</div>
               </div>
             </div>
             <div style={{ display:'flex', alignItems:'center', gap:'14px' }}>
-              <span style={{ display:'flex', alignItems:'center', gap:'4px', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--c-muted)' }}>
+              <span style={{ display:'flex', alignItems:'center', gap:'4px', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--t3)' }}>
                 <Eye size={12}/> {post.view_count||0}
               </span>
-              <span style={{ display:'flex', alignItems:'center', gap:'4px', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--c-muted)' }}>
+              <span style={{ display:'flex', alignItems:'center', gap:'4px', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--t3)' }}>
                 <MessageCircle size={12}/> {allComments.length}
               </span>
               {isAuthor && (
-                <button onClick={handleDelete} style={{ background:'none', border:'none', color:'var(--c-red)', cursor:'pointer', display:'flex', alignItems:'center', gap:'4px', fontSize:'12px' }}>
+                <button onClick={handleDelete} style={{ background:'none', border:'none', color:'var(--rose)', cursor:'pointer', display:'flex', alignItems:'center', gap:'4px', fontSize:'12px' }}>
                   <Trash2 size={13}/> 삭제
                 </button>
               )}
@@ -332,7 +332,7 @@ export default function PostDetailPage() {
         </div>
 
         {/* 본문 */}
-        <div style={{ fontSize:'15px', lineHeight:1.9, color:'var(--c-paper)', marginBottom:'32px', whiteSpace:'pre-wrap', minHeight:'80px', wordBreak:'break-word' }}>
+        <div style={{ fontSize:'15px', lineHeight:1.9, color:'var(--t1)', marginBottom:'32px', whiteSpace:'pre-wrap', minHeight:'80px', wordBreak:'break-word' }}>
           {post.body||post.content||'(내용 없음)'}
         </div>
 
@@ -344,15 +344,15 @@ export default function PostDetailPage() {
         )}
 
         {/* 좋아요 + 신고 */}
-        <div style={{ display:'flex', gap:'10px', marginBottom:'36px', paddingTop:'16px', borderTop:'1px solid var(--c-border)', flexWrap:'wrap' }}>
+        <div style={{ display:'flex', gap:'10px', marginBottom:'36px', paddingTop:'16px', borderTop:'1px solid var(--b1)', flexWrap:'wrap' }}>
           <button onClick={handleLikePost} className="btn btn-outline"
-            style={{ gap:'6px', color:liked?'var(--c-red)':undefined, borderColor:liked?'var(--c-red)44':undefined }}>
+            style={{ gap:'6px', color:liked?'var(--rose)':undefined, borderColor:liked?'var(--rose)44':undefined }}>
             <Heart size={14} fill={liked?'currentColor':'none'}/>
             {(post.like_count||0)+(liked?1:0)} 좋아요
           </button>
           {user && !isAuthor && (
             <button onClick={() => setShowReport('post')} className="btn btn-ghost btn-sm"
-              style={{ marginLeft:'auto', gap:'5px', color:'var(--c-gray-5)', fontSize:'12px' }}>
+              style={{ marginLeft:'auto', gap:'5px', color:'var(--t4)', fontSize:'12px' }}>
               <Flag size={12}/> 신고
             </button>
           )}
@@ -360,7 +360,7 @@ export default function PostDetailPage() {
 
         {/* 댓글 섹션 */}
         <div>
-          <div style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--c-gold)', letterSpacing:'2px', marginBottom:'16px' }}>
+          <div style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--amber)', letterSpacing:'2px', marginBottom:'16px' }}>
             COMMENTS ({allComments.length})
           </div>
 
@@ -385,7 +385,7 @@ export default function PostDetailPage() {
                 <textarea value={comment} onChange={e=>setComment(e.target.value)}
                   placeholder={user ? "댓글을 입력하세요..." : "로그인 후 댓글을 달 수 있습니다"}
                   disabled={!user} rows={3} maxLength={2000}
-                  style={{ width:'100%', padding:'10px 12px', background:'var(--c-gray-1)', border:'1px solid var(--c-border)', color:'var(--c-paper)', fontSize:'14px', fontFamily:'var(--f-sans)', resize:'vertical', outline:'none', boxSizing:'border-box' }}
+                  style={{ width:'100%', padding:'10px 12px', background:'var(--bg2)', border:'1px solid var(--b1)', color:'var(--t1)', fontSize:'14px', fontFamily:'var(--f-sans)', resize:'vertical', outline:'none', boxSizing:'border-box' }}
                   onKeyDown={e => { if (e.key==='Enter'&&e.metaKey) handleComment() }}/>
                 <div style={{ display:'flex', justifyContent:'flex-end', marginTop:'6px' }}>
                   <button onClick={handleComment} disabled={submitting||!user||!comment.trim()} className="btn btn-gold btn-sm" style={{ gap:'6px' }}>

@@ -1,20 +1,76 @@
 {
-  "name": "Insightship",
+  "name": "Insightship — 청소년 창업 플랫폼",
   "short_name": "Insightship",
-  "description": "청소년 창업 플랫폼",
-  "start_url": "/",
+  "description": "청소년 창업가를 위한 AI 멘토·인사이트·트렌드·커뮤니티 플랫폼",
+  "start_url": "/?source=pwa",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#0F0E0A",
   "theme_color": "#0F0E0A",
+  "orientation": "portrait-primary",
+  "lang": "ko-KR",
+  "dir": "ltr",
+  "categories": ["education", "business", "productivity", "social"],
+  "scope": "/",
+  "id": "insightship-pwa",
   "icons": [
-    { "src": "/icons/icon-72.png", "sizes": "72x72", "type": "image/png" },
-    { "src": "/icons/icon-96.png", "sizes": "96x96", "type": "image/png" },
+    { "src": "/icons/icon-72.png",  "sizes": "72x72",   "type": "image/png" },
+    { "src": "/icons/icon-96.png",  "sizes": "96x96",   "type": "image/png" },
     { "src": "/icons/icon-128.png", "sizes": "128x128", "type": "image/png" },
     { "src": "/icons/icon-144.png", "sizes": "144x144", "type": "image/png" },
     { "src": "/icons/icon-152.png", "sizes": "152x152", "type": "image/png" },
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/icons/icon-384.png", "sizes": "384x384", "type": "image/png" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icons/icon-192.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable any" }
-  ]
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-192.svg", "sizes": "any",     "type": "image/svg+xml", "purpose": "maskable" },
+    { "src": "/icons/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ],
+  "shortcuts": [
+    {
+      "name": "AI 멘토",
+      "short_name": "멘토",
+      "description": "PACM-AI 창업 멘토와 대화하기",
+      "url": "/mentor?source=pwa-shortcut",
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96", "type": "image/png" }]
+    },
+    {
+      "name": "아이디어랩",
+      "short_name": "아이디어",
+      "description": "창업 아이디어 공유 및 팀원 모집",
+      "url": "/ideas?source=pwa-shortcut",
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96", "type": "image/png" }]
+    },
+    {
+      "name": "트렌드",
+      "short_name": "트렌드",
+      "description": "최신 창업·AI 트렌드 확인",
+      "url": "/trend?source=pwa-shortcut",
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96", "type": "image/png" }]
+    },
+    {
+      "name": "커뮤니티",
+      "short_name": "커뮤니티",
+      "description": "창업 커뮤니티 참여",
+      "url": "/community?source=pwa-shortcut",
+      "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96", "type": "image/png" }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/home.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Insightship 홈 화면"
+    },
+    {
+      "src": "/screenshots/mentor.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "AI 멘토 채팅"
+    }
+  ],
+  "prefer_related_applications": false,
+  "related_applications": []
 }

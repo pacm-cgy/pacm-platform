@@ -1,36 +1,35 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
-  Home, TrendingUp, BookOpen, Users, GraduationCap, Newspaper,
-  Search, Bell, User, Menu, X, MessageSquare, Zap, Star, Globe, LogOut
+  Home, TrendingUp, Users, GraduationCap, Newspaper, Search,
+  Bell, Menu, X, LogOut, BrainCircuit, Lightbulb, CalendarDays,
+  Rocket, Zap, Globe, User, ChevronDown, Settings, Bookmark
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../store'
 
-const NAV_ITEMS = [
-  { id: 'home',      path: '/',          icon: Home,           label: '홈' },
-  { id: 'insight',   path: '/insight',   icon: Zap,            label: '인사이트', badge: 'NEW' },
-  { id: 'news',      path: '/news',      icon: Newspaper,      label: '뉴스' },
-  { id: 'trend',     path: '/trend',     icon: TrendingUp,     label: '트렌드' },
-  { id: 'edu',       path: '/edu',       icon: GraduationCap,  label: '교육' },
-  { id: 'magazine',  path: '/magazine',  icon: BookOpen,       label: '매거진' },
-  { id: 'story',     path: '/story',     icon: Star,           label: '스토리' },
-  { id: 'community', path: '/community', icon: Users,          label: '커뮤니티' },
-  { id: 'messages',  path: '/messages',  icon: MessageSquare,  label: '메시지', notif: true },
-  { id: 'connect',   path: '/connect',   icon: Globe,          label: '파트너십' },
+const NAV = [
+  { id: 'home',      path: '/',          icon: Home,          label: '홈' },
+  { id: 'insight',   path: '/insight',   icon: Zap,           label: '인사이트', badge: 'NEW', color: '#3B82F6' },
+  { id: 'trend',     path: '/trend',     icon: TrendingUp,    label: '트렌드',   color: '#F59E0B' },
+  { id: 'news',      path: '/news',      icon: Newspaper,     label: '뉴스',     color: '#60A5FA' },
+  { id: 'mentor',    path: '/mentor',    icon: BrainCircuit,  label: 'AI 멘토',  badge: 'AI', color: '#A855F7' },
+  { id: 'ideas',     path: '/ideas',     icon: Lightbulb,     label: '아이디어랩', color: '#06B6D4' },
+  { id: 'edu',       path: '/edu',       icon: GraduationCap, label: '학습센터', color: '#F97316' },
+  { id: 'community', path: '/community', icon: Users,         label: '커뮤니티', color: '#10B981' },
+  { id: 'events',    path: '/events',    icon: CalendarDays,  label: '이벤트',   color: '#F43F5E' },
+  { id: 'connect',   path: '/connect',   icon: Globe,         label: '파트너십', color: '#818CF8' },
 ]
 
-// 실시간 트렌드 티커
-function TrendTicker({ trends }) {
-  const items = trends?.length > 0 ? trends : [
-    '청소년 창업', 'AI 스타트업', '투자 유치', '유니콘 기업',
-    '창업진흥원', '시리즈A', '핀테크', '에듀테크', '그린테크', '헬스케어'
-  ]
-  const doubled = [...items, ...items]
+function Ticker({ items }) {
+  const kws = items?.length
+    ? items
+    : ['AI 스타트업', '청소년 창업', '투자 유치', '핀테크', '에듀테크', '그린테크', '유니콘 기업', '창업진흥원', '시리즈A', '헬스케어', 'PACM 챌린지', '린 스타트업']
+  const d = [...kws, ...kws]
   return (
     <div className="ticker-wrap">
       <div className="ticker-track">
-        {doubled.map((kw, i) => (
+        {d.map((kw, i) => (
           <div key={i} className="ticker-item">
             <div className="dot" />
             {typeof kw === 'string' ? kw : kw.keyword || kw}
@@ -42,408 +41,347 @@ function TrendTicker({ trends }) {
 }
 
 export default function Header() {
-  const location = useLocation()
+  const loc = useLocation()
   const navigate = useNavigate()
-  const { user, setUser } = useAuthStore()
-
+  const { user, profile, signOut } = useAuthStore()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notifOpen, setNotifOpen]   = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [query, setQuery]           = useState('')
-  const [searchActive, setSearchActive] = useState(false)
+  const [searchOn, setSearchOn]     = useState(false)
   const [trends, setTrends]         = useState([])
-  const [notifications, setNotifications] = useState([])
-  const [unreadCount, setUnreadCount]     = useState(0)
+  const [notifs, setNotifs]         = useState([])
+  const [unread, setUnread]         = useState(0)
+  const [scrolled, setScrolled]     = useState(false)
   const searchRef = useRef(null)
+  const notifRef  = useRef(null)
+  const userRef   = useRef(null)
 
-  const isActive = (path) =>
-    path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
+  const isActive = p => p === '/' ? loc.pathname === '/' : loc.pathname.startsWith(p)
+
+  useEffect(() => { setMobileOpen(false) }, [loc.pathname])
 
   useEffect(() => {
-    setMobileOpen(false)
-  }, [location.pathname])
+    const fn = () => setScrolled(window.scrollY > 8)
+    window.addEventListener('scroll', fn, { passive: true })
+    return () => window.removeEventListener('scroll', fn)
+  }, [])
 
   useEffect(() => {
-    loadTrends()
-    if (user) loadNotifications()
+    supabase.from('trend_keywords').select('keyword').order('count', { ascending: false }).limit(14)
+      .then(({ data }) => { if (data?.length) setTrends(data.map(d => d.keyword)) }).catch(() => {})
+    if (user) {
+      supabase.from('notifications').select('*').eq('user_id', user.id)
+        .order('created_at', { ascending: false }).limit(20)
+        .then(({ data }) => { if (data) { setNotifs(data); setUnread(data.filter(n => !n.is_read).length) } }).catch(() => {})
+    }
   }, [user])
 
+  useEffect(() => { if (searchOn) setTimeout(() => searchRef.current?.focus(), 80) }, [searchOn])
+
+  // 외부 클릭으로 드롭다운 닫기
   useEffect(() => {
-    if (searchActive) setTimeout(() => searchRef.current?.focus(), 100)
-  }, [searchActive])
-
-  async function loadTrends() {
-    try {
-      const { data } = await supabase
-        .from('trend_keywords').select('keyword').order('count', { ascending: false }).limit(10)
-      if (data?.length) setTrends(data.map(d => d.keyword))
-    } catch {}
-  }
-
-  async function loadNotifications() {
-    try {
-      const { data } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(20)
-      if (data) {
-        setNotifications(data)
-        setUnreadCount(data.filter(n => !n.is_read).length)
-      }
-    } catch {}
-  }
-
-  async function handleLogout() {
-    await supabase.auth.signOut()
-    setUser(null)
-    navigate('/')
-  }
-
-  function handleSearch(e) {
-    e.preventDefault()
-    if (query.trim()) {
-      navigate(`/news?q=${encodeURIComponent(query.trim())}`)
-      setSearchActive(false)
-      setQuery('')
+    const fn = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false)
+      if (userRef.current && !userRef.current.contains(e.target)) setUserMenuOpen(false)
     }
+    document.addEventListener('mousedown', fn)
+    return () => document.removeEventListener('mousedown', fn)
+  }, [])
+
+  const doSearch = e => {
+    e.preventDefault()
+    if (query.trim()) { navigate(`/news?q=${encodeURIComponent(query.trim())}`); setSearchOn(false); setQuery('') }
   }
 
-  const noSidebar = ['/login', '/signup', '/terms', '/privacy'].includes(location.pathname)
-  if (noSidebar) return null
+  const doLogout = async () => {
+    if (signOut) await signOut()
+    else { await supabase.auth.signOut(); window.location.href = '/' }
+  }
+
+  const markAllRead = async () => {
+    if (!user || !notifs.length) return
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false)
+    setNotifs(prev => prev.map(n => ({ ...n, is_read: true })))
+    setUnread(0)
+  }
+
+  if (['/login', '/signup'].includes(loc.pathname)) return null
+
+  const avatarLetter = (profile?.display_name || user?.email || 'U')[0].toUpperCase()
 
   return (
     <>
-      {/* ── 메인 헤더 바 ── */}
+      {/* ── TICKER ── */}
+      <div style={{
+        height: 32, background: 'var(--bg1)', borderBottom: '1px solid var(--b1)',
+        overflow: 'hidden', display: 'flex', alignItems: 'center',
+      }}>
+        <div style={{ flexShrink: 0, padding: '0 14px', fontFamily: 'var(--f-mono)', fontSize: 9, letterSpacing: '.18em', color: '#3B82F6', borderRight: '1px solid var(--b1)', height: '100%', display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+          TRENDING
+        </div>
+        <Ticker items={trends} />
+      </div>
+
+      {/* ── MAIN HEADER ── */}
       <header style={{
         position: 'sticky', top: 0, zIndex: 200,
-        background: 'rgba(6,6,6,0.95)', backdropFilter: 'blur(20px)',
-        borderBottom: '1px solid var(--line-1)',
+        background: scrolled ? 'rgba(5,5,5,0.97)' : 'rgba(5,5,5,1)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        borderBottom: `1px solid ${scrolled ? 'rgba(59,130,246,0.18)' : 'rgba(255,255,255,0.06)'}`,
+        transition: 'all 0.2s ease',
       }}>
-        {/* 상단 로고 + 액션 행 */}
-        <div style={{
-          display: 'flex', alignItems: 'center',
-          height: 56, padding: '0 20px', gap: 12,
-        }}>
-          {/* 로고 */}
-          <Link to="/" style={{
-            fontWeight: 900, fontSize: 18, letterSpacing: '-0.04em',
-            color: 'var(--bw-white)', textDecoration: 'none', flexShrink: 0,
-            display: 'flex', alignItems: 'center', gap: 6,
-          }}>
-            INSIGHT<span style={{ color: '#F59E0B' }}>SHIP</span>
+        <div style={{ display: 'flex', alignItems: 'center', height: 56, padding: '0 20px', gap: 8, maxWidth: 'var(--max-w)', margin: '0 auto' }}>
+
+          {/* ── LOGO ── */}
+          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0, marginRight: 8 }}>
+            <div style={{ width: 30, height: 30, background: 'linear-gradient(135deg,#3B82F6,#1D4ED8)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 12px rgba(59,130,246,0.4)', flexShrink: 0 }}>
+              <Rocket size={14} color="#fff" />
+            </div>
+            <div>
+              <div style={{ fontFamily: 'var(--f-sans)', fontWeight: 800, fontSize: 15, letterSpacing: '-0.04em', color: 'var(--t1)', lineHeight: 1.1 }}>
+                INSIGHT<span style={{ color: '#3B82F6' }}>SHIP</span>
+              </div>
+              <div style={{ fontFamily: 'var(--f-mono)', fontSize: 7.5, color: 'var(--t3)', letterSpacing: '0.1em' }}>by PACM</div>
+            </div>
           </Link>
 
-          {/* 검색바 (데스크탑 inline) */}
-          <form onSubmit={handleSearch} style={{
-            flex: 1, maxWidth: 360, marginLeft: 16,
-            display: searchActive ? 'flex' : 'none',
-          }} className="header-search-form">
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              background: 'var(--bw-900)', border: '1px solid var(--line-2)',
-              borderRadius: 8, padding: '6px 12px', width: '100%',
-            }}>
-              <Search size={14} color="var(--text-4)" />
-              <input
-                ref={searchRef}
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                placeholder="뉴스, 인사이트 검색..."
-                onBlur={() => !query && setSearchActive(false)}
-                style={{
-                  background: 'none', border: 'none', outline: 'none',
-                  fontSize: 13, color: 'var(--text-1)', width: '100%',
+          {/* ── NAV LINKS (desktop) ── */}
+          <nav style={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, overflowX: 'auto' }} className="hide-mobile">
+            {NAV.map(n => {
+              const active = isActive(n.path)
+              return (
+                <Link key={n.id} to={n.path} style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '6px 10px', borderRadius: 6,
+                  fontFamily: 'var(--f-sans)', fontSize: 13, fontWeight: active ? 600 : 400,
+                  color: active ? 'var(--t1)' : 'var(--t3)',
+                  background: active ? 'rgba(255,255,255,0.06)' : 'transparent',
+                  textDecoration: 'none', whiteSpace: 'nowrap',
+                  transition: 'all 0.15s ease', position: 'relative',
                 }}
-              />
-            </div>
-          </form>
-
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
-            {/* 검색 토글 */}
-            <button
-              className="icon-btn"
-              onClick={() => setSearchActive(!searchActive)}
-              style={{ color: searchActive ? 'var(--bw-white)' : 'var(--text-3)' }}
-            >
-              <Search size={17} />
-            </button>
-
-            {/* 알림 */}
-            <button
-              className="icon-btn"
-              onClick={() => setNotifOpen(!notifOpen)}
-              style={{ position: 'relative' }}
-            >
-              <Bell size={17} />
-              {unreadCount > 0 && (
-                <span style={{
-                  position: 'absolute', top: 6, right: 6,
-                  width: 7, height: 7, borderRadius: '50%',
-                  background: '#6366F1', border: '1px solid var(--bw-black)',
-                }} />
-              )}
-            </button>
-
-            {/* 사용자 */}
-            {user ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Link to="/profile" style={{
-                  width: 32, height: 32, borderRadius: 8,
-                  background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#818cf8', fontWeight: 700, fontSize: 13,
-                  textDecoration: 'none', fontFamily: 'var(--f-mono)',
-                }}>
-                  {(user.email?.[0] || 'U').toUpperCase()}
-                </Link>
-                <button
-                  className="icon-btn"
-                  onClick={handleLogout}
-                  title="로그아웃"
-                  style={{ color: 'var(--text-4)' }}
+                  onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--t2)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+                  onMouseLeave={e => { if (!active) { e.currentTarget.style.color = 'var(--t3)'; e.currentTarget.style.background = 'transparent' } else { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' } }}
                 >
-                  <LogOut size={15} />
+                  <n.icon size={13} color={active ? (n.color || 'var(--t1)') : 'currentColor'} />
+                  {n.label}
+                  {n.badge && (
+                    <span style={{ fontSize: 8, fontWeight: 700, padding: '1px 4px', borderRadius: 3, fontFamily: 'var(--f-mono)', letterSpacing: '.04em', background: n.color ? `${n.color}22` : 'rgba(59,130,246,0.2)', color: n.color || '#3B82F6', border: `1px solid ${n.color || '#3B82F6'}30` }}>
+                      {n.badge}
+                    </span>
+                  )}
+                </Link>
+              )
+            })}
+          </nav>
+
+          {/* ── RIGHT ACTIONS ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, marginLeft: 'auto' }}>
+
+            {/* Search */}
+            {searchOn ? (
+              <form onSubmit={doSearch} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input ref={searchRef} value={query} onChange={e => setQuery(e.target.value)}
+                  placeholder="뉴스 검색..." autoFocus
+                  style={{ padding: '6px 12px', background: 'var(--bg3)', border: '1px solid var(--b2)', borderRadius: 6, color: 'var(--t1)', fontSize: 13, fontFamily: 'var(--f-sans)', outline: 'none', width: 180 }} />
+                <button type="button" onClick={() => setSearchOn(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', display: 'flex', padding: 4 }}>
+                  <X size={14} />
                 </button>
-              </div>
+              </form>
             ) : (
-              <Link to="/login" className="btn btn-primary btn-sm" style={{ fontSize: 12 }}>
-                로그인
-              </Link>
+              <button onClick={() => setSearchOn(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', padding: 6, borderRadius: 6, display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--t1)'; e.currentTarget.style.background = 'var(--bg3)' }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--t3)'; e.currentTarget.style.background = 'none' }}>
+                <Search size={16} />
+              </button>
             )}
 
-            {/* 모바일 햄버거 */}
-            <button
-              className="icon-btn hdr-mobile-only"
-              onClick={() => setMobileOpen(!mobileOpen)}
-              style={{ marginLeft: 4 }}
-            >
-              {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+            {/* Notification (logged in) */}
+            {user && (
+              <div ref={notifRef} style={{ position: 'relative' }}>
+                <button onClick={() => setNotifOpen(p => !p)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', padding: 6, borderRadius: 6, display: 'flex', alignItems: 'center', position: 'relative', transition: 'all 0.15s' }}
+                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--t1)'; e.currentTarget.style.background = 'var(--bg3)' }}
+                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--t3)'; e.currentTarget.style.background = 'none' }}>
+                  <Bell size={16} />
+                  {unread > 0 && (
+                    <span style={{ position: 'absolute', top: 4, right: 4, width: 7, height: 7, borderRadius: '50%', background: '#F43F5E', border: '1px solid var(--bg1)' }} />
+                  )}
+                </button>
+
+                {notifOpen && (
+                  <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 8, width: 320, background: 'var(--bg2)', border: '1px solid var(--b2)', borderRadius: 10, boxShadow: 'var(--sh-lg)', zIndex: 300, overflow: 'hidden' }}>
+                    <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--b1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontFamily: 'var(--f-sans)', fontSize: 13, fontWeight: 600, color: 'var(--t1)' }}>알림</span>
+                      {unread > 0 && (
+                        <button onClick={markAllRead} style={{ background: 'none', border: 'none', fontSize: 11, color: '#3B82F6', cursor: 'pointer', fontFamily: 'var(--f-sans)' }}>
+                          모두 읽음
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                      {notifs.length === 0 ? (
+                        <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--t3)', fontSize: 13 }}>
+                          <Bell size={28} style={{ marginBottom: 10, opacity: 0.3 }} />
+                          <div>알림이 없습니다</div>
+                        </div>
+                      ) : notifs.map(n => (
+                        <div key={n.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--b0)', background: n.is_read ? 'transparent' : 'rgba(59,130,246,0.04)', cursor: 'pointer', transition: 'background 0.15s' }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg3)'}
+                          onMouseLeave={e => e.currentTarget.style.background = n.is_read ? 'transparent' : 'rgba(59,130,246,0.04)'}>
+                          <div style={{ fontSize: 13, color: 'var(--t1)', lineHeight: 1.5, marginBottom: 4 }}>{n.message || n.title}</div>
+                          <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t3)' }}>{n.created_at?.slice(0, 10)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* User Menu / Login */}
+            {user ? (
+              <div ref={userRef} style={{ position: 'relative' }}>
+                <button onClick={() => setUserMenuOpen(p => !p)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: '1px solid var(--b1)', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', transition: 'all 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--b2)'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--b1)'}>
+                  {profile?.avatar_url ? (
+                    <img src={profile.avatar_url} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg,#3B82F6,#1D4ED8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--f-mono)', fontSize: 10, fontWeight: 700, color: '#fff' }}>
+                      {avatarLetter}
+                    </div>
+                  )}
+                  <span style={{ fontFamily: 'var(--f-sans)', fontSize: 13, color: 'var(--t2)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} className="hide-mobile">
+                    {profile?.display_name || '내 계정'}
+                  </span>
+                  <ChevronDown size={12} color="var(--t3)" />
+                </button>
+
+                {userMenuOpen && (
+                  <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 8, width: 200, background: 'var(--bg2)', border: '1px solid var(--b2)', borderRadius: 10, boxShadow: 'var(--sh-lg)', zIndex: 300, overflow: 'hidden' }}>
+                    <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--b1)' }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t1)', marginBottom: 2 }}>{profile?.display_name || '사용자'}</div>
+                      <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t3)' }}>{user.email}</div>
+                    </div>
+                    {[
+                      { icon: User, label: '내 프로필', path: '/profile' },
+                      { icon: Bookmark, label: '북마크', path: '/profile' },
+                      { icon: Settings, label: '설정', path: '/profile' },
+                    ].map(item => (
+                      <button key={item.path + item.label} onClick={() => { navigate(item.path); setUserMenuOpen(false) }}
+                        style={{ width: '100%', padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t2)', fontSize: 13, fontFamily: 'var(--f-sans)', textAlign: 'left', transition: 'all 0.1s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--bg3)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                        <item.icon size={14} />
+                        {item.label}
+                      </button>
+                    ))}
+                    <div style={{ borderTop: '1px solid var(--b1)' }}>
+                      <button onClick={doLogout}
+                        style={{ width: '100%', padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', color: '#F43F5E', fontSize: 13, fontFamily: 'var(--f-sans)', textAlign: 'left', transition: 'all 0.1s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(244,63,94,0.08)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                        <LogOut size={14} />
+                        로그아웃
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => navigate('/login')} style={{ padding: '6px 14px', background: 'none', border: '1px solid var(--b2)', borderRadius: 6, color: 'var(--t2)', fontSize: 13, fontFamily: 'var(--f-sans)', cursor: 'pointer', transition: 'all 0.15s' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--b3)'; e.currentTarget.style.color = 'var(--t1)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--b2)'; e.currentTarget.style.color = 'var(--t2)' }}>
+                  로그인
+                </button>
+                <button onClick={() => navigate('/signup')} style={{ padding: '6px 14px', background: 'linear-gradient(135deg,#3B82F6,#1D4ED8)', border: 'none', borderRadius: 6, color: '#fff', fontSize: 13, fontFamily: 'var(--f-sans)', fontWeight: 600, cursor: 'pointer', transition: 'opacity 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
+                  가입
+                </button>
+              </div>
+            )}
+
+            {/* Mobile menu toggle */}
+            <button onClick={() => setMobileOpen(p => !p)} className="hide-desktop"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t2)', padding: 6, display: 'flex' }}>
+              {mobileOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
           </div>
         </div>
-
-        {/* ── 탭 네비게이션 행 (데스크탑) ── */}
-        <nav className="hdr-tab-nav hdr-desktop-only">
-          {NAV_ITEMS.map(item => {
-            const Icon = item.icon
-            const active = isActive(item.path)
-            return (
-              <Link
-                key={item.id}
-                to={item.path}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                  padding: '0 14px', height: 38,
-                  fontSize: 13, fontWeight: active ? 600 : 400,
-                  color: active ? 'var(--bw-white)' : 'var(--text-4)',
-                  textDecoration: 'none', position: 'relative',
-                  borderBottom: active ? '2px solid #6366F1' : '2px solid transparent',
-                  transition: 'color .15s, border-color .15s',
-                  whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-                onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--text-2)' }}
-                onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--text-4)' }}
-              >
-                <Icon size={13} />
-                {item.label}
-                {item.badge && (
-                  <span style={{
-                    fontSize: 9, fontWeight: 700, padding: '1px 4px',
-                    borderRadius: 4, background: '#6366F1', color: '#fff',
-                    lineHeight: 1.4, letterSpacing: '0.03em',
-                  }}>{item.badge}</span>
-                )}
-                {item.notif && unreadCount > 0 && (
-                  <span style={{
-                    fontSize: 9, fontWeight: 700, padding: '1px 5px',
-                    borderRadius: 9999, background: '#F43F5E', color: '#fff',
-                    lineHeight: 1.4,
-                  }}>{unreadCount}</span>
-                )}
-              </Link>
-            )
-          })}
-        </nav>
       </header>
 
-      {/* ── 모바일 드로어 ── */}
+      {/* ── MOBILE DRAWER ── */}
       {mobileOpen && (
-        <>
-          <div
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 300 }}
-            onClick={() => setMobileOpen(false)}
-          />
-          <div style={{
-            position: 'fixed', top: 0, left: 0, bottom: 0, width: 260,
-            background: 'var(--bw-ink)', borderRight: '1px solid var(--line-1)',
-            zIndex: 310, display: 'flex', flexDirection: 'column',
+        <div style={{ position: 'fixed', inset: 0, zIndex: 190 }} onClick={() => setMobileOpen(false)}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }} />
+          <div onClick={e => e.stopPropagation()} style={{
+            position: 'absolute', top: 0, left: 0, width: 280, height: '100%',
+            background: 'var(--bg1)', borderRight: '1px solid var(--b2)',
+            display: 'flex', flexDirection: 'column', animation: 'slideIn 0.22s ease',
             overflowY: 'auto',
           }}>
-            {/* 드로어 헤더 */}
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '16px 16px 12px',
-              borderBottom: '1px solid var(--line-1)',
-            }}>
-              <span style={{ fontWeight: 900, fontSize: 16, letterSpacing: '-0.03em' }}>
-                INSIGHT<span style={{ color: '#F59E0B' }}>SHIP</span>
-              </span>
-              <button className="icon-btn" onClick={() => setMobileOpen(false)}>
+            <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid var(--b1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontFamily: 'var(--f-sans)', fontWeight: 800, fontSize: 16, letterSpacing: '-0.04em', color: 'var(--t1)' }}>
+                INSIGHT<span style={{ color: '#3B82F6' }}>SHIP</span>
+              </div>
+              <button onClick={() => setMobileOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', padding: 4 }}>
                 <X size={18} />
               </button>
             </div>
 
-            {/* 검색 */}
-            <div style={{ padding: '12px 12px 8px' }}>
-              <form onSubmit={handleSearch}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  background: 'var(--bw-900)', border: '1px solid var(--line-1)',
-                  borderRadius: 8, padding: '8px 12px',
-                }}>
-                  <Search size={13} color="var(--text-4)" />
-                  <input
-                    value={query}
-                    onChange={e => setQuery(e.target.value)}
-                    placeholder="검색..."
-                    style={{
-                      background: 'none', border: 'none', outline: 'none',
-                      fontSize: 13, color: 'var(--text-1)', width: '100%',
-                    }}
-                  />
-                </div>
-              </form>
-            </div>
-
-            {/* 메뉴 항목 */}
-            <div style={{ flex: 1, padding: '4px 8px' }}>
-              {NAV_ITEMS.map(item => {
-                const Icon = item.icon
-                const active = isActive(item.path)
+            <div style={{ padding: '12px 0', flex: 1 }}>
+              {NAV.map(n => {
+                const active = isActive(n.path)
                 return (
-                  <Link
-                    key={item.id}
-                    to={item.path}
-                    onClick={() => setMobileOpen(false)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '10px 12px', borderRadius: 8, marginBottom: 2,
-                      fontSize: 14, fontWeight: active ? 600 : 400,
-                      color: active ? 'var(--bw-white)' : 'var(--text-3)',
-                      background: active ? 'rgba(99,102,241,0.12)' : 'transparent',
-                      textDecoration: 'none', transition: 'all .1s',
-                    }}
-                  >
-                    <Icon size={16} color={active ? '#818cf8' : 'var(--text-4)'} />
-                    {item.label}
-                    {item.badge && (
-                      <span style={{
-                        fontSize: 9, fontWeight: 700, padding: '1px 4px',
-                        borderRadius: 4, background: '#6366F1', color: '#fff',
-                        lineHeight: 1.4, marginLeft: 'auto',
-                      }}>{item.badge}</span>
-                    )}
-                    {item.notif && unreadCount > 0 && (
-                      <span style={{
-                        fontSize: 10, fontWeight: 700, padding: '1px 6px',
-                        borderRadius: 9999, background: '#F43F5E', color: '#fff',
-                        lineHeight: 1.4, marginLeft: 'auto',
-                      }}>{unreadCount}</span>
+                  <Link key={n.id} to={n.path} onClick={() => setMobileOpen(false)} style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '13px 20px',
+                    textDecoration: 'none',
+                    color: active ? 'var(--t1)' : 'var(--t2)',
+                    background: active ? 'rgba(255,255,255,0.05)' : 'transparent',
+                    borderLeft: active ? `2px solid ${n.color || '#3B82F6'}` : '2px solid transparent',
+                    transition: 'all 0.15s',
+                  }}>
+                    <n.icon size={16} color={active ? (n.color || '#3B82F6') : 'currentColor'} />
+                    <span style={{ fontFamily: 'var(--f-sans)', fontSize: 14, fontWeight: active ? 600 : 400 }}>{n.label}</span>
+                    {n.badge && (
+                      <span style={{ marginLeft: 'auto', fontSize: 9, padding: '1px 5px', borderRadius: 3, fontFamily: 'var(--f-mono)', background: n.color ? `${n.color}22` : 'rgba(59,130,246,0.2)', color: n.color || '#3B82F6', border: `1px solid ${n.color || '#3B82F6'}30` }}>
+                        {n.badge}
+                      </span>
                     )}
                   </Link>
                 )
               })}
             </div>
 
-            {/* 하단 */}
-            <div style={{ padding: '12px', borderTop: '1px solid var(--line-1)' }}>
+            <div style={{ padding: '16px 20px', borderTop: '1px solid var(--b1)' }}>
               {user ? (
-                <button
-                  onClick={() => { handleLogout(); setMobileOpen(false) }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-                    padding: '10px 12px', borderRadius: 8, fontSize: 14,
-                    color: 'var(--text-4)', background: 'none', border: 'none', cursor: 'pointer',
-                  }}
-                >
-                  <LogOut size={15} />
-                  로그아웃
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg,#3B82F6,#1D4ED8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--f-mono)', fontSize: 13, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                    {avatarLetter}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.display_name || '사용자'}</div>
+                    <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>
+                  </div>
+                  <button onClick={doLogout} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', padding: 4 }}>
+                    <LogOut size={16} />
+                  </button>
+                </div>
               ) : (
-                <Link
-                  to="/login"
-                  onClick={() => setMobileOpen(false)}
-                  className="btn btn-primary btn-sm"
-                  style={{ width: '100%', justifyContent: 'center' }}
-                >
-                  로그인
-                </Link>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => { navigate('/login'); setMobileOpen(false) }} style={{ flex: 1, padding: '10px', background: 'var(--bg3)', border: '1px solid var(--b2)', borderRadius: 8, color: 'var(--t1)', fontSize: 13, fontFamily: 'var(--f-sans)', cursor: 'pointer' }}>로그인</button>
+                  <button onClick={() => { navigate('/signup'); setMobileOpen(false) }} style={{ flex: 1, padding: '10px', background: 'linear-gradient(135deg,#3B82F6,#1D4ED8)', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontFamily: 'var(--f-sans)', fontWeight: 600, cursor: 'pointer' }}>가입하기</button>
+                </div>
               )}
             </div>
           </div>
-        </>
-      )}
-
-      {/* ── 알림 패널 ── */}
-      <div className={`notif-panel${notifOpen ? ' open' : ''}`}>
-        <div className="notif-panel-hd">
-          <Bell size={16} color="var(--brand)" />
-          <span className="notif-panel-title">알림</span>
-          {unreadCount > 0 && (
-            <span className="badge badge-white" style={{ marginLeft: 'auto' }}>{unreadCount}</span>
-          )}
-          <button className="icon-btn" onClick={() => setNotifOpen(false)}
-            style={{ marginLeft: unreadCount > 0 ? 8 : 'auto' }}>
-            <X size={16} />
-          </button>
         </div>
-        <div className="notif-list">
-          {notifications.length === 0 ? (
-            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-3)', fontSize: 14 }}>
-              새로운 알림이 없습니다
-            </div>
-          ) : notifications.map(n => (
-            <div key={n.id} className={`notif-item${!n.is_read ? ' unread' : ''}`}>
-              <div className="notif-icon">
-                {n.type === 'comment' ? '💬' : n.type === 'like' ? '❤️' : n.type === 'newsletter' ? '📬' : '🔔'}
-              </div>
-              <div className="notif-content">
-                <div className="notif-title">{n.title}</div>
-                {n.body && <div className="notif-body">{n.body}</div>}
-                <div className="notif-time">{new Date(n.created_at).toLocaleString('ko-KR')}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      {notifOpen && (
-        <div
-          style={{ position: 'fixed', inset: 0, zIndex: 150 }}
-          onClick={() => setNotifOpen(false)}
-        />
       )}
-
-      <style>{`
-        .hdr-tab-nav {
-          display: flex;
-          overflow-x: auto;
-          padding: 0 8px;
-          border-top: 1px solid var(--line-1);
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-        }
-        .hdr-tab-nav::-webkit-scrollbar { display: none; }
-
-        @media (max-width: 768px) {
-          .hdr-desktop-only { display: none !important; }
-          .hdr-mobile-only  { display: inline-flex !important; }
-        }
-        @media (min-width: 769px) {
-          .hdr-mobile-only { display: none !important; }
-          .hdr-desktop-only { display: flex !important; }
-        }
-      `}</style>
     </>
   )
 }

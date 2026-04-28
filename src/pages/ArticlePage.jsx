@@ -32,7 +32,7 @@ function parseBold(text) {
   if (parts.length === 1) return text
   return parts.map((p, i) => {
     if (p.startsWith('**') && p.endsWith('**')) {
-      return <strong key={i} style={{ color:'var(--bw-white)', fontWeight:700 }}>{p.slice(2,-2)}</strong>
+      return <strong key={i} style={{ color:'var(--t1)', fontWeight:700 }}>{p.slice(2,-2)}</strong>
     }
     return p
   })
@@ -51,7 +51,7 @@ function renderV7Summary(text) {
 
     // HR 구분선
     if (t === '---') {
-      elements.push(<hr key={i} style={{ border:'none', borderTop:'1px solid var(--line-1)', margin:'28px 0' }}/>)
+      elements.push(<hr key={i} style={{ border:'none', borderTop:'1px solid var(--b1)', margin:'28px 0' }}/>)
       i++; continue
     }
 
@@ -61,7 +61,7 @@ function renderV7Summary(text) {
     // 이벤트·도메인 레이블 (💰 투자 유치 · 투자·금융)
     if (i < 4 && /[💰🏛️🚀🤝🔬👤📊📰]/.test(t) && t.includes(' · ')) {
       elements.push(
-        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--bw-400)', marginBottom:'20px', letterSpacing:'0.06em', display:'flex', alignItems:'center', gap:'6px' }}>
+        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--t3)', marginBottom:'20px', letterSpacing:'0.06em', display:'flex', alignItems:'center', gap:'6px' }}>
           {t}
         </div>
       )
@@ -71,7 +71,7 @@ function renderV7Summary(text) {
     // 💡 심층 개념 헤더 (이모지로 시작하는 섹션 제목)
     if (/^[💡📚📈🚀💭]/.test(t) && !t.startsWith('•')) {
       elements.push(
-        <div key={i} style={{ fontFamily:'var(--f-serif)', fontSize:'17px', fontWeight:700, color:'var(--bw-white)', margin:'32px 0 16px', paddingBottom:'10px', borderBottom:'1px solid var(--line-1)' }}>
+        <div key={i} style={{ fontFamily:'var(--f-serif)', fontSize:'17px', fontWeight:700, color:'var(--t1)', margin:'32px 0 16px', paddingBottom:'10px', borderBottom:'1px solid var(--b1)' }}>
           {t}
         </div>
       )
@@ -82,7 +82,7 @@ function renderV7Summary(text) {
     if (t.startsWith('**') && t.endsWith('**') && t.length > 4) {
       const label = t.slice(2, -2)
       elements.push(
-        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', letterSpacing:'0.14em', textTransform:'uppercase', color:'var(--bw-white)', opacity:0.7, marginTop:'28px', marginBottom:'12px', display:'flex', alignItems:'center', gap:'8px' }}>
+        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', letterSpacing:'0.14em', textTransform:'uppercase', color:'var(--t1)', opacity:0.7, marginTop:'28px', marginBottom:'12px', display:'flex', alignItems:'center', gap:'8px' }}>
           <span style={{ display:'inline-block', width:'16px', height:'1px', background:'currentColor' }}/>
           {label}
         </div>
@@ -94,8 +94,8 @@ function renderV7Summary(text) {
     if (t.startsWith('→')) {
       elements.push(
         <div key={i} style={{ display:'flex', gap:'10px', marginBottom:'14px', padding:'10px 14px', background:'rgba(255,255,255,0.03)', borderLeft:'2px solid rgba(255,255,255,0.15)' }}>
-          <span style={{ color:'var(--bw-white)', opacity:0.5, flexShrink:0, fontFamily:'var(--f-mono)', fontSize:'12px', marginTop:'2px' }}>→</span>
-          <span style={{ color:'var(--text-2)', lineHeight:1.8 }}>{parseBold(t.slice(1).trim())}</span>
+          <span style={{ color:'var(--t1)', opacity:0.5, flexShrink:0, fontFamily:'var(--f-mono)', fontSize:'12px', marginTop:'2px' }}>→</span>
+          <span style={{ color:'var(--t2)', lineHeight:1.8 }}>{parseBold(t.slice(1).trim())}</span>
         </div>
       )
       i++; continue
@@ -105,8 +105,8 @@ function renderV7Summary(text) {
     if (t.startsWith('•')) {
       elements.push(
         <div key={i} style={{ display:'flex', gap:'10px', marginBottom:'10px', paddingLeft:'4px' }}>
-          <span style={{ color:'var(--bw-400)', flexShrink:0, marginTop:'5px', fontSize:'8px' }}>■</span>
-          <span style={{ color:'var(--text-2)', lineHeight:1.8 }}>{parseBold(t.slice(1).trim())}</span>
+          <span style={{ color:'var(--t3)', flexShrink:0, marginTop:'5px', fontSize:'8px' }}>■</span>
+          <span style={{ color:'var(--t2)', lineHeight:1.8 }}>{parseBold(t.slice(1).trim())}</span>
         </div>
       )
       i++; continue
@@ -115,7 +115,7 @@ function renderV7Summary(text) {
     // *이탤릭* 메타 (ai: insightship-v7 ...)
     if (t.startsWith('*') && t.endsWith('*') && !t.startsWith('**')) {
       elements.push(
-        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--bw-500)', marginTop:'20px', letterSpacing:'0.08em' }}>
+        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--t3)', marginTop:'20px', letterSpacing:'0.08em' }}>
           {t.slice(1,-1)}
         </div>
       )
@@ -124,7 +124,7 @@ function renderV7Summary(text) {
 
     // 일반 단락
     elements.push(
-      <p key={i} style={{ marginBottom:'16px', lineHeight:1.95, color:'var(--text-2)' }}>
+      <p key={i} style={{ marginBottom:'16px', lineHeight:1.95, color:'var(--t2)' }}>
         {parseBold(t)}
       </p>
     )
@@ -137,18 +137,18 @@ function renderV7Summary(text) {
 function renderMarkdown(text) {
   if (!text) return ''
   return text.split('\n').map(line => {
-    if (line.startsWith('### ')) return `<h3 style="font-family:var(--f-serif);font-size:17px;font-weight:700;margin:22px 0 8px;color:var(--c-paper)">${md(line.slice(4))}</h3>`
-    if (line.startsWith('## ')) return `<h2 style="font-family:var(--f-serif);font-size:19px;font-weight:700;margin:28px 0 10px;color:var(--c-paper);border-bottom:1px solid var(--c-border);padding-bottom:7px">${md(line.slice(3))}</h2>`
-    if (line.startsWith('# ')) return `<h1 style="font-family:var(--f-serif);font-size:22px;font-weight:700;margin:32px 0 12px;color:var(--c-paper)">${md(line.slice(2))}</h1>`
-    if (line.match(/^[*-] /)) return `<li style="margin:5px 0;color:var(--c-gray-7);line-height:1.8;margin-left:18px">${md(line.slice(2))}</li>`
-    if (line.match(/^---+$/)) return `<hr style="border:none;border-top:1px solid var(--c-border);margin:18px 0"/>`
+    if (line.startsWith('### ')) return `<h3 style="font-family:var(--f-serif);font-size:17px;font-weight:700;margin:22px 0 8px;color:var(--t1)">${md(line.slice(4))}</h3>`
+    if (line.startsWith('## ')) return `<h2 style="font-family:var(--f-serif);font-size:19px;font-weight:700;margin:28px 0 10px;color:var(--t1);border-bottom:1px solid var(--b1);padding-bottom:7px">${md(line.slice(3))}</h2>`
+    if (line.startsWith('# ')) return `<h1 style="font-family:var(--f-serif);font-size:22px;font-weight:700;margin:32px 0 12px;color:var(--t1)">${md(line.slice(2))}</h1>`
+    if (line.match(/^[*-] /)) return `<li style="margin:5px 0;color:var(--t2);line-height:1.8;margin-left:18px">${md(line.slice(2))}</li>`
+    if (line.match(/^---+$/)) return `<hr style="border:none;border-top:1px solid var(--b1);margin:18px 0"/>`
     if (line.trim() === '') return '<br/>'
-    return `<p style="margin:0 0 12px;color:var(--c-gray-7);line-height:1.9;font-size:16px">${md(line)}</p>`
+    return `<p style="margin:0 0 12px;color:var(--t2);line-height:1.9;font-size:16px">${md(line)}</p>`
   }).join('')
 }
 function md(t) {
-  return t.replace(/\*\*([^*]+)\*\*/g, '<strong style="color:var(--c-paper);font-weight:700">$1</strong>')
-         .replace(/`([^`]+)`/g, '<code style="background:var(--c-gray-2);padding:1px 5px;font-family:var(--f-mono);font-size:13px">$1</code>')
+  return t.replace(/\*\*([^*]+)\*\*/g, '<strong style="color:var(--t1);font-weight:700">$1</strong>')
+         .replace(/`([^`]+)`/g, '<code style="background:var(--bg3);padding:1px 5px;font-family:var(--f-mono);font-size:13px">$1</code>')
 }
 
 function BookmarkButton({ articleId }) {
@@ -156,7 +156,7 @@ function BookmarkButton({ articleId }) {
   const toggle = useToggleBookmark()
   const { user } = useAuthStore()
   return (
-    <button className="btn btn-outline" style={{ gap:'6px', color:isBookmarked?'var(--c-gold)':undefined, borderColor:isBookmarked?'var(--c-gold)':undefined }}
+    <button className="btn btn-outline" style={{ gap:'6px', color:isBookmarked?'var(--amber)':undefined, borderColor:isBookmarked?'var(--amber)':undefined }}
       onClick={() => { if (!user) { alert('로그인이 필요합니다'); return } toggle.mutate({ articleId, isBookmarked }) }}
       disabled={toggle.isPending}>
       <Bookmark size={14} fill={isBookmarked?'currentColor':'none'} />
@@ -224,7 +224,7 @@ export default function ArticlePage() {
   if (isError || !article) return (
     <div style={{ textAlign:'center', padding:'80px 20px' }}>
       <div style={{ fontSize:'48px', marginBottom:'16px' }}>404</div>
-      <div style={{ fontFamily:'var(--f-serif)', fontSize:'20px', marginBottom:'16px', color:'var(--c-paper)' }}>
+      <div style={{ fontFamily:'var(--f-serif)', fontSize:'20px', marginBottom:'16px', color:'var(--t1)' }}>
         아티클을 찾을 수 없습니다
       </div>
       <button className="btn" style={{ background:'#6366F1', color:'#fff', border:'none', padding:'8px 20px', cursor:'pointer' }} onClick={() => navigate(-1)}>돌아가기</button>
@@ -265,8 +265,8 @@ export default function ArticlePage() {
   return (
     <>
       {/* Reading Progress Bar */}
-      <div style={{ position:'fixed', top:0, left:0, right:0, height:'3px', background:'var(--c-gray-2)', zIndex:200, pointerEvents:'none' }}>
-        <div style={{ height:'100%', width:`${progress}%`, background:'var(--c-gold)', transition:'width 0.1s linear' }}/>
+      <div style={{ position:'fixed', top:0, left:0, right:0, height:'3px', background:'var(--bg3)', zIndex:200, pointerEvents:'none' }}>
+        <div style={{ height:'100%', width:`${progress}%`, background:'var(--amber)', transition:'width 0.1s linear' }}/>
       </div>
 
       <div style={{ maxWidth:'740px', margin:'0 auto', padding:'32px var(--pad-x) 80px' }}>
@@ -283,33 +283,33 @@ export default function ArticlePage() {
             {CATEGORY_LABELS[article.category] || 'NEWS'}
           </span>
           {article.source_name && (
-            <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-gray-5)', letterSpacing:'0.5px' }}>
+            <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--t4)', letterSpacing:'0.5px' }}>
               {article.source_name}
             </span>
           )}
         </div>
 
         {/* 제목 */}
-        <h1 style={{ fontFamily:'var(--f-serif)', fontSize:'clamp(20px,4vw,32px)', fontWeight:700, lineHeight:1.3, marginBottom:'20px', color:'var(--c-paper)' }}>
+        <h1 style={{ fontFamily:'var(--f-serif)', fontSize:'clamp(20px,4vw,32px)', fontWeight:700, lineHeight:1.3, marginBottom:'20px', color:'var(--t1)' }}>
           {article.title}
         </h1>
 
         {/* 메타 정보 */}
-        <div style={{ display:'flex', alignItems:'center', gap:'14px', padding:'14px 0', borderTop:'1px solid var(--c-border)', borderBottom:'1px solid var(--c-border)', marginBottom:'32px', flexWrap:'wrap' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'14px', padding:'14px 0', borderTop:'1px solid var(--b1)', borderBottom:'1px solid var(--b1)', marginBottom:'32px', flexWrap:'wrap' }}>
           <div className="avatar avatar-md" style={{ flexShrink:0 }}>
             {article.profiles?.avatar_url
               ? <img src={article.profiles.avatar_url} alt=""/>
               : (article.profiles?.display_name?.[0] || 'I')}
           </div>
           <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontSize:'13px', fontWeight:600, color:'var(--c-paper)' }}>
+            <div style={{ fontSize:'13px', fontWeight:600, color:'var(--t1)' }}>
               {article.profiles?.display_name || 'Insightship 에디터'}
             </div>
             {article.profiles?.startup_name && (
-              <div style={{ fontSize:'11px', color:'var(--text-3)' }}>{article.profiles.startup_name}</div>
+              <div style={{ fontSize:'11px', color:'var(--t3)' }}>{article.profiles.startup_name}</div>
             )}
           </div>
-          <div style={{ display:'flex', gap:'12px', alignItems:'center', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--text-3)', flexShrink:0 }}>
+          <div style={{ display:'flex', gap:'12px', alignItems:'center', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--t3)', flexShrink:0 }}>
             {article.published_at && (
               <span>{format(new Date(article.published_at), 'yyyy.MM.dd', { locale: ko })}</span>
             )}
@@ -330,8 +330,8 @@ export default function ArticlePage() {
             {summary ? (
               <>
                 {/* AI 요약 배지 */}
-                <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'24px', padding:'10px 16px', background:'var(--bw-900)', borderLeft:'2px solid var(--bw-white)' }}>
-                  <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--bw-white)', letterSpacing:'0.12em', textTransform:'uppercase' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'24px', padding:'10px 16px', background:'var(--bg3)', borderLeft:'2px solid var(--t1)' }}>
+                  <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--t1)', letterSpacing:'0.12em', textTransform:'uppercase' }}>
                     INSIGHTSHIP AI v7 — 교육 콘텐츠
                   </span>
                 </div>
@@ -344,15 +344,15 @@ export default function ArticlePage() {
             ) : (
               /* 요약 없는 경우 - HTML 제거 후 안내 표시 */
               <div>
-                <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'20px', padding:'10px 16px', background:'var(--bw-900)', border:'1px solid var(--line-2)' }}>
-                  <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--bw-500)', letterSpacing:'0.12em', textTransform:'uppercase' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'20px', padding:'10px 16px', background:'var(--bg3)', border:'1px solid var(--b2)' }}>
+                  <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--t3)', letterSpacing:'0.12em', textTransform:'uppercase' }}>
                     AI 분석 준비 중 — 잠시 후 업데이트됩니다
                   </span>
                 </div>
                 {(() => {
                   const raw = stripHtml(article.body || article.excerpt || '')
                   return raw ? (
-                    <div style={{ fontSize:'15px', lineHeight:1.85, color:'var(--text-2)' }}>
+                    <div style={{ fontSize:'15px', lineHeight:1.85, color:'var(--t2)' }}>
                       {raw.split('\n').map((para, i) =>
                         para.trim() ? <p key={i} style={{ marginBottom:'14px' }}>{para}</p> : null
                       )}
@@ -364,12 +364,12 @@ export default function ArticlePage() {
 
             {/* 원문 보기 버튼 */}
             {article.source_url && (
-              <div style={{ marginTop:'36px', padding:'20px 24px', background:'var(--bw-900)', border:'1px solid var(--line-1)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'16px', flexWrap:'wrap' }}>
+              <div style={{ marginTop:'36px', padding:'20px 24px', background:'var(--bg3)', border:'1px solid var(--b1)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'16px', flexWrap:'wrap' }}>
                 <div>
-                  <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--bw-400)', letterSpacing:'1.5px', marginBottom:'4px' }}>
+                  <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--t3)', letterSpacing:'1.5px', marginBottom:'4px' }}>
                     ORIGINAL SOURCE
                   </div>
-                  <div style={{ fontSize:'13px', color:'var(--text-3)' }}>
+                  <div style={{ fontSize:'13px', color:'var(--t3)' }}>
                     {article.source_name} — 원문 전체 읽기
                   </div>
                 </div>
@@ -386,7 +386,7 @@ export default function ArticlePage() {
           <>
             {article.cover_image && (
               <div style={{ marginBottom:'28px' }}>
-                <img src={article.cover_image} alt={article.title} style={{ width:'100%', border:'1px solid var(--line-1)' }}/>
+                <img src={article.cover_image} alt={article.title} style={{ width:'100%', border:'1px solid var(--b1)' }}/>
               </div>
             )}
             <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(article.body || article.excerpt || '') }}/>
@@ -395,15 +395,15 @@ export default function ArticlePage() {
 
         {/* 태그 */}
         {article.tags?.length > 0 && (
-          <div style={{ display:'flex', gap:'6px', flexWrap:'wrap', marginTop:'32px', paddingTop:'20px', borderTop:'1px solid var(--c-border)' }}>
+          <div style={{ display:'flex', gap:'6px', flexWrap:'wrap', marginTop:'32px', paddingTop:'20px', borderTop:'1px solid var(--b1)' }}>
             {article.tags.map(t => <span key={t} className="tag">{t}</span>)}
           </div>
         )}
 
         {/* 액션 버튼 */}
-        <div style={{ display:'flex', gap:'10px', marginTop:'24px', paddingTop:'20px', borderTop:'1px solid var(--c-border)', flexWrap:'wrap' }}>
+        <div style={{ display:'flex', gap:'10px', marginTop:'24px', paddingTop:'20px', borderTop:'1px solid var(--b1)', flexWrap:'wrap' }}>
           <button onClick={handleLike} className="btn btn-outline"
-            style={{ color:liked?'var(--c-red)':undefined, borderColor:liked?'var(--c-red)44':undefined, gap:'6px' }}>
+            style={{ color:liked?'var(--rose)':undefined, borderColor:liked?'var(--rose)44':undefined, gap:'6px' }}>
             <Heart size={14} fill={liked?'currentColor':'none'}/> {likeCount}
           </button>
           {article.id && <BookmarkButton articleId={article.id} />}
