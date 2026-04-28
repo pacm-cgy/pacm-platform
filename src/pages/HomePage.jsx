@@ -24,12 +24,7 @@ const CAT_COLOR = {
 }
 const cc = c => CAT_COLOR[c] || CAT_COLOR.default
 
-const MOCK_TRENDS = [
-  { metric_name:'AI 스타트업 투자', metric_value:2847, metric_unit:'억원', change_pct:12.4, category:'ai_startup' },
-  { metric_name:'에듀테크 시장규모', metric_value:1523, metric_unit:'억원', change_pct:8.2, category:'edutech' },
-  { metric_name:'청년 창업 법인 수', metric_value:18342, metric_unit:'개', change_pct:-2.1, category:'startup' },
-  { metric_name:'핀테크 거래액', metric_value:4291, metric_unit:'억원', change_pct:22.7, category:'fintech' },
-]
+// MOCK_TRENDS 제거됨 — 실제 DB 데이터만 사용 (useTrends hook)
 
 /* ── Skeleton ────────────────────────────────────────────────── */
 function Sk({ h=16, w='100%', r=6, mb=0 }) {
@@ -502,11 +497,7 @@ const FEATURES = [
   { icon:TrendingUp, label:'트렌드', desc:'AI·핀테크·에듀테크 실시간 시장 데이터', color:'#F59E0B', path:'/trend' },
 ]
 
-const MOCK_PROJECTS = [
-  { id:1, title:'AI 기반 학습 앱 팀 구성', description:'초·중학생 맞춤형 AI 학습 앱', required_roles:['디자이너','백엔드'], tech_stack:['React','FastAPI'], team_size:3 },
-  { id:2, title:'친환경 배달 플랫폼', description:'탄소중립 배달 서비스 공동창업자 모집', required_roles:['기획자','마케터'], tech_stack:['Next.js'], team_size:4 },
-  { id:3, title:'청소년 금융 교육 앱', description:'게임형 금융 교육 앱 개발팀 구성', required_roles:['iOS개발자','UX'], tech_stack:['Swift','Figma'], team_size:3 },
-]
+// MOCK_PROJECTS 제거됨 — 실제 DB 데이터만 사용 (useProjects hook)
 
 export default function HomePage() {
   const navigate = useNavigate()
@@ -558,9 +549,9 @@ export default function HomePage() {
   const hero = articles[0]
   const sideArts = articles.slice(1,5)
   const gridArts = articles.slice(5,9)
-  const trendData = (trends?.length ? trends : MOCK_TRENDS).slice(0,4)
-  const projData = (projects?.filter(p=>p.status==='recruiting')?.length
-    ? projects.filter(p=>p.status==='recruiting') : MOCK_PROJECTS).slice(0,3)
+  const trendData = (trends?.length ? trends : []).slice(0,4)
+  // projData: 'recruiting' or 'open' or 'coming_soon' — no mock fallback
+  const projData = (projects?.filter(p=>['recruiting','open','coming_soon'].includes(p.status)) || []).slice(0,3)
 
   return (
     <div style={{ background:'var(--bg0)', minHeight:'100vh' }}>
@@ -598,8 +589,7 @@ export default function HomePage() {
       {/* ── STATS ROW ──────────────────────────────────────── */}
       <div ref={statsRef} style={{ maxWidth:'var(--max-w)', margin:'0 auto',
         padding:'0 var(--pad-x)', marginBottom:0 }}>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12,
-          padding:'24px 0 32px', borderBottom:'1px solid var(--b1)' }}>
+        <div className="home-stats-grid" style={{ padding:'24px 0 32px', borderBottom:'1px solid var(--b1)' }}>
           {[
             { val:statsVisible?'18,400+':'0', label:'청소년 창업가', icon:Users, color:'#3B82F6' },
             { val:statsVisible?'1,200+':'0', label:'인사이트 아티클', icon:BookOpen, color:'#A855F7' },
@@ -643,7 +633,7 @@ export default function HomePage() {
             트렌드 전체 <ChevronRight size={12}/>
           </button>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:40 }}>
+        <div className="home-trends-grid">
           {trendLoading
             ? Array(4).fill(0).map((_,i)=>(
                 <div key={i} style={{ padding:'18px', background:'var(--bg2)',
@@ -674,7 +664,7 @@ export default function HomePage() {
         </div>
 
         {/* Hero + sidebar grid */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 320px', gap:16, marginBottom:40 }}>
+        <div className="home-hero-grid">
           <div style={{ minHeight:440 }}>
             <HeroCard art={artLoading?null:hero} onClick={()=>hero&&goArt(hero)}/>
           </div>
@@ -711,7 +701,7 @@ export default function HomePage() {
 
         {/* 2×2 grid articles */}
         {gridArts.length > 0 && (
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:48 }}>
+          <div className="home-articles-grid">
             {(artLoading?Array(4).fill(null):gridArts).map((art,i) => {
               if (!art) return (
                 <div key={i} style={{ background:'var(--bg2)', border:'1px solid var(--b1)',
@@ -764,14 +754,14 @@ export default function HomePage() {
             <span style={{ fontFamily:'var(--f-mono)', fontSize:11, color:'#A855F7', letterSpacing:'.12em' }}>PLATFORM FEATURES</span>
           </div>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 }}>
+        <div className="home-features-grid">
           {FEATURES.map(f => <FeatureCard key={f.label} {...f}/>)}
         </div>
       </section>
 
       {/* ── 2COL: PROJECTS + NEWS ───────────────────────────── */}
       <section style={{ padding:'0 var(--pad-x) 48px', maxWidth:'var(--max-w)', margin:'0 auto' }}>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24 }}>
+        <div className="home-2col">
 
           {/* Projects */}
           <div>
@@ -816,7 +806,7 @@ export default function HomePage() {
                 더 보기 <ChevronRight size={11}/>
               </button>
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10 }}>
+            <div className="home-news-grid">
               {newsLoading
                 ? Array(6).fill(0).map((_,i)=>(
                     <div key={i} style={{ background:'var(--bg2)', border:'1px solid var(--b1)',
@@ -906,19 +896,38 @@ export default function HomePage() {
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
         @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes skPulse { 0%,100%{opacity:1} 50%{opacity:.5} }
         .art-grid-card:hover { transform:translateY(-3px)!important; border-color:var(--b2)!important; box-shadow:0 8px 28px rgba(0,0,0,0.5); }
         .art-grid-card:hover img { transform:scale(1.07); }
+        .home-stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; padding:24px 0 32px; border-bottom:1px solid var(--b1); }
+        .home-trends-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:40px; }
+        .home-hero-grid { display:grid; grid-template-columns:1fr 320px; gap:16px; margin-bottom:40px; }
+        .home-articles-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:48px; }
+        .home-features-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+        .home-2col { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+        .home-news-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
         @media(max-width:1100px){
-          .grid-4col { grid-template-columns:repeat(2,1fr)!important; }
-          .grid-3col { grid-template-columns:repeat(2,1fr)!important; }
+          .home-stats-grid { grid-template-columns:repeat(2,1fr)!important; }
+          .home-trends-grid { grid-template-columns:repeat(2,1fr)!important; }
+          .home-articles-grid { grid-template-columns:repeat(2,1fr)!important; }
+          .home-features-grid { grid-template-columns:repeat(2,1fr)!important; }
+          .home-news-grid { grid-template-columns:repeat(2,1fr)!important; }
         }
         @media(max-width:768px){
-          section > div[style*="grid-template-columns: 1fr 320px"] { grid-template-columns:1fr!important; }
-          section > div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns:1fr!important; }
-          section > div[style*="grid-template-columns: repeat(4"] { grid-template-columns:repeat(2,1fr)!important; }
-          section > div[style*="grid-template-columns: repeat(3"] { grid-template-columns:1fr!important; }
+          .home-stats-grid { grid-template-columns:repeat(2,1fr)!important; gap:8px!important; }
+          .home-trends-grid { grid-template-columns:repeat(2,1fr)!important; }
+          .home-hero-grid { grid-template-columns:1fr!important; }
+          .home-articles-grid { grid-template-columns:repeat(2,1fr)!important; }
+          .home-features-grid { grid-template-columns:1fr!important; }
+          .home-2col { grid-template-columns:1fr!important; }
+          .home-news-grid { grid-template-columns:repeat(2,1fr)!important; }
         }
-      `}</style>
+        @media(max-width:480px){
+          .home-stats-grid { grid-template-columns:repeat(2,1fr)!important; }
+          .home-articles-grid { grid-template-columns:1fr!important; }
+          .home-news-grid { grid-template-columns:1fr!important; }
+        }
+      \`}</style>
     </div>
   )
 }

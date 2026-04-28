@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-  Rocket, Mail, Github, Twitter, Instagram, Youtube,
-  ArrowRight, ExternalLink, Heart, ChevronRight, Zap
+  Rocket, Mail, Instagram,
+  ArrowRight, Heart
 } from 'lucide-react'
 
 const LINKS = {
@@ -30,10 +30,8 @@ const LINKS = {
 }
 
 const SOCIALS = [
-  { icon: Instagram, href: 'https://instagram.com/pacm_kr',    label: 'Instagram' },
-  { icon: Twitter,   href: 'https://twitter.com/pacm_kr',      label: 'Twitter' },
-  { icon: Youtube,   href: 'https://youtube.com/@pacm_kr',     label: 'YouTube' },
-  { icon: Github,    href: 'https://github.com/pacm-kr',       label: 'GitHub' },
+  { icon: Instagram, href: 'https://www.instagram.com/pacm.official/',    label: 'PACM Instagram',        desc: 'PACM' },
+  { icon: Instagram, href: 'https://www.instagram.com/insightship.team/', label: 'Insightship Instagram', desc: 'Insightship' },
 ]
 
 export default function Footer() {
@@ -56,7 +54,7 @@ export default function Footer() {
 
       {/* ── MAIN FOOTER ─────────────────────────────────────────── */}
       <div style={{ maxWidth: 'var(--max-w)', margin: '0 auto', padding: '48px var(--pad-x) 32px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 300px', gap: 40 }}>
+        <div className="footer-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 300px', gap: 40 }}>
 
           {/* Platform links */}
           <div>
@@ -131,16 +129,18 @@ export default function Footer() {
               lineHeight: 1.7, margin: '0 0 16px' }}>
               청소년 창업가를 위한<br/>무료 AI 기반 인사이트 플랫폼
             </p>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {SOCIALS.map(s => (
                 <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer"
                   aria-label={s.label}
-                  style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--b1)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: 'var(--t3)', transition: 'all .15s', textDecoration: 'none' }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--b2)'; e.currentTarget.style.color = 'var(--t1)'; e.currentTarget.style.background = 'var(--bg3)' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '6px 12px', borderRadius: 8, border: '1px solid var(--b1)',
+                    color: 'var(--t3)', transition: 'all .15s', textDecoration: 'none',
+                    fontSize: 11, fontFamily: 'var(--f-sans)' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#E1306C40'; e.currentTarget.style.color = '#E1306C'; e.currentTarget.style.background = 'rgba(225,48,108,0.06)' }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--b1)'; e.currentTarget.style.color = 'var(--t3)'; e.currentTarget.style.background = 'transparent' }}>
-                  <s.icon size={14} />
+                  <s.icon size={13} />
+                  <span>{s.desc}</span>
                 </a>
               ))}
             </div>
@@ -197,7 +197,7 @@ export default function Footer() {
           <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t4)' }}>
             © 2026 PACM. All rights reserved. · 대표: 조경용
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
             {LINKS.legal.map(l => (
               <Link key={l.path} to={l.path} style={{
                 fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t4)',
@@ -215,6 +215,21 @@ export default function Footer() {
           </div>
         </div>
       </div>
+
+      <style>{`
+        @media (max-width: 900px) {
+          .footer-grid {
+            grid-template-columns: 1fr 1fr !important;
+            gap: 28px !important;
+          }
+        }
+        @media (max-width: 540px) {
+          .footer-grid {
+            grid-template-columns: 1fr !important;
+            gap: 24px !important;
+          }
+        }
+      `}</style>
     </footer>
   )
 }
