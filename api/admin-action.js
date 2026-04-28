@@ -77,6 +77,40 @@ export default async function handler(req) {
         return ok({ action: 'delete_article', id })
       }
 
+      // 공지글 게시 (RLS 우회, service_role)
+      case 'post_notice': {
+        const { title, content, tags, author_id } = data || {}
+        if (!title || !content || !author_id) throw new Error('title, content, author_id 필수')
+        const r = await fetch(`${SB_URL}/rest/v1/community_posts`, {
+          method: 'POST',
+          headers: { ...H, Prefer: 'return=representation' },
+          body: JSON.stringify({
+            title,
+            content,
+            post_type: 'notice',
+            author_id,
+            tags: tags || [],
+            is_pinned: true,
+            is_deleted: false,
+            created_at: new Date().toISOString(),
+          }),
+        })
+        const txt = await r.text()
+        if (r.status !== 201) throw new Error(`DB 오류 ${r.status}: ${txt.slice(0,120)}`)
+        const d = JSON.parse(txt)
+        return ok({ action: 'post_notice', id: d?.[0]?.id })
+      }
+
+      // 공지글 소프트 삭제
+      case 'delete_notice': {
+        const r = await fetch(`${SB_URL}/rest/v1/community_posts?id=eq.${id}`, {
+          method: 'PATCH', headers: H,
+          body: JSON.stringify({ is_deleted: true, is_pinned: false }),
+        })
+        if (!r.ok && r.status !== 204) throw new Error(`DB 오류 ${r.status}`)
+        return ok({ action: 'delete_notice', id })
+      }
+
       default:
         return new Response(JSON.stringify({ error: `알 수 없는 action: ${action}` }), { status: 400, headers: CORS })
     }
