@@ -31,7 +31,7 @@
         },
         {
           "key": "Permissions-Policy",
-          "value": "camera=(), microphone=(), geolocation=(), payment=()"
+          "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), serial=(), midi=()"
         },
         {
           "key": "Strict-Transport-Security",
@@ -43,15 +43,27 @@
         },
         {
           "key": "Cross-Origin-Opener-Policy",
-          "value": "same-origin"
+          "value": "same-origin-allow-popups"
         },
         {
           "key": "Cross-Origin-Resource-Policy",
-          "value": "same-origin"
+          "value": "same-site"
+        },
+        {
+          "key": "Cross-Origin-Embedder-Policy",
+          "value": "unsafe-none"
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co https://*.naver.com https://*.naver.net https://ssl.pstatic.net https://*.pstatic.net https://image.pollinations.ai https://*.kakao.com https://img1.daumcdn.net https://t1.daumcdn.net https://images.unsplash.com *; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-ancestors 'none';"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co https://*.naver.com https://*.naver.net https://ssl.pstatic.net https://*.pstatic.net https://image.pollinations.ai https://*.kakao.com https://img1.daumcdn.net https://t1.daumcdn.net https://images.unsplash.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://openapi.naver.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;"
+        },
+        {
+          "key": "X-Permitted-Cross-Domain-Policies",
+          "value": "none"
+        },
+        {
+          "key": "X-Download-Options",
+          "value": "noopen"
         }
       ]
     },
@@ -73,11 +85,15 @@
         },
         {
           "key": "X-Robots-Tag",
-          "value": "noindex"
+          "value": "noindex, nofollow"
         },
         {
           "key": "X-RateLimit-Policy",
-          "value": "60;w=60"
+          "value": "40;w=60"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate"
         }
       ]
     }
@@ -85,43 +101,43 @@
   "crons": [
     {
       "path": "/api/fetch-news",
-      "schedule": "0 20 * * *"
+      "schedule": "0 11 * * *"
     },
     {
       "path": "/api/summarize-news",
-      "schedule": "30 20 * * *"
+      "schedule": "0 13 * * *"
     },
     {
       "path": "/api/run-summarize",
-      "schedule": "0 21 * * *"
+      "schedule": "0 15 * * *"
     },
     {
       "path": "/api/extract-news-trends",
-      "schedule": "0 22 * * *"
+      "schedule": "0 17 * * *"
     },
     {
       "path": "/api/news-cleanup",
-      "schedule": "0 23 * * *"
+      "schedule": "0 19 * * *"
     },
     {
       "path": "/api/ai-platform-operator",
-      "schedule": "0 0 * * *"
+      "schedule": "0 21 * * *"
     },
     {
       "path": "/api/ai-content-writer",
-      "schedule": "0 1 * * *"
+      "schedule": "0 22 * * *"
     },
     {
       "path": "/api/ai-mentor-learn",
-      "schedule": "0 3 * * *"
+      "schedule": "0 23 * * *"
     },
     {
       "path": "/api/generate-report",
-      "schedule": "0 14 * * 5"
+      "schedule": "0 6 * * 5"
     },
     {
       "path": "/api/send-newsletter",
-      "schedule": "0 23 * * 0"
+      "schedule": "0 10 * * 0"
     }
   ],
   "buildCommand": "npm run build",
