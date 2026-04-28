@@ -14,7 +14,7 @@ const FEATURES = [
 
 const HOW_IT_WORKS = [
   { step: '01', title: '뉴스 자동 수집', desc: '30개 RSS 피드에서 매시간 창업·스타트업 뉴스를 자동 수집합니다.' },
-  { step: '02', title: 'AI 청소년 맞춤 요약', desc: 'Gemini AI가 800~2,000자로 청소년 눈높이에 맞게 요약합니다.' },
+  { step: '02', title: 'AI 청소년 맞춤 요약', desc: 'Insightship AI가 800~2,000자로 청소년 눈높이에 맞게 요약합니다.' },
   { step: '03', title: '트렌드 자동 분석', desc: '수집된 뉴스를 분석해 카테고리별 트렌드와 시장 분위기를 자동 업데이트합니다.' },
   { step: '04', title: '큐레이션 발행', desc: '에디터가 엄선한 인사이트 아티클과 주간 뉴스레터를 발행합니다.' },
 ]
