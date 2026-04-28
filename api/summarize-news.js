@@ -482,17 +482,17 @@ export default async function handler(req) {
   let articles = []
   try {
     if (reprocessAll) {
-      // 전체 재처리 모드: ai_version이 v6 미만인 것
+      // 전체 재처리 모드: ai_summary 없거나 짧은 것
       const url = `${SB_URL}/rest/v1/articles`
-        + `?select=id,title,body,excerpt,ai_version`
+        + `?select=id,title,body,excerpt,ai_summary`
         + `&status=eq.published`
         + `&order=published_at.desc`
         + `&limit=${batchLimit}`
       const res = await fetch(url, { headers: H })
       const all = await res.json()
-      // v6 미처리 우선
+      // ai_summary 없거나 짧은 것 우선
       articles = Array.isArray(all)
-        ? all.filter(a => !a.ai_version || !a.ai_version.includes('v6'))
+        ? all.filter(a => !a.ai_summary || a.ai_summary.length < 100)
         : []
       if (articles.length === 0) articles = Array.isArray(all) ? all.slice(0, batchLimit) : []
     } else {
@@ -500,14 +500,14 @@ export default async function handler(req) {
       const cutoff = new Date(Date.now() - cutoffDays * 86400 * 1000).toISOString()
       const url = `${SB_URL}/rest/v1/articles`
         + `?published_at=gte.${cutoff}`
-        + `&select=id,title,body,excerpt,ai_version`
+        + `&select=id,title,body,excerpt,ai_summary`
         + `&order=published_at.desc`
         + `&limit=${batchLimit}`
       const res = await fetch(url, { headers: H })
       const all = await res.json()
-      // v6 미처리 우선, 없으면 전부
+      // ai_summary 없는 것 우선, 없으면 전부
       const unprocessed = Array.isArray(all)
-        ? all.filter(a => !a.ai_version || !a.ai_version.includes('v6'))
+        ? all.filter(a => !a.ai_summary || a.ai_summary.length < 100)
         : []
       articles = unprocessed.length > 0 ? unprocessed : (Array.isArray(all) ? all : [])
     }
@@ -517,7 +517,7 @@ export default async function handler(req) {
 
   if (!articles.length) {
     return new Response(JSON.stringify({
-      message: '처리할 기사 없음 (모두 v6 완료)',
+      message: '처리할 기사 없음 (모두 처리 완료)',
       processed: 0, skipped: 0, errors: [],
       timestamp: new Date().toISOString(),
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })
@@ -555,7 +555,6 @@ export default async function handler(req) {
           body: JSON.stringify({
             ai_summary:      summary,
             category,
-            ai_version:      'insightship-v6',
             ai_processed_at: new Date().toISOString(),
             read_time:       readTime,
             // ai_category: 도메인 기반 세분류

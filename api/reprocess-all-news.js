@@ -215,25 +215,25 @@ export default async function handler(req) {
     if (!SB_URL || !SB_KEY) {
       return new Response(JSON.stringify({ error: 'Missing Supabase env' }), { status: 500 })
     }
-    const [rTotal, rV6, rNull] = await Promise.all([
+    const [rTotal, rSummary, rNull] = await Promise.all([
       fetch(`${SB_URL}/rest/v1/articles?status=eq.published&select=id&limit=1`,
         { headers: { ...H, Prefer: 'count=exact' } }),
-      fetch(`${SB_URL}/rest/v1/articles?status=eq.published&ai_version=eq.insightship-v6&select=id&limit=1`,
+      fetch(`${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=not.is.null&select=id&limit=1`,
         { headers: { ...H, Prefer: 'count=exact' } }),
       fetch(`${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=is.null&select=id&limit=1`,
         { headers: { ...H, Prefer: 'count=exact' } }),
     ])
     const total     = parseInt(rTotal.headers.get('content-range')?.split('/')[1]   || '0')
-    const v6Done    = parseInt(rV6.headers.get('content-range')?.split('/')[1]      || '0')
+    const summaryDone = parseInt(rSummary.headers.get('content-range')?.split('/')[1] || '0')
     const nullCount = parseInt(rNull.headers.get('content-range')?.split('/')[1]    || '0')
-    const pending   = total - v6Done
+    const pending   = total - summaryDone
 
     return new Response(JSON.stringify({
       total_articles:  total,
-      v6_processed:    v6Done,
+      v6_processed:    summaryDone,
       pending_reprocess: pending,
       no_summary:      nullCount,
-      progress_pct:    total > 0 ? Math.round((v6Done / total) * 100) : 0,
+      progress_pct:    total > 0 ? Math.round((summaryDone / total) * 100) : 0,
       engine:          'insightship-v6',
       timestamp:       new Date().toISOString(),
     }), { headers: { 'Content-Type': 'application/json' } })
@@ -260,7 +260,7 @@ export default async function handler(req) {
     // 전체 강제 재처리
     const r = await fetch(
       `${SB_URL}/rest/v1/articles?status=eq.published`
-      + `&select=id,title,body,excerpt,ai_version`
+      + `&select=id,title,body,excerpt`
       + `&order=published_at.desc&limit=${batchSize}&offset=${offset}`,
       { headers: H }
     )
@@ -269,26 +269,28 @@ export default async function handler(req) {
     // 1차: ai_summary 없는 것
     const r1 = await fetch(
       `${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=is.null`
-      + `&select=id,title,body,excerpt,ai_version`
+      + `&select=id,title,body,excerpt`
       + `&order=published_at.desc&limit=${batchSize}&offset=${offset}`,
       { headers: H }
     )
     const raw1 = await r1.json().catch(() => [])
     articles = Array.isArray(raw1) ? raw1 : []
 
-    // 2차: v6 미처리 (ai_version이 insightship-v6가 아닌 것)
+    // 2차: ai_summary 있지만 짧은 것 (재처리 필요)
     if (articles.length < batchSize) {
       const need = batchSize - articles.length
       const existIds = new Set(articles.map(a => a.id))
       const r2 = await fetch(
         `${SB_URL}/rest/v1/articles?status=eq.published`
-        + `&ai_version=not.eq.insightship-v6&ai_summary=not.is.null`
-        + `&select=id,title,body,excerpt,ai_version`
+        + `&ai_summary=not.is.null`
+        + `&select=id,title,body,excerpt,ai_summary`
         + `&order=published_at.desc&limit=${need * 2}&offset=${offset}`,
         { headers: H }
       )
       const raw2 = await r2.json().catch(() => [])
-      const extra = Array.isArray(raw2) ? raw2.filter(a => !existIds.has(a.id)).slice(0, need) : []
+      const extra = (Array.isArray(raw2) ? raw2 : [])
+        .filter(a => !existIds.has(a.id) && (a.ai_summary?.length || 0) < 100)
+        .slice(0, need)
       articles = [...articles, ...extra]
     }
   }
@@ -296,12 +298,12 @@ export default async function handler(req) {
   if (!Array.isArray(articles) || articles.length === 0) {
     // 남은 미처리 수 확인
     const cr = await fetch(
-      `${SB_URL}/rest/v1/articles?status=eq.published&ai_version=not.eq.insightship-v6&select=id&limit=1`,
+      `${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=is.null&select=id&limit=1`,
       { headers: { ...H, Prefer: 'count=exact' } }
     )
     const remaining = parseInt(cr.headers.get('content-range')?.split('/')[1] || '0')
     return new Response(JSON.stringify({
-      message: remaining === 0 ? '✅ 모든 기사가 v6로 처리 완료되었습니다!' : '현재 배치에 처리할 기사 없음',
+      message: remaining === 0 ? '✅ 모든 기사 요약 처리 완료!' : '현재 배치에 처리할 기사 없음',
       processed: 0, done: 0, failed: 0, remaining,
       next_offset: offset + batchSize,
       engine: 'insightship-v6',
@@ -338,7 +340,6 @@ export default async function handler(req) {
       headers: { ...H, Prefer: 'return=minimal' },
       body: JSON.stringify({
         ai_summary:      result.value,
-        ai_version:      'insightship-v6',
         ai_processed_at: new Date().toISOString(),
         ai_category:     dom,
         category,
@@ -356,7 +357,7 @@ export default async function handler(req) {
 
   // 남은 미처리 수 (재처리 완료 여부 확인)
   const crRes = await fetch(
-    `${SB_URL}/rest/v1/articles?status=eq.published&ai_version=not.eq.insightship-v6&select=id&limit=1`,
+    `${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=is.null&select=id&limit=1`,
     { headers: { ...H, Prefer: 'count=exact' } }
   )
   const remaining = parseInt(crRes.headers.get('content-range')?.split('/')[1] || '0')

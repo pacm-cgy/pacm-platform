@@ -233,46 +233,45 @@ export default async function handler(req) {
     'Content-Type': 'application/json',
   }
 
-  // 미처리 기사 우선 (ai_version이 v6가 아닌 것)
+  // 미처리 기사 조회 (ai_summary 없는 것 우선)
   let articles = []
 
   // 1차: ai_summary가 없는 것
   const r1 = await fetch(
     `${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=is.null`
-    + `&select=id,title,body,excerpt,ai_version&order=published_at.desc&limit=60`,
+    + `&select=id,title,body,excerpt&order=published_at.desc&limit=60`,
     { headers: H }
   )
   const raw1 = await r1.json()
   articles = Array.isArray(raw1) ? raw1 : []
 
-  // 2차: v6 미처리 기사 (ai_version이 v6 아닌 것)
+  // 2차: 짧은 요약 재처리 (200자 미만)
   if (articles.length < 10) {
     const r2 = await fetch(
-      `${SB_URL}/rest/v1/articles?status=eq.published&ai_version=not.like.*v6*`
-      + `&select=id,title,body,excerpt,ai_version&order=published_at.desc&limit=60`,
+      `${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=not.is.null`
+      + `&select=id,title,body,excerpt,ai_summary&order=published_at.desc&limit=200`,
       { headers: H }
     )
     const raw2 = await r2.json()
-    const extra = Array.isArray(raw2) ? raw2.filter(a => !articles.find(x => x.id === a.id)) : []
+    const extra = (Array.isArray(raw2) ? raw2 : [])
+      .filter(a => (a.ai_summary?.length || 0) < 200 && !articles.find(x => x.id === a.id))
     articles = [...articles, ...extra].slice(0, 60)
   }
 
-  // 3차: 짧은 요약 재처리 (200자 미만)
+  // 3차: 최근 기사 중 ai_category 없는 것
   if (articles.length < 5) {
     const r3 = await fetch(
-      `${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=not.is.null`
-      + `&select=id,title,body,excerpt,ai_summary,ai_version&order=published_at.desc&limit=200`,
+      `${SB_URL}/rest/v1/articles?status=eq.published&ai_category=is.null`
+      + `&select=id,title,body,excerpt,ai_summary&order=published_at.desc&limit=200`,
       { headers: H }
     )
     const raw3 = await r3.json()
-    articles = (Array.isArray(raw3) ? raw3 : [])
-      .filter(a => (a.ai_summary?.length || 0) < 200)
-      .slice(0, 60)
+    articles = (Array.isArray(raw3) ? raw3 : []).slice(0, 60)
   }
 
   if (!articles.length) {
     return new Response(JSON.stringify({
-      message: '처리할 뉴스 없음 — 모두 v6 완료', done: 0, remaining: 0,
+      message: '처리할 뉴스 없음 — 모두 처리 완료', done: 0, remaining: 0,
       engine: 'insightship-v6', timestamp: new Date().toISOString(),
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })
   }
@@ -300,7 +299,6 @@ export default async function handler(req) {
       headers: { ...H, Prefer: 'return=minimal' },
       body: JSON.stringify({
         ai_summary:      result.value,
-        ai_version:      'insightship-v6',
         ai_processed_at: new Date().toISOString(),
         ai_category:     domain,
         category,

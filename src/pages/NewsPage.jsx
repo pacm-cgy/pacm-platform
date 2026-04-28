@@ -9,6 +9,8 @@ const CATEGORY_COLORS = {
   funding: '#F59E0B', ai: '#818cf8', ai_startup: '#818cf8', edutech: '#38bdf8',
   youth: '#34d399', entrepreneurship: '#c4b5fd', unicorn: '#fb7185',
   climate: '#86efac', health: '#67e8f9', fintech: '#fb923c', general: '#9CA3AF',
+  investment: '#F59E0B', tech: '#818cf8', startup: '#60A5FA',
+  policy: '#a78bfa', esg: '#86efac',
 }
 const CATEGORY_BG = {
   funding: 'rgba(245,158,11,0.12)', ai: 'rgba(129,140,248,0.12)', ai_startup: 'rgba(129,140,248,0.12)',
@@ -16,21 +18,27 @@ const CATEGORY_BG = {
   entrepreneurship: 'rgba(196,181,253,0.12)', unicorn: 'rgba(251,113,133,0.12)',
   climate: 'rgba(134,239,172,0.12)', health: 'rgba(103,232,249,0.12)',
   fintech: 'rgba(251,146,60,0.12)', general: 'rgba(156,163,175,0.12)',
+  investment: 'rgba(245,158,11,0.12)', tech: 'rgba(129,140,248,0.12)',
+  startup: 'rgba(96,165,250,0.12)', policy: 'rgba(167,139,250,0.12)', esg: 'rgba(134,239,172,0.12)',
 }
 const CATEGORY_KO = {
   funding: '투자/펀딩', ai: 'AI', ai_startup: 'AI', edutech: '에듀테크',
   youth: '청소년창업', entrepreneurship: '창업', unicorn: '유니콘',
   climate: '기후테크', health: '헬스케어', fintech: '핀테크', general: '일반',
+  investment: '투자/펀딩', tech: 'AI/기술', startup: '스타트업',
+  policy: '정책/지원', esg: 'ESG',
 }
 const FILTERS = [
   { label: '전체', value: '전체' },
   { label: '투자/펀딩', value: '투자/펀딩' },
-  { label: 'AI', value: 'AI' },
+  { label: 'AI/기술', value: 'AI/기술' },
   { label: '창업', value: '창업' },
   { label: '청소년창업', value: '청소년창업' },
   { label: '에듀테크', value: '에듀테크' },
   { label: '헬스케어', value: '헬스케어' },
   { label: '핀테크', value: '핀테크' },
+  { label: '기후테크', value: '기후테크' },
+  { label: '정책/지원', value: '정책/지원' },
 ]
 const PAGE_SIZE = 60
 
@@ -85,13 +93,13 @@ function NewsRow({ article }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{
             fontFamily: 'var(--f-mono)', fontSize: 10, letterSpacing: '0.3px',
-            color: accent, background: CATEGORY_BG[article.ai_category] || 'transparent',
+            color: accent, background: CATEGORY_BG[article.ai_category] || 'rgba(156,163,175,0.1)',
             padding: '1px 6px', border: `1px solid ${accent}55`, borderRadius: 3,
           }}>
             {catKo}
           </span>
-          {article.ai_version && (
-            <span style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t4)', letterSpacing: '0.05em' }}>AI</span>
+          {article.ai_summary && (
+            <span style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t4)', letterSpacing: '0.05em' }}>AI요약</span>
           )}
           {article.source_name && (
             <span style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t3)' }}>{article.source_name}</span>
@@ -132,13 +140,15 @@ export default function NewsPage() {
   const searchRef = useRef(null)
 
   const FILTER_TO_CAT = {
-    '투자/펀딩': ['funding', 'unicorn'],
-    'AI': ['ai', 'ai_startup'],
-    '창업': ['entrepreneurship', 'general'],
+    '투자/펀딩': ['funding', 'unicorn', 'investment'],
+    'AI/기술': ['ai', 'ai_startup', 'tech'],
+    '창업': ['entrepreneurship', 'general', 'startup'],
     '청소년창업': ['youth'],
     '에듀테크': ['edutech'],
     '헬스케어': ['health'],
     '핀테크': ['fintech'],
+    '기후테크': ['climate', 'esg'],
+    '정책/지원': ['policy'],
   }
 
   const fetchNews = useCallback(async (pageNum, filter, search, reset = false) => {
@@ -147,7 +157,7 @@ export default function NewsPage() {
     try {
       let q = supabase
         .from('articles')
-        .select('id,title,slug,ai_category,source_name,published_at,ai_summary,ai_version', { count: 'exact' })
+        .select('id,title,slug,ai_category,source_name,published_at,ai_summary', { count: 'exact' })
         .eq('status', 'published')
         .not('source_name', 'is', null)
         .order('published_at', { ascending: false })
