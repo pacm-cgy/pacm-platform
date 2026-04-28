@@ -85,35 +85,23 @@
   "crons": [
     {
       "path": "/api/fetch-news",
-      "schedule": "0 * * * *"
+      "schedule": "0 20 * * *"
     },
     {
       "path": "/api/summarize-news",
-      "schedule": "30 * * * *"
+      "schedule": "30 20 * * *"
     },
     {
       "path": "/api/run-summarize",
-      "schedule": "0 20 * * *"
+      "schedule": "0 21 * * *"
     },
     {
       "path": "/api/extract-news-trends",
-      "schedule": "0 0/6 * * *"
+      "schedule": "0 22 * * *"
     },
     {
       "path": "/api/news-cleanup",
-      "schedule": "0 20 * * *"
-    },
-    {
-      "path": "/api/ai-mentor-learn",
-      "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/generate-report",
-      "schedule": "0 23 * * 5"
-    },
-    {
-      "path": "/api/send-newsletter",
-      "schedule": "0 23 * * 0"
+      "schedule": "0 23 * * *"
     },
     {
       "path": "/api/ai-platform-operator",
@@ -122,6 +110,18 @@
     {
       "path": "/api/ai-content-writer",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/ai-mentor-learn",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/generate-report",
+      "schedule": "0 14 * * 5"
+    },
+    {
+      "path": "/api/send-newsletter",
+      "schedule": "0 23 * * 0"
     }
   ],
   "buildCommand": "npm run build",
