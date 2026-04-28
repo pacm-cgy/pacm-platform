@@ -8,9 +8,9 @@
  * GET  /api/reprocess-all-news  → 처리 현황 통계
  *
  * 동작 방식:
- *   1. ai_version != 'insightship-v6' 인 기사 batch 개씩 조회
- *   2. v6 엔진으로 요약 재생성
- *   3. ai_summary, ai_version, ai_category, category, read_time 업데이트
+ *   1. ai_summary 없는 기사 batch 개씩 조회
+ *   2. 자체 NLP 엔진으로 요약 재생성
+ *   3. ai_summary, ai_category, category, read_time 업데이트
  *   4. 응답에 remaining 포함 → 프론트/cron에서 반복 호출 가능
  */
 export const config = { runtime: 'edge', maxDuration: 60 }
@@ -178,7 +178,7 @@ function buildSummary(title,body){
   if(!sents.length){
     return [`**${title.trim()}**`,'',`${evtInfo.label} · ${domInfo.ko}`,'',
       '**핵심 내용**','',title.trim(),'','**창업가 시사점**','',insight,'',
-      `*ai: insightship-v6 · domain: ${dom} · event: ${evt}*`].join('\n')
+      `*ai: insightship-nlp · domain: ${dom} · event: ${evt}*`].join('\n')
   }
 
   const ttoks=tokenize(title)
@@ -193,7 +193,7 @@ function buildSummary(title,body){
     '**핵심 내용**','',...ordered.map(s=>applyTerms(s,used)),'']
   if(numS.length){lines.push('**주요 수치**','');numS.forEach(s=>lines.push(`→ ${applyTerms(s,used)}`));lines.push('')}
   if(cauS.length){lines.push('**배경과 맥락**','',applyTerms(cauS[0],used),'')}
-  lines.push('**창업가 시사점**','',insight,'',`*ai: insightship-v6 · domain: ${dom} · event: ${evt}*`)
+  lines.push('**창업가 시사점**','',insight,'',`*ai: insightship-nlp · domain: ${dom} · event: ${evt}*`)
   return lines.join('\n')
 }
 
@@ -234,7 +234,7 @@ export default async function handler(req) {
       pending_reprocess: pending,
       no_summary:      nullCount,
       progress_pct:    total > 0 ? Math.round((summaryDone / total) * 100) : 0,
-      engine:          'insightship-v6',
+      engine:          'insightship-nlp',
       timestamp:       new Date().toISOString(),
     }), { headers: { 'Content-Type': 'application/json' } })
   }
@@ -306,7 +306,7 @@ export default async function handler(req) {
       message: remaining === 0 ? '✅ 모든 기사 요약 처리 완료!' : '현재 배치에 처리할 기사 없음',
       processed: 0, done: 0, failed: 0, remaining,
       next_offset: offset + batchSize,
-      engine: 'insightship-v6',
+      engine: 'insightship-nlp',
       timestamp: new Date().toISOString(),
     }), { headers: { 'Content-Type': 'application/json' } })
   }
@@ -370,7 +370,7 @@ export default async function handler(req) {
     remaining,
     next_offset: offset + batchSize,
     has_more:    remaining > 0,
-    engine:      'insightship-v6',
+    engine:      'insightship-nlp',
     cost:        0,
     external_api: false,
     timestamp:   new Date().toISOString(),

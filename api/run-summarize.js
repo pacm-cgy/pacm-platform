@@ -180,7 +180,7 @@ function buildSummary(title, body) {
   if (!sents.length) {
     return [`**${title.trim()}**`, '', `${evtInfo.label} · ${domInfo.ko}`, '',
       '**핵심 내용**', '', title.trim(), '', '**창업가 시사점**', '', insight, '',
-      `*ai: insightship-v6 · domain: ${domain} · event: ${eventType}*`].join('\n')
+      `*ai: insightship-nlp · domain: ${domain} · event: ${eventType}*`].join('\n')
   }
 
   const titleToks = tokenize(title)
@@ -202,7 +202,7 @@ function buildSummary(title, body) {
     lines.push('**배경과 맥락**', '', applyTerms(causal[0], used), '')
   }
   lines.push('**창업가 시사점**', '', insight, '',
-    `*ai: insightship-v6 · domain: ${domain} · event: ${eventType}*`)
+    `*ai: insightship-nlp · domain: ${domain} · event: ${eventType}*`)
   return lines.join('\n')
 }
 
@@ -218,7 +218,7 @@ function mapCategory(domain, eventType) {
 export default async function handler(req) {
   if (req.method === 'GET') {
     return new Response(JSON.stringify({
-      status: 'ok', engine: 'insightship-v6',
+      status: 'ok', engine: 'insightship-nlp',
       description: '뉴스 AI 요약 배치 실행기 — 외부 API 0원',
     }), { headers: { 'Content-Type': 'application/json' } })
   }
@@ -272,7 +272,7 @@ export default async function handler(req) {
   if (!articles.length) {
     return new Response(JSON.stringify({
       message: '처리할 뉴스 없음 — 모두 처리 완료', done: 0, remaining: 0,
-      engine: 'insightship-v6', timestamp: new Date().toISOString(),
+      engine: 'insightship-nlp', timestamp: new Date().toISOString(),
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })
   }
 
@@ -316,7 +316,7 @@ export default async function handler(req) {
 
   return new Response(JSON.stringify({
     done, failed, processed: articles.length, remaining,
-    engine: 'insightship-v6',
+    engine: 'insightship-nlp',
     cost: 0, external_api: false,
     timestamp: new Date().toISOString(),
   }), { status: 200, headers: { 'Content-Type': 'application/json' } })

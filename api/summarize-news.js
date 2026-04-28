@@ -371,7 +371,7 @@ function buildSummary(title, body) {
 
   // ── So What (창업가 시사점) ───────────────────────────────────────
   lines.push('**창업가 시사점**', '', insight, '')
-  lines.push(`*ai: insightship-v6 · domain: ${domain} · event: ${eventType}*`)
+  lines.push(`*ai: insightship-nlp · domain: ${domain} · event: ${eventType}*`)
 
   return lines.join('\n')
 }
@@ -393,7 +393,7 @@ function buildFallback(title, domain, eventType) {
     '',
     insight,
     '',
-    `*ai: insightship-v6 · domain: ${domain} · event: ${eventType}*`,
+    `*ai: insightship-nlp · domain: ${domain} · event: ${eventType}*`,
   ].join('\n')
 }
 
@@ -576,7 +576,7 @@ export default async function handler(req) {
   return new Response(JSON.stringify({
     ...results,
     total: articles.length,
-    engine: 'insightship-v6',
+    engine: 'insightship-nlp',
     timestamp: new Date().toISOString(),
   }), {
     status: 200,

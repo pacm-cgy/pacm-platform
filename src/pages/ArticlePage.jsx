@@ -112,7 +112,7 @@ function renderV7Summary(text) {
       i++; continue
     }
 
-    // *이탤릭* 메타 (ai: insightship-v7 ...)
+    // *이탤릭* 메타 라인 (ai: ...) — 숨김 처리
     if (t.startsWith('*') && t.endsWith('*') && !t.startsWith('**')) {
       elements.push(
         <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--t3)', marginTop:'20px', letterSpacing:'0.08em' }}>
@@ -332,11 +332,11 @@ export default function ArticlePage() {
                 {/* AI 요약 배지 */}
                 <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'24px', padding:'10px 16px', background:'var(--bg3)', borderLeft:'2px solid var(--t1)' }}>
                   <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--t1)', letterSpacing:'0.12em', textTransform:'uppercase' }}>
-                    INSIGHTSHIP AI v7 — 교육 콘텐츠
+                    AI 인사이트 요약
                   </span>
                 </div>
 
-                {/* AI v7 교육 콘텐츠 렌더러 */}
+                {/* AI 인사이트 요약 렌더러 */}
                 <div style={{ fontSize:'15px', lineHeight:1.95, letterSpacing:'-0.01em' }}>
                   {renderV7Summary(summary)}
                 </div>

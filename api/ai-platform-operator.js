@@ -93,32 +93,40 @@ async function getAriaId() {
 // §3. 오늘 이미 실행했는지 확인 (중복 방지)
 // ══════════════════════════════════════════════════════════════════════
 
+// 오늘 이미 같은 제목으로 공지가 올라갔는지 community_posts로 확인 (ai_operations_log 스키마 미완성 대비)
 async function alreadyRanToday(taskType) {
   try {
     const today = todayKST()
-    const r = await fetch(
-      `${SB_URL}/rest/v1/ai_operations_log?task_type=eq.${taskType}&run_date=eq.${today}&limit=1&select=id`,
-      { headers: H() }
-    )
-    const d = await r.json()
-    return Array.isArray(d) && d.length > 0
+    // community_posts에서 오늘 날짜 공지/질문 여부로 중복 판단
+    if (taskType === 'daily_notice') {
+      const r = await fetch(
+        `${SB_URL}/rest/v1/community_posts?post_type=eq.notice&created_at=gte.${today}T00:00:00Z&limit=1&select=id`,
+        { headers: H() }
+      )
+      const d = await r.json().catch(() => [])
+      return Array.isArray(d) && d.length > 0
+    }
+    if (taskType === 'community_discussion') {
+      const r = await fetch(
+        `${SB_URL}/rest/v1/community_posts?post_type=eq.question&created_at=gte.${today}T00:00:00Z&limit=1&select=id`,
+        { headers: H() }
+      )
+      const d = await r.json().catch(() => [])
+      return Array.isArray(d) && d.length > 0
+    }
+    return false
   } catch { return false }
 }
 
 async function logOperation(taskType, result, details='') {
+  // ai_operations_log 테이블은 id, created_at 컬럼만 존재 — 로깅 스킵 (에러 방지)
+  // 중복 방지는 alreadyRanToday()에서 community_posts로 처리
   try {
     await fetch(`${SB_URL}/rest/v1/ai_operations_log`, {
       method: 'POST',
       headers: { ...H(), Prefer: 'return=minimal' },
-      body: JSON.stringify({
-        task_type: taskType,
-        run_date: todayKST(),
-        result,
-        details: details.slice(0, 500),
-        engine: 'ARIA-v2',
-        created_at: new Date().toISOString(),
-      }),
-    })
+      body: JSON.stringify({ created_at: new Date().toISOString() }),
+    }).catch(() => {})
   } catch {}
 }
 
