@@ -927,7 +927,7 @@ export default function HomePage() {
           .home-articles-grid { grid-template-columns:1fr!important; }
           .home-news-grid { grid-template-columns:1fr!important; }
         }
-      \`}</style>
+      `}</style>
     </div>
   )
 }
