@@ -51,7 +51,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co https://*.naver.com https://*.naver.net https://ssl.pstatic.net https://*.pstatic.net https://image.pollinations.ai https://*.kakao.com https://img1.daumcdn.net https://t1.daumcdn.net https://images.unsplash.com *; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com; frame-ancestors 'none';"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co https://*.naver.com https://*.naver.net https://ssl.pstatic.net https://*.pstatic.net https://image.pollinations.ai https://*.kakao.com https://img1.daumcdn.net https://t1.daumcdn.net https://images.unsplash.com *; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-ancestors 'none';"
         }
       ]
     },
@@ -84,12 +84,44 @@
   ],
   "crons": [
     {
-      "path": "/api/send-newsletter",
-      "schedule": "0 23 * * 0"
+      "path": "/api/fetch-news",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/summarize-news",
+      "schedule": "30 * * * *"
+    },
+    {
+      "path": "/api/run-summarize",
+      "schedule": "0 20 * * *"
+    },
+    {
+      "path": "/api/extract-news-trends",
+      "schedule": "0 0/6 * * *"
+    },
+    {
+      "path": "/api/news-cleanup",
+      "schedule": "0 20 * * *"
+    },
+    {
+      "path": "/api/ai-mentor-learn",
+      "schedule": "0 3 * * *"
     },
     {
       "path": "/api/generate-report",
       "schedule": "0 23 * * 5"
+    },
+    {
+      "path": "/api/send-newsletter",
+      "schedule": "0 23 * * 0"
+    },
+    {
+      "path": "/api/ai-platform-operator",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/ai-content-writer",
+      "schedule": "0 1 * * *"
     }
   ],
   "buildCommand": "npm run build",

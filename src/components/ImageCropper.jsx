@@ -69,16 +69,16 @@ export default function ImageCropper({ src, aspectRatio = 16/9, onCrop, onCancel
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-      <div style={{ background: 'var(--c-gray-1)', border: '1px solid var(--c-gray-3)', maxWidth: '720px', width: '100%' }}>
+      <div style={{ background: 'var(--bg2)', border: '1px solid var(--b1)', maxWidth: '720px', width: '100%' }}>
         {/* 헤더 */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--c-gray-3)' }}>
-          <div style={{ fontFamily: 'var(--f-mono)', fontSize: '12px', color: 'var(--c-gold)', letterSpacing: '2px' }}>IMAGE CROP</div>
-          <button onClick={onCancel} style={{ background: 'none', border: 'none', color: 'var(--c-muted)', cursor: 'pointer' }}><X size={18} /></button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--b1)' }}>
+          <div style={{ fontFamily: 'var(--f-mono)', fontSize: '12px', color: 'var(--amber)', letterSpacing: '2px' }}>IMAGE CROP</div>
+          <button onClick={onCancel} style={{ background: 'none', border: 'none', color: 'var(--t3)', cursor: 'pointer' }}><X size={18} /></button>
         </div>
 
         {/* 캔버스 영역 */}
         <div style={{ padding: '20px', display: 'flex', justifyContent: 'center' }}>
-          <div ref={containerRef} style={{ position: 'relative', cursor: dragging ? 'grabbing' : 'grab', userSelect: 'none', border: '2px solid var(--c-gold)', lineHeight: 0 }}
+          <div ref={containerRef} style={{ position: 'relative', cursor: dragging ? 'grabbing' : 'grab', userSelect: 'none', border: '2px solid var(--amber)', lineHeight: 0 }}
             onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
             onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onMouseUp}
           >
@@ -92,21 +92,21 @@ export default function ImageCropper({ src, aspectRatio = 16/9, onCrop, onCancel
 
         {/* 컨트롤 */}
         <div style={{ padding: '0 20px 16px', display: 'flex', alignItems: 'center', gap: '12px', justifyContent: 'center' }}>
-          <button onClick={() => setScale(s => Math.max(0.5, s - 0.1))} style={{ background: 'var(--c-gray-2)', border: '1px solid var(--c-gray-3)', color: 'var(--c-paper)', padding: '8px', cursor: 'pointer' }}><ZoomOut size={16} /></button>
+          <button onClick={() => setScale(s => Math.max(0.5, s - 0.1))} style={{ background: 'var(--bg3)', border: '1px solid var(--b1)', color: 'var(--t1)', padding: '8px', cursor: 'pointer' }}><ZoomOut size={16} /></button>
           <input type="range" min={50} max={300} value={Math.round(scale * 100)}
             onChange={e => setScale(Number(e.target.value) / 100)}
-            style={{ flex: 1, maxWidth: '200px', accentColor: 'var(--c-gold)' }} />
-          <button onClick={() => setScale(s => Math.min(3, s + 0.1))} style={{ background: 'var(--c-gray-2)', border: '1px solid var(--c-gray-3)', color: 'var(--c-paper)', padding: '8px', cursor: 'pointer' }}><ZoomIn size={16} /></button>
-          <button onClick={() => { setScale(1); setOffset({ x: 0, y: 0 }) }} style={{ background: 'var(--c-gray-2)', border: '1px solid var(--c-gray-3)', color: 'var(--c-muted)', padding: '8px', cursor: 'pointer' }}><RotateCcw size={16} /></button>
+            style={{ flex: 1, maxWidth: '200px', accentColor: 'var(--amber)' }} />
+          <button onClick={() => setScale(s => Math.min(3, s + 0.1))} style={{ background: 'var(--bg3)', border: '1px solid var(--b1)', color: 'var(--t1)', padding: '8px', cursor: 'pointer' }}><ZoomIn size={16} /></button>
+          <button onClick={() => { setScale(1); setOffset({ x: 0, y: 0 }) }} style={{ background: 'var(--bg3)', border: '1px solid var(--b1)', color: 'var(--t3)', padding: '8px', cursor: 'pointer' }}><RotateCcw size={16} /></button>
         </div>
 
         {/* 안내 */}
-        <div style={{ padding: '0 20px 12px', textAlign: 'center', fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--c-gray-5)' }}>
+        <div style={{ padding: '0 20px 12px', textAlign: 'center', fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--t4)' }}>
           드래그로 위치 조정 · 슬라이더로 크기 조정 · {CROP_W}×{CROP_H}px (16:9)
         </div>
 
         {/* 버튼 */}
-        <div style={{ padding: '16px 20px', borderTop: '1px solid var(--c-gray-3)', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+        <div style={{ padding: '16px 20px', borderTop: '1px solid var(--b1)', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
           <button onClick={onCancel} className="btn btn-outline btn-sm">취소</button>
           <button onClick={handleCrop} className="btn btn-gold btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Check size={14} /> 적용

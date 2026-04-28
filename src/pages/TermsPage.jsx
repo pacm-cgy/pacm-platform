@@ -5,9 +5,9 @@ export default function TermsPage() {
   const navigate = useNavigate()
   return (
     <div style={{ paddingBottom: '80px' }}>
-      <div style={{ borderBottom: '1px solid var(--c-gray-3)', padding: '14px 0', marginBottom: '0' }}>
+      <div style={{ borderBottom: '1px solid var(--b1)', padding: '14px 0', marginBottom: '0' }}>
         <div className="container">
-          <button onClick={() => navigate(-1)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', color: 'var(--c-muted)', fontSize: '13px', fontFamily: 'var(--f-mono)', cursor: 'pointer' }}>
+          <button onClick={() => navigate(-1)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', color: 'var(--t3)', fontSize: '13px', fontFamily: 'var(--f-mono)', cursor: 'pointer' }}>
             <ArrowLeft size={14} /> 돌아가기
           </button>
         </div>
@@ -15,9 +15,9 @@ export default function TermsPage() {
       <div className="container" style={{ maxWidth: '800px', margin: '0 auto', padding: '48px var(--pad-x)' }}>
         <div className="t-eyebrow" style={{ marginBottom: '8px' }}>LEGAL</div>
         <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(24px,4vw,32px)', fontWeight: 700, marginBottom: '8px' }}>이용약관</h1>
-        <div style={{ fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--c-muted)', marginBottom: '40px' }}>시행일: 2026년 1월 1일 | 버전: 1.0</div>
+        <div style={{ fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--t3)', marginBottom: '40px' }}>시행일: 2026년 1월 1일 | 버전: 1.0</div>
         
-        <div style={{ fontFamily: 'var(--f-sans)', fontSize: '15px', lineHeight: 1.9, color: 'var(--c-paper)' }}>
+        <div style={{ fontFamily: 'var(--f-sans)', fontSize: '15px', lineHeight: 1.9, color: 'var(--t1)' }}>
           {[
             { title: '제1조 (목적)', content: `이 약관은 피에이씨엠(PACM, 이하 "회사")이 운영하는 청소년 창업 플랫폼 Insightship(이하 "서비스")의 이용과 관련하여 회사와 이용자 간의 권리·의무 및 책임사항, 기타 필요한 사항을 규정함을 목적으로 합니다.` },
             { title: '제2조 (정의)', content: `① "서비스"란 회사가 제공하는 웹사이트(www.insightship.pacm.kr) 및 관련 서비스 일체를 말합니다.\n② "이용자"란 이 약관에 따라 서비스를 이용하는 회원 및 비회원을 말합니다.\n③ "회원"이란 서비스에 개인정보를 제공하고 회원등록을 한 자를 말합니다.\n④ "콘텐츠"란 서비스 내에서 게시, 제공되는 텍스트, 이미지, 동영상 등 일체의 정보를 말합니다.` },
@@ -31,10 +31,10 @@ export default function TermsPage() {
             { title: '제10조 (문의)', content: `서비스 이용 관련 문의는 아래 연락처로 해주시기 바랍니다.\n• 이메일: contact@pacm.kr\n• 운영사: 피에이씨엠(PACM)\n• 사업자등록번호: 891-45-01385` },
           ].map((section, i) => (
             <div key={i} style={{ marginBottom: '36px' }}>
-              <h2 style={{ fontFamily: 'var(--f-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--c-paper)', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid var(--c-gray-3)' }}>
+              <h2 style={{ fontFamily: 'var(--f-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--t1)', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid var(--b1)' }}>
                 {section.title}
               </h2>
-              <p style={{ color: 'var(--c-muted)', whiteSpace: 'pre-line', fontSize: '14px', lineHeight: 1.9 }}>
+              <p style={{ color: 'var(--t3)', whiteSpace: 'pre-line', fontSize: '14px', lineHeight: 1.9 }}>
                 {section.content}
               </p>
             </div>

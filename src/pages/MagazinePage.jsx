@@ -320,13 +320,13 @@ const STYLES = `
     box-shadow: -6px 0 24px rgba(0,0,0,0.5), 8px 0 24px rgba(0,0,0,0.4), 0 24px 64px rgba(0,0,0,0.5);
   }
   .page-l {
-    background: linear-gradient(160deg, var(--bw-ink) 0%, #111118 100%);
+    background: linear-gradient(160deg, var(--bg1) 0%, #111118 100%);
     border-right: 1px solid rgba(255,255,255,0.05);
     border-radius: 8px 0 0 8px; padding: 52px 44px;
     position: relative; overflow: hidden;
   }
   .page-r {
-    background: linear-gradient(200deg, #111118 0%, var(--bw-ink) 100%);
+    background: linear-gradient(200deg, #111118 0%, var(--bg1) 100%);
     border-radius: 0 8px 8px 0;
     padding: 52px 44px; position: relative; overflow: hidden;
   }
@@ -338,21 +338,21 @@ const STYLES = `
   .spine-center {
     position: absolute; top: 0; bottom: 0; left: 50%;
     width: 2px; transform: translateX(-50%);
-    background: linear-gradient(to bottom, transparent 0%, var(--bw-900) 15%, var(--bw-900) 85%, transparent 100%);
+    background: linear-gradient(to bottom, transparent 0%, var(--bg3) 15%, var(--bg3) 85%, transparent 100%);
     pointer-events: none; z-index: 1;
   }
   .pg-fade { animation: pgIn 0.4s cubic-bezier(0.4,0,0.2,1); }
   @keyframes pgIn { from { opacity: 0; transform: rotateY(-5deg) translateX(-8px); } to { opacity: 1; transform: none; } }
-  .pgnum { font-family: 'JetBrains Mono',monospace; font-size: 10px; color: var(--bw-600); letter-spacing: 0.12em; margin-bottom: 20px; }
+  .pgnum { font-family: 'JetBrains Mono',monospace; font-size: 10px; color: var(--t4); letter-spacing: 0.12em; margin-bottom: 20px; }
   .cat-tag { font-family: 'JetBrains Mono',monospace; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
   .cat-tag::after { content: ''; flex: 1; height: 1px; background: currentColor; opacity: 0.25; }
-  .art-title { font-family: var(--f-serif); font-size: clamp(16px,2vw,21px); font-weight: 800; line-height: 1.2; color: var(--bw-white); margin: 0 0 8px; }
-  .art-sub { font-size: 12px; color: var(--bw-400); line-height: 1.6; margin: 0 0 16px; font-style: italic; }
+  .art-title { font-family: var(--f-serif); font-size: clamp(16px,2vw,21px); font-weight: 800; line-height: 1.2; color: var(--t1); margin: 0 0 8px; }
+  .art-sub { font-size: 12px; color: var(--t3); line-height: 1.6; margin: 0 0 16px; font-style: italic; }
   .divider { width: 32px; height: 2px; border-radius: 1px; margin-bottom: 16px; }
-  .art-body { font-size: 13px; color: var(--bw-300); line-height: 1.95; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 14; -webkit-box-orient: vertical; flex: 1; }
-  .ins-box { border-top: 1px solid var(--bw-800); padding-top: 14px; margin-top: auto; background: rgba(0,0,0,0.2); margin-left: -8px; margin-right: -8px; padding-left: 8px; padding-right: 8px; border-radius: 4px; }
+  .art-body { font-size: 13px; color: var(--t2); line-height: 1.95; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 14; -webkit-box-orient: vertical; flex: 1; }
+  .ins-box { border-top: 1px solid var(--b2); padding-top: 14px; margin-top: auto; background: rgba(0,0,0,0.2); margin-left: -8px; margin-right: -8px; padding-left: 8px; padding-right: 8px; border-radius: 4px; }
   .ins-label { font-family: 'JetBrains Mono',monospace; font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 6px; }
-  .ins-text { font-size: 12px; color: var(--bw-300); line-height: 1.7; font-style: italic; }
+  .ins-text { font-size: 12px; color: var(--t2); line-height: 1.7; font-style: italic; }
   @media (max-width: 680px) {
     .mag-spread { grid-template-columns: 1fr; }
     .page-r, .spine-center { display: none; }
@@ -386,25 +386,25 @@ export default function MagazinePage() {
   const Page = ({ s, pn, side }) => {
     if (!s) return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-        <BookOpen size={36} color="var(--bw-900)" />
+        <BookOpen size={36} color="var(--bg3)" />
       </div>
     )
     if (s.type === 'cover') return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
         <div style={{ position: 'absolute', top: 0, right: 0, width: '140px', height: '140px', background: 'radial-gradient(circle at top right, rgba(99,102,241,0.1), transparent 70%)', pointerEvents: 'none' }} />
         <div>
-          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--bw-white)', letterSpacing: '0.2em', marginBottom: '36px' }}>PACM × INSIGHTSHIP</div>
-          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--bw-600)', letterSpacing: '0.1em', marginBottom: '10px' }}>VOL.1 · 2026.03</div>
-          <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(30px,5vw,48px)', fontWeight: 900, lineHeight: 1.05, color: 'var(--bw-white)', margin: '0 0 18px', letterSpacing: '-0.02em' }}>
+          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--t1)', letterSpacing: '0.2em', marginBottom: '36px' }}>PACM × INSIGHTSHIP</div>
+          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--t4)', letterSpacing: '0.1em', marginBottom: '10px' }}>VOL.1 · 2026.03</div>
+          <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(30px,5vw,48px)', fontWeight: 900, lineHeight: 1.05, color: 'var(--t1)', margin: '0 0 18px', letterSpacing: '-0.02em' }}>
             창업의<br /><span style={{ color: '#818cf8' }}>모든 것</span>
           </h1>
-          <p style={{ fontSize: '13px', color: 'var(--bw-400)', lineHeight: 1.75, maxWidth: '260px' }}>
+          <p style={{ fontSize: '13px', color: 'var(--t3)', lineHeight: 1.75, maxWidth: '260px' }}>
             공개된 데이터와 검증된 이론으로<br />구성한 청소년 창업 인사이트
           </p>
         </div>
         <div>
           <div style={{ width: '40px', height: '2px', background: '#6366F1', borderRadius: '1px', marginBottom: '20px' }} />
-          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--bw-500)', lineHeight: 2 }}>
+          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--t3)', lineHeight: 2 }}>
             {MAGAZINE_SECTIONS.filter(s => s.type === 'article').length * 2} PAGES<br />
             MONTHLY · INSIGHTSHIP.PACM.KR
           </div>
@@ -414,13 +414,13 @@ export default function MagazinePage() {
     if (s.type === 'backcover') return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--bw-white)', letterSpacing: '0.18em', marginBottom: '28px' }}>THANK YOU</div>
-          <h2 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(20px,3vw,28px)', fontWeight: 800, color: 'var(--bw-white)', lineHeight: 1.25, marginBottom: '16px' }}>다음 호에서<br />다시 만나요</h2>
-          <p style={{ fontSize: '13px', color: '#3a3a3a', lineHeight: 1.8 }}>매달 새로운 창업 인사이트와<br />함께 찾아옵니다.</p>
+          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--t1)', letterSpacing: '0.18em', marginBottom: '28px' }}>THANK YOU</div>
+          <h2 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(20px,3vw,28px)', fontWeight: 800, color: 'var(--t1)', lineHeight: 1.25, marginBottom: '16px' }}>다음 호에서<br />다시 만나요</h2>
+          <p style={{ fontSize: '13px', color: 'var(--t3)', lineHeight: 1.8 }}>매달 새로운 창업 인사이트와<br />함께 찾아옵니다.</p>
         </div>
         <div>
-          <div style={{ width: '100%', height: '1px', background: 'var(--bw-900)', marginBottom: '18px' }} />
-          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--bw-500)', lineHeight: 2 }}>
+          <div style={{ width: '100%', height: '1px', background: 'var(--bg3)', marginBottom: '18px' }} />
+          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--t3)', lineHeight: 2 }}>
             www.insightship.pacm.kr<br />contact@pacm.kr<br />© 2026 PACM Corp.
           </div>
         </div>
@@ -429,15 +429,15 @@ export default function MagazinePage() {
     // 커버 오른쪽 = 목차
     if (side === 'right' && ls?.type === 'cover') return (
       <div>
-        <div className="cat-tag" style={{ color: 'var(--bw-white)' }}>CONTENTS</div>
+        <div className="cat-tag" style={{ color: 'var(--t1)' }}>CONTENTS</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {MAGAZINE_SECTIONS.filter(x => x.type === 'article').map((x, i) => (
             <div key={i} style={{ display: 'flex', gap: '12px', cursor: 'pointer', alignItems: 'flex-start' }}
               onClick={() => { setSpread(Math.floor(i / 2) + 1); setKey(k => k + 1) }}>
-              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', color: '#252525', minWidth: '18px', paddingTop: '2px' }}>{String(i + 1).padStart(2, '0')}</span>
+              <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', color: 'var(--t4)', minWidth: '18px', paddingTop: '2px' }}>{String(i + 1).padStart(2, '0')}</span>
               <div>
-                <div style={{ fontSize: '12px', color: '#aaa', fontWeight: 600, lineHeight: 1.35, marginBottom: '1px' }}>{x.title}</div>
-                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', color: 'var(--bw-800)' }}>{x.category}</div>
+                <div style={{ fontSize: '12px', color: 'var(--t2)', fontWeight: 600, lineHeight: 1.35, marginBottom: '1px' }}>{x.title}</div>
+                <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '9px', color: 'var(--b2)' }}>{x.category}</div>
               </div>
             </div>
           ))}
@@ -471,19 +471,19 @@ export default function MagazinePage() {
       <style>{STYLES}</style>
 
       {/* 헤더 */}
-      <div style={{ padding: '32px 0 28px', borderBottom: '1px solid #141414', marginBottom: '40px' }}>
-        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--bw-white)', letterSpacing: '0.18em', marginBottom: '8px' }}>
+      <div style={{ padding: '32px 0 28px', borderBottom: '1px solid var(--b1)', marginBottom: '40px' }}>
+        <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: 'var(--t1)', letterSpacing: '0.18em', marginBottom: '8px' }}>
           PACM MAGAZINE · VOL.1 · 2026.03
         </div>
         <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: 'clamp(24px,4vw,34px)', fontWeight: 700, marginBottom: '10px', lineHeight: 1.2 }}>
           창업 매거진
         </h1>
-        <p style={{ color: '#444', fontSize: '13px', maxWidth: '560px', lineHeight: 1.8 }}>
+        <p style={{ color: 'var(--t3)', fontSize: '13px', maxWidth: '560px', lineHeight: 1.8 }}>
           공개된 데이터와 검증된 이론만으로 구성했습니다 · {pageCount}페이지 · {total} 스프레드
         </p>
         <div style={{ marginTop: '12px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
           {['창업 기초', 'AI × 창업', '경제·투자', '경영 방법론', '성공 사례', '글로벌', '성장', '팀 빌딩', '실전 가이드', 'PACM'].map(t => (
-            <span key={t} style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: '#252525', border: '1px solid var(--bw-900)', padding: '3px 8px', borderRadius: '3px' }}>{t}</span>
+            <span key={t} style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--t4)', border: '1px solid var(--b1)', padding: '3px 8px', borderRadius: '3px' }}>{t}</span>
           ))}
         </div>
       </div>
@@ -515,9 +515,9 @@ export default function MagazinePage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             {Array.from({ length: total }).map((_, i) => (
               <div key={i} onClick={() => { setSpread(i); setKey(k => k + 1) }}
-                style={{ width: i === spread ? '16px' : '4px', height: '4px', borderRadius: i === spread ? '2px' : '50%', background: i === spread ? '#6366F1' : 'var(--bw-800)', cursor: 'pointer', transition: 'all 0.3s' }} />
+                style={{ width: i === spread ? '16px' : '4px', height: '4px', borderRadius: i === spread ? '2px' : '50%', background: i === spread ? '#6366F1' : 'var(--b2)', cursor: 'pointer', transition: 'all 0.3s' }} />
             ))}
-            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--bw-500)', marginLeft: '10px' }}>
+            <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: 'var(--t3)', marginLeft: '10px' }}>
               {spread * 2 + 1}–{Math.min(spread * 2 + 2, MAGAZINE_SECTIONS.length)} / {MAGAZINE_SECTIONS.length}
             </span>
           </div>

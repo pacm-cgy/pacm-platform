@@ -29,11 +29,11 @@ export default function ArticlePanel({ slug, onClose }) {
         </div>
         <div style={{
           display:'flex', alignItems:'center', justifyContent:'space-between',
-          padding:'13px 24px', borderBottom:'1px solid var(--c-border)',
-          background:'var(--c-paper)', position:'sticky', top:3, zIndex:1,
+          padding:'13px 24px', borderBottom:'1px solid var(--b1)',
+          background:'var(--t1)', position:'sticky', top:3, zIndex:1,
         }}>
-          <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-muted)', letterSpacing:'2px' }}>PACM INSIGHT</div>
-          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:'18px', cursor:'pointer', color:'var(--c-muted)', lineHeight:1 }}>✕</button>
+          <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--t3)', letterSpacing:'2px' }}>PACM INSIGHT</div>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:'18px', cursor:'pointer', color:'var(--t3)', lineHeight:1 }}>✕</button>
         </div>
 
         {isLoading ? (
@@ -54,11 +54,11 @@ export default function ArticlePanel({ slug, onClose }) {
               {article.title}
             </h1>
             {article.excerpt && (
-              <p style={{ color:'var(--c-muted)', fontFamily:'var(--f-serif)', fontStyle:'italic', fontSize:'15px', lineHeight:1.7, marginBottom:'18px' }}>
+              <p style={{ color:'var(--t3)', fontFamily:'var(--f-serif)', fontStyle:'italic', fontSize:'15px', lineHeight:1.7, marginBottom:'18px' }}>
                 {article.excerpt}
               </p>
             )}
-            <div style={{ display:'flex', gap:'12px', alignItems:'center', padding:'13px 0', borderTop:'1px solid var(--c-border)', borderBottom:'1px solid var(--c-border)', marginBottom:'28px' }}>
+            <div style={{ display:'flex', gap:'12px', alignItems:'center', padding:'13px 0', borderTop:'1px solid var(--b1)', borderBottom:'1px solid var(--b1)', marginBottom:'28px' }}>
               <div className="avatar avatar-sm">
                 {article.profiles?.avatar_url
                   ? <img src={article.profiles.avatar_url} alt="" />
@@ -75,7 +75,7 @@ export default function ArticlePanel({ slug, onClose }) {
 
             {article.cover_image && (
               <img src={article.cover_image} alt={article.title}
-                style={{ width:'100%', border:'1px solid var(--c-border)', marginBottom:'28px', display:'block' }} />
+                style={{ width:'100%', border:'1px solid var(--b1)', marginBottom:'28px', display:'block' }} />
             )}
 
             {article.article_images?.length > 0 && (
@@ -93,13 +93,13 @@ export default function ArticlePanel({ slug, onClose }) {
             <div className="article-body" dangerouslySetInnerHTML={{ __html: article.body }} />
 
             {article.tags?.length > 0 && (
-              <div style={{ display:'flex', gap:'6px', flexWrap:'wrap', marginTop:'32px', paddingTop:'20px', borderTop:'1px solid var(--c-border)' }}>
+              <div style={{ display:'flex', gap:'6px', flexWrap:'wrap', marginTop:'32px', paddingTop:'20px', borderTop:'1px solid var(--b1)' }}>
                 {article.tags.map(t => <span key={t} className="tag">{t}</span>)}
               </div>
             )}
           </div>
         ) : (
-          <div style={{ padding:'48px', textAlign:'center', color:'var(--c-muted)' }}>
+          <div style={{ padding:'48px', textAlign:'center', color:'var(--t3)' }}>
             아티클을 찾을 수 없습니다
           </div>
         )}

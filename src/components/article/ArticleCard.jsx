@@ -1,283 +1,308 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Heart } from 'lucide-react'
+import { Eye, Heart, Bookmark, Clock, ArrowRight, TrendingUp } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { useAuthStore } from '../../store'
-import { useLikeArticle } from '../../hooks/useData'
 
-const CATEGORY_LABELS = {
-  insight:'INSIGHT', story:'FOUNDER STORY', trend:'TREND',
-  magazine:'MAGAZINE', community:'COMMUNITY', opinion:'OPINION',
+const CAT_COLOR = {
+  insight: '#3B82F6', trend: '#F59E0B', opinion: '#A855F7',
+  magazine: '#06B6D4', story: '#10B981', news: '#60A5FA',
+  ai: '#A855F7', funding: '#F59E0B', ai_startup: '#3B82F6',
+  edutech: '#F97316', youth: '#10B981', entrepreneurship: '#06B6D4',
+  unicorn: '#F59E0B', climate: '#10B981', health: '#F43F5E',
+  fintech: '#6366F1', general: '#A1A1AA',
+}
+const CAT_KO = {
+  insight: '인사이트', trend: '트렌드', opinion: '오피니언',
+  magazine: '매거진', story: '스토리', news: '뉴스',
+  ai: 'AI', funding: '투자', ai_startup: 'AI스타트업',
+  edutech: '에듀테크', youth: '청소년창업', entrepreneurship: '창업',
+  unicorn: '유니콘', climate: '기후테크', health: '헬스케어',
+  fintech: '핀테크', general: '뉴스',
 }
 
-const CATEGORY_BG = {
-  insight:   'linear-gradient(135deg,#1e1b4b 0%,#312e81 100%)',
-  story:     'linear-gradient(135deg,#1e1427 0%,#2e1065 100%)',
-  trend:     'linear-gradient(135deg,#1c0f00 0%,#431407 100%)',
-  magazine:  'linear-gradient(135deg,#082f49 0%,#0c4a6e 100%)',
-  community: 'linear-gradient(135deg,#022c22 0%,#064e3b 100%)',
-  opinion:   'linear-gradient(135deg,#200a12 0%,#4c0519 100%)',
+function catColor(cat) { return CAT_COLOR[cat] || '#3B82F6' }
+function catLabel(cat) { return CAT_KO[cat] || cat || '아티클' }
+
+function timeAgo(dateStr) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  const diff = (Date.now() - d) / 1000
+  if (diff < 3600) return `${Math.floor(diff / 60)}분 전`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`
+  if (diff < 604800) return `${Math.floor(diff / 86400)}일 전`
+  try { return format(d, 'M월 d일', { locale: ko }) } catch { return '' }
 }
 
-const CATEGORY_COLOR = {
-  insight:   '#818cf8',
-  story:     '#c4b5fd',
-  trend:     '#fb923c',
-  magazine:  '#38bdf8',
-  community: '#34d399',
-  opinion:   '#fb7185',
-}
-
-const CATEGORY_ICONS = {
-  insight:   { icon: '◆', label: 'INSIGHT' },
-  story:     { icon: '◇', label: 'STORY' },
-  trend:     { icon: '▲', label: 'TREND' },
-  magazine:  { icon: '■', label: 'MAGAZINE' },
-  community: { icon: '○', label: 'COMMUNITY' },
-  opinion:   { icon: '◉', label: 'OPINION' },
-}
-
-function CoverImage({ url, category, alt, title }) {
-  const [loaded, setLoaded] = useState(false)
-  const [error, setError] = useState(false)
-  const bg = CATEGORY_BG[category] || 'var(--bw-900)'
-  const catInfo = CATEGORY_ICONS[category] || { icon: '□', label: 'ARTICLE' }
-
-  const catColor = CATEGORY_COLOR[category] || 'rgba(255,255,255,0.5)'
+// ── ARTICLE CARD (grid 3col)
+export function ArticleCard({ article: a, onClick }) {
+  const navigate = useNavigate()
+  const go = () => onClick ? onClick(a) : navigate(`/article/${a.slug}`)
+  const color = catColor(a.category || a.ai_category)
 
   return (
-    <div style={{
-      width: '100%', aspectRatio: '16/9', overflow: 'hidden',
-      position: 'relative', flexShrink: 0, background: bg,
-      transition: 'transform 0.3s ease',
-    }}>
-      {url && !error ? (
-        <>
-          {!loaded && (
-            <div style={{
-              position: 'absolute', inset: 0, background: bg,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              flexDirection: 'column', gap: '8px'
-            }}>
-              <span style={{ fontSize: '28px', color: catColor, opacity: 0.8 }}>{catInfo.icon}</span>
-              <span style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: catColor, opacity: 0.5, letterSpacing: '2px' }}>
-                {catInfo.label}
-              </span>
-            </div>
-          )}
+    <div
+      onClick={go}
+      className="card card-clickable"
+      style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', cursor: 'pointer' }}
+    >
+      {/* Cover image */}
+      {a.cover_image && (
+        <div style={{ width: '100%', aspectRatio: '16/9', overflow: 'hidden', background: 'var(--bg3)' }}>
           <img
-            src={url} alt={alt || ''}
-            onLoad={() => setLoaded(true)}
-            onError={() => setError(true)}
-            style={{
-              width: '100%', height: '100%', objectFit: 'cover',
-              opacity: loaded ? 1 : 0, transition: 'opacity 0.4s ease',
-            }}
+            src={a.cover_image}
+            alt={a.title}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform .4s ease', display: 'block' }}
+            onMouseEnter={e => e.target.style.transform = 'scale(1.03)'}
+            onMouseLeave={e => e.target.style.transform = 'scale(1)'}
+            onError={e => { e.target.closest('div').style.display = 'none' }}
           />
-        </>
-      ) : (
-        <div style={{
-          width: '100%', height: '100%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexDirection: 'column', gap: '10px', padding: '16px',
-        }}>
-          <span style={{ fontSize: '36px', color: catColor, filter: 'drop-shadow(0 2px 12px rgba(0,0,0,0.6))' }}>
-            {catInfo.icon}
-          </span>
-          <span style={{
-            fontFamily: 'var(--f-mono)', fontSize: '9px',
-            color: catColor, opacity: 0.6, letterSpacing: '3px',
-          }}>
-            {catInfo.label}
-          </span>
-          {title && (
-            <span style={{
-              fontFamily: 'var(--f-serif)', fontSize: '11px', fontWeight: 600,
-              color: 'rgba(255,255,255,0.5)', textAlign: 'center', lineHeight: 1.4,
-              maxWidth: '160px',
-              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
-            }}>
-              {title}
-            </span>
-          )}
         </div>
       )}
+      <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+        {/* Category + time */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <span style={{
+            fontFamily: 'var(--f-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '.08em',
+            textTransform: 'uppercase', color: color,
+            background: `${color}18`, border: `1px solid ${color}28`,
+            padding: '2px 7px', borderRadius: 3,
+          }}>
+            {catLabel(a.category || a.ai_category)}
+          </span>
+          <span style={{ fontFamily: 'var(--f-mono)', fontSize: 9.5, color: 'var(--t3)', display: 'flex', alignItems: 'center', gap: 3 }}>
+            <Clock size={9} />{timeAgo(a.published_at || a.created_at)}
+          </span>
+        </div>
+
+        {/* Title */}
+        <h3 style={{
+          fontFamily: 'var(--f-display)', fontSize: 14.5, fontWeight: 700,
+          color: 'var(--t1)', lineHeight: 1.42, letterSpacing: '-0.01em',
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+        }}>
+          {a.title}
+        </h3>
+
+        {/* Summary */}
+        {a.summary && (
+          <p style={{
+            fontSize: 12.5, color: 'var(--t2)', lineHeight: 1.65,
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>
+            {a.summary}
+          </p>
+        )}
+
+        {/* Footer */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 'auto', paddingTop: 8, borderTop: '1px solid var(--b0)' }}>
+          {a.source_name && (
+            <span style={{ fontSize: 11, color: 'var(--t3)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {a.source_name}
+            </span>
+          )}
+          <div style={{ display: 'flex', gap: 10, marginLeft: 'auto', flexShrink: 0 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t3)' }}>
+              <Eye size={10} />{(a.view_count || 0).toLocaleString()}
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t3)' }}>
+              <Heart size={10} />{a.like_count || 0}
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
 
-export function ArticleCard({ article, onClick }) {
+// ── ARTICLE HERO (main featured)
+export function ArticleHero({ article: a, onClick }) {
   const navigate = useNavigate()
-  const { user } = useAuthStore()
-  const likeMutation = useLikeArticle()
-  const [liked, setLiked] = useState(false)
-  const [likeCount, setLikeCount] = useState(article.like_count || 0)
-  const author = article.profiles
-  const date = article.published_at ? format(new Date(article.published_at), 'M월 d일', { locale: ko }) : ''
+  const go = () => onClick ? onClick(a) : navigate(`/article/${a.slug}`)
+  const color = catColor(a?.category || a?.ai_category)
 
-  const handleClick = () => { if (onClick) return onClick(article); navigate(`/article/${article.slug}`) }
-  const handleLike = (e) => {
-    e.stopPropagation()
-    if (!user) return
-    const next = !liked; setLiked(next); setLikeCount(c => next ? c + 1 : c - 1)
-    likeMutation.mutate({ articleId: article.id, liked })
-  }
+  if (!a) return null
 
   return (
-    <article
-      className="card card-clickable"
-      onClick={handleClick}
-      style={{ display: 'flex', flexDirection: 'column', background: 'var(--c-card)', overflow: 'hidden' }}
+    <div
+      onClick={go}
+      style={{
+        position: 'relative', cursor: 'pointer', overflow: 'hidden',
+        minHeight: 360,
+        background: a.cover_image
+          ? 'var(--bg2)'
+          : `linear-gradient(135deg, #050d1f 0%, #0a1628 100%)`,
+      }}
     >
-      <CoverImage url={article.cover_image} category={article.category} alt={article.title} title={article.title} />
-      <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column', gap: '7px' }}>
-        <div className="t-eyebrow" style={{ color: CATEGORY_COLOR[article.category] || 'var(--bw-400)' }}>{CATEGORY_LABELS[article.category] || article.category}</div>
-        <h3 style={{ fontFamily: 'var(--f-serif)', fontSize: '16px', fontWeight: 700, lineHeight: 1.4, flex: 1 }}>
-          {article.title?.startsWith('[AI 정리본]') && (
-            <span style={{
-              display: 'inline-block', background: 'var(--bw-white)', color: 'var(--bw-black)',
-              fontFamily: 'var(--f-mono)', fontSize: '10px', fontWeight: 700,
-              padding: '2px 6px', marginBottom: '6px', marginRight: '6px', verticalAlign: 'middle'
-            }}>AI</span>
-          )}
-          {article.title?.replace('[AI 정리본] ', '')}
-        </h3>
-        {article.excerpt && (
-          <p style={{
-            fontSize: '13px', color: 'var(--c-muted)', lineHeight: 1.6,
-            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
-          }}>{article.excerpt}</p>
-        )}
-        {article.source_name && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span className="source-badge">출처 · {article.source_name}</span>
-            {article.source_url && (
-              <a href={article.source_url} target="_blank" rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                style={{ fontSize: '10px', color: 'var(--bw-300)', fontFamily: 'var(--f-mono)' }}>
-                원문↗
-              </a>
-            )}
-          </div>
-        )}
-        {article.tags?.length > 0 && (
-          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-            {article.tags.slice(0, 3).map(t => <span key={t} className="tag">{t}</span>)}
-          </div>
-        )}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          paddingTop: '10px', borderTop: '1px solid var(--c-border)', marginTop: '4px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div className="avatar avatar-sm">
-              {author?.avatar_url ? <img src={author.avatar_url} alt={author.display_name} /> : (author?.display_name?.[0] || 'A')}
-            </div>
-            <div>
-              <div style={{ fontSize: '12px', fontWeight: 600 }}>{author?.display_name || '편집부'}</div>
-              <div className="t-caption">{date}{article.read_time ? ` · ${article.read_time}분` : ''}</div>
-            </div>
-          </div>
-          <button onClick={handleLike} style={{
-            background: 'none', border: 'none', cursor: user ? 'pointer' : 'default',
-            display: 'flex', alignItems: 'center', gap: '3px',
-            fontFamily: 'var(--f-mono)', fontSize: '11px',
-            color: liked ? 'var(--c-red)' : 'var(--c-muted)'
+      {/* BG image */}
+      {a.cover_image && (
+        <>
+          <img
+            src={a.cover_image} alt={a.title}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: .45 }}
+            onError={e => e.target.style.display = 'none'}
+          />
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg, rgba(5,5,5,.96) 0%, rgba(5,5,5,.5) 60%, transparent 100%)' }} />
+        </>
+      )}
+
+      {/* Content */}
+      <div style={{ position: 'relative', zIndex: 2, padding: '32px 28px 28px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+        {/* Badge */}
+        <div style={{ marginBottom: 14 }}>
+          <span style={{
+            fontFamily: 'var(--f-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '.12em',
+            textTransform: 'uppercase', color: color,
+            background: `${color}20`, border: `1px solid ${color}35`,
+            padding: '3px 9px', borderRadius: 3,
           }}>
-            <Heart size={12} fill={liked ? 'currentColor' : 'none'} />{likeCount}
-          </button>
+            FEATURED · {catLabel(a.category || a.ai_category)}
+          </span>
         </div>
-      </div>
-    </article>
-  )
-}
 
-export function ArticleHero({ article, onClick }) {
-  const navigate = useNavigate()
-  const date = article.published_at ? format(new Date(article.published_at), 'yyyy.MM.dd') : ''
-  return (
-    <article className="card card-clickable"
-      onClick={() => { if (onClick) return onClick(article); navigate(`/article/${article.slug}`) }}
-      style={{ background: 'var(--c-card)', position: 'relative', overflow: 'hidden' }}
-    >
-      <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', background: 'var(--bw-white)' }} />
-      <div style={{ padding: '44px 44px 44px 52px' }}>
-        <div className="t-eyebrow" style={{ marginBottom: '14px' }}>COVER STORY · {date}</div>
-        <h1 style={{ fontFamily: 'var(--f-serif)', fontSize: '32px', fontWeight: 700, lineHeight: 1.2, marginBottom: '16px' }}>
-          {article.title}
-        </h1>
-        {article.excerpt && (
-          <p style={{ color: 'var(--c-muted)', fontSize: '15px', lineHeight: 1.7, marginBottom: '24px', maxWidth: '520px' }}>
-            {article.excerpt}
+        {/* Title */}
+        <h2 style={{
+          fontFamily: 'var(--f-display)', fontSize: 'clamp(20px,2.8vw,28px)', fontWeight: 800,
+          color: '#fff', lineHeight: 1.25, letterSpacing: '-0.02em', marginBottom: 12,
+          display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+        }}>
+          {a.title}
+        </h2>
+
+        {/* Summary */}
+        {a.summary && (
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,.65)', lineHeight: 1.65, marginBottom: 18,
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {a.summary}
           </p>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          {article.read_time && (
-            <span style={{
-              background: 'var(--bw-white)', color: 'var(--bw-black)',
-              fontFamily: 'var(--f-mono)', fontSize: '10px', fontWeight: 700, padding: '3px 8px'
-            }}>{article.read_time} MIN READ</span>
-          )}
-          <span className="t-caption">{CATEGORY_LABELS[article.category]}</span>
-          <span className="t-caption">{article.profiles?.display_name || '편집부'}</span>
-          {article.source_name && <span className="source-badge">출처 · {article.source_name}</span>}
+
+        {/* Meta */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          {a.source_name && <span style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'rgba(255,255,255,.45)' }}>{a.source_name}</span>}
+          <span style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'rgba(255,255,255,.45)', display: 'flex', alignItems: 'center', gap: 3 }}>
+            <Clock size={9} />{timeAgo(a.published_at || a.created_at)}
+          </span>
+          <div style={{ display: 'flex', gap: 10, marginLeft: 'auto' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontFamily: 'var(--f-mono)', fontSize: 10, color: 'rgba(255,255,255,.4)' }}>
+              <Eye size={10} />{(a.view_count || 0).toLocaleString()}
+            </span>
+          </div>
+        </div>
+
+        {/* Read more */}
+        <div style={{ marginTop: 18, display: 'inline-flex', alignItems: 'center', gap: 5, color: color, fontSize: 12.5, fontWeight: 600 }}>
+          자세히 읽기 <ArrowRight size={13} />
         </div>
       </div>
-    </article>
+    </div>
   )
 }
 
-export function ArticleSideItem({ article, onClick }) {
+// ── ARTICLE SIDE ITEM (vertical list)
+export function ArticleSideItem({ article: a, onClick }) {
   const navigate = useNavigate()
+  const go = () => onClick ? onClick(a) : navigate(`/article/${a.slug}`)
+  const color = catColor(a?.category || a?.ai_category)
+
   return (
-    <article className="card card-clickable"
-      onClick={() => { if (onClick) return onClick(article); navigate(`/article/${article.slug}`) }}
-      style={{ background: 'var(--c-card)', padding: '20px 24px', flex: 1 }}
+    <div
+      onClick={go}
+      style={{
+        display: 'flex', gap: 12, padding: '14px 16px',
+        cursor: 'pointer', flex: 1,
+        background: 'var(--bg2)', transition: 'background .12s',
+        borderBottom: '1px solid var(--b0)',
+      }}
+      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg3)'}
+      onMouseLeave={e => e.currentTarget.style.background = 'var(--bg2)'}
     >
-      <div className="t-caption" style={{ marginBottom: '8px', letterSpacing: '2px' }}>{CATEGORY_LABELS[article.category]}</div>
-      <h3 style={{ fontFamily: 'var(--f-serif)', fontSize: '15px', fontWeight: 600, lineHeight: 1.4, marginBottom: '8px' }}>
-        {article.title}
-      </h3>
-      <div className="t-caption">{article.read_time ? `${article.read_time}분 읽기` : ''}</div>
-      {article.source_name && <div className="source-badge" style={{ marginTop: '6px' }}>출처 · {article.source_name}</div>}
-    </article>
+      {/* Thumb */}
+      {a.cover_image && (
+        <div style={{ width: 60, height: 48, flexShrink: 0, borderRadius: 5, overflow: 'hidden', background: 'var(--bg3)' }}>
+          <img src={a.cover_image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.closest('div').style.display = 'none'} />
+        </div>
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: 'var(--f-mono)', fontSize: 8.5, color, letterSpacing: '.06em', marginBottom: 4, textTransform: 'uppercase' }}>
+          {catLabel(a.category || a.ai_category)}
+        </div>
+        <h4 style={{
+          fontFamily: 'var(--f-sans)', fontSize: 12.5, fontWeight: 600, color: 'var(--t1)', lineHeight: 1.4,
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          marginBottom: 4,
+        }}>
+          {a.title}
+        </h4>
+        <div style={{ fontFamily: 'var(--f-mono)', fontSize: 9.5, color: 'var(--t3)' }}>
+          {timeAgo(a.published_at || a.created_at)}
+        </div>
+      </div>
+    </div>
   )
 }
 
-export function ArticleMagItem({ article, number, onClick }) {
-  const navigate = useNavigate()
-  return (
-    <article className="card card-clickable"
-      onClick={() => { if (onClick) return onClick(article); navigate(`/article/${article.slug}`) }}
-      style={{ background: 'var(--c-card)', padding: '20px 24px', display: 'flex', gap: '16px', alignItems: 'flex-start' }}
-    >
-      <div style={{
-        fontFamily: 'var(--f-mono)', fontSize: '22px', color: 'var(--c-border)',
-        fontWeight: 700, minWidth: '32px', lineHeight: 1, marginTop: '2px'
-      }}>
-        {String(number).padStart(2, '0')}
-      </div>
-      <div>
-        <div className="t-caption" style={{ marginBottom: '4px' }}>{CATEGORY_LABELS[article.category]}</div>
-        <h3 style={{ fontFamily: 'var(--f-serif)', fontSize: '15px', fontWeight: 600, lineHeight: 1.4, marginBottom: '6px' }}>
-          {article.title}
-        </h3>
-        <div className="t-caption">{article.read_time ? `${article.read_time}분 읽기` : ''}</div>
-      </div>
-    </article>
-  )
-}
-
+// ── ARTICLE CARD SKELETON
 export function ArticleCardSkeleton() {
   return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
-      <div className="skeleton skeleton-img" />
-      <div style={{ padding: '20px' }}>
-        <div className="skeleton skeleton-text" style={{ width: '60px', height: '10px', marginBottom: '10px' }} />
-        <div className="skeleton skeleton-text skeleton-title" />
+    <div className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="skeleton skeleton-img" style={{ width: '100%', aspectRatio: '16/9' }} />
+      <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="skeleton skeleton-text" style={{ width: 70 }} />
+        <div className="skeleton skeleton-title" />
+        <div className="skeleton skeleton-title" style={{ width: '75%' }} />
         <div className="skeleton skeleton-text" />
-        <div className="skeleton skeleton-text" style={{ width: '80%' }} />
+        <div className="skeleton skeleton-text" style={{ width: '60%' }} />
+      </div>
+    </div>
+  )
+}
+
+// ── ARTICLE LIST ROW (for news page)
+export function ArticleRow({ article: a, onClick }) {
+  const navigate = useNavigate()
+  const go = () => onClick ? onClick(a) : navigate(`/article/${a.slug}`)
+  const color = catColor(a?.category || a?.ai_category)
+
+  return (
+    <div
+      onClick={go}
+      style={{
+        display: 'flex', gap: 14, padding: '16px 0',
+        borderBottom: '1px solid var(--b0)', cursor: 'pointer',
+        transition: 'background .12s',
+      }}
+      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
+      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+    >
+      {a.cover_image && (
+        <div style={{ width: 90, height: 62, flexShrink: 0, borderRadius: 7, overflow: 'hidden', background: 'var(--bg3)' }}>
+          <img src={a.cover_image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.closest('div').style.display = 'none'} />
+        </div>
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+          <span style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+            {catLabel(a.category || a.ai_category)}
+          </span>
+          {a.source_name && (
+            <span style={{ fontSize: 11, color: 'var(--t3)' }}>· {a.source_name}</span>
+          )}
+        </div>
+        <h3 style={{
+          fontFamily: 'var(--f-sans)', fontSize: 14, fontWeight: 600, color: 'var(--t1)',
+          lineHeight: 1.4, marginBottom: 5,
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+        }}>
+          {a.title}
+        </h3>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <span style={{ fontFamily: 'var(--f-mono)', fontSize: 9.5, color: 'var(--t3)' }}>
+            {timeAgo(a.published_at || a.created_at)}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontFamily: 'var(--f-mono)', fontSize: 9.5, color: 'var(--t3)' }}>
+            <Eye size={9} />{(a.view_count || 0).toLocaleString()}
+          </span>
+        </div>
       </div>
     </div>
   )

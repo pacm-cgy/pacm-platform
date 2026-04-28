@@ -453,3 +453,334 @@ create policy "avatars_insert" on storage.objects
 --   (current_date, 'edutech',     '투자 규모', 2300, '억원', 21.4),
 --   (current_date, 'social',      '소셜임팩트 스타트업', 234, '개', 55.1),
 --   (current_date, 'youth',       '청소년 창업자', 1127, '명', 67.3);
+
+-- ================================================================
+-- PACM-AI MENTOR 지속 학습 스키마 (v3.0 추가)
+-- ================================================================
+
+-- ── AI 지식베이스 ────────────────────────────────────────────────
+create table if not exists public.ai_knowledge (
+  id          uuid primary key default uuid_generate_v4(),
+  content     text not null,
+  category    text not null default 'guide',
+  source      text,
+  keywords    text[] default '{}',
+  quality     integer not null default 7 check (quality between 1 and 10),
+  use_count   integer not null default 0,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  constraint content_len check (char_length(content) between 20 and 1000)
+);
+create index if not exists ai_knowledge_cat_idx on public.ai_knowledge(category, quality desc);
+create index if not exists ai_knowledge_use_idx on public.ai_knowledge(use_count desc);
+
+-- ── AI 멘토 대화 로그 (지속 학습용) ───────────────────────────────
+create table if not exists public.mentor_chat_logs (
+  id                 uuid primary key default uuid_generate_v4(),
+  session_id         text not null,
+  user_id            uuid references public.profiles(id) on delete set null,
+  user_message       text not null,
+  ai_response        text not null,
+  intent_classified  text,
+  feedback           text check (feedback in ('good','bad','neutral')),
+  feedback_at        timestamptz,
+  created_at         timestamptz not null default now()
+);
+create index if not exists mentor_logs_session_idx on public.mentor_chat_logs(session_id);
+create index if not exists mentor_logs_intent_idx  on public.mentor_chat_logs(intent_classified);
+create index if not exists mentor_logs_feedback_idx on public.mentor_chat_logs(feedback) where feedback is not null;
+
+-- ── AI 의도 통계 (취약 영역 탐지) ───────────────────────────────
+create table if not exists public.mentor_intent_stats (
+  id                uuid primary key default uuid_generate_v4(),
+  intent            text not null,
+  sample_query      text,
+  needs_improvement boolean default false,
+  created_at        timestamptz not null default now()
+);
+create index if not exists mentor_stats_intent_idx on public.mentor_intent_stats(intent, created_at desc);
+
+-- ── 트렌드 키워드 (헤더 ticker용) ──────────────────────────────
+create table if not exists public.trend_keywords (
+  id         uuid primary key default uuid_generate_v4(),
+  keyword    text not null,
+  count      integer not null default 1,
+  category   text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists trend_kw_count_idx on public.trend_keywords(count desc);
+
+-- ── 알림 테이블 ────────────────────────────────────────────────
+create table if not exists public.notifications (
+  id         uuid primary key default uuid_generate_v4(),
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  title      text,
+  message    text not null,
+  type       text default 'info',
+  is_read    boolean default false,
+  link       text,
+  created_at timestamptz not null default now()
+);
+create index if not exists notif_user_idx on public.notifications(user_id, created_at desc);
+
+-- ── 아이디어랩 ────────────────────────────────────────────────
+create table if not exists public.ideas (
+  id           uuid primary key default uuid_generate_v4(),
+  author_id    uuid not null references public.profiles(id) on delete cascade,
+  title        text not null,
+  description  text not null,
+  category     text not null default 'other',
+  stage        text not null default 'idea',
+  tags         text[] default '{}',
+  like_count   integer not null default 0,
+  view_count   integer not null default 0,
+  is_public    boolean default true,
+  is_deleted   boolean default false,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  constraint title_len check (char_length(title) between 5 and 100),
+  constraint desc_len  check (char_length(description) between 20 and 2000)
+);
+create index if not exists ideas_author_idx on public.ideas(author_id);
+create index if not exists ideas_cat_idx    on public.ideas(category, created_at desc);
+
+-- ── 아이디어 좋아요 ────────────────────────────────────────────
+create table if not exists public.idea_likes (
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  idea_id    uuid not null references public.ideas(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, idea_id)
+);
+
+-- ── 이벤트/챌린지 ──────────────────────────────────────────────
+create table if not exists public.events (
+  id              uuid primary key default uuid_generate_v4(),
+  title           text not null,
+  description     text,
+  type            text not null default 'event',
+  status          text not null default 'upcoming',
+  start_date      date,
+  end_date        date,
+  location        text,
+  prize           text,
+  max_participants integer,
+  participant_count integer not null default 0,
+  tags            text[] default '{}',
+  link            text,
+  is_featured     boolean default false,
+  created_at      timestamptz not null default now()
+);
+create index if not exists events_status_idx on public.events(status, start_date);
+
+-- ── 이벤트 참가 신청 ───────────────────────────────────────────
+create table if not exists public.event_registrations (
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  event_id   uuid not null references public.events(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, event_id)
+);
+
+-- ── 학습 퀴즈/배지 ────────────────────────────────────────────
+create table if not exists public.badges (
+  id          uuid primary key default uuid_generate_v4(),
+  user_id     uuid not null references public.profiles(id) on delete cascade,
+  badge_type  text not null,
+  badge_name  text not null,
+  earned_at   timestamptz not null default now()
+);
+create index if not exists badges_user_idx on public.badges(user_id);
+
+-- RLS 활성화
+alter table public.ai_knowledge       enable row level security;
+alter table public.mentor_chat_logs   enable row level security;
+alter table public.mentor_intent_stats enable row level security;
+alter table public.trend_keywords     enable row level security;
+alter table public.notifications      enable row level security;
+alter table public.ideas              enable row level security;
+alter table public.idea_likes         enable row level security;
+alter table public.events             enable row level security;
+alter table public.event_registrations enable row level security;
+alter table public.badges             enable row level security;
+
+-- RLS 정책
+create policy "ai_knowledge_read"   on public.ai_knowledge       for select using (true);
+create policy "ai_knowledge_write"  on public.ai_knowledge       for all    using (true);
+create policy "mentor_logs_insert"  on public.mentor_chat_logs   for insert with check (true);
+create policy "mentor_logs_update"  on public.mentor_chat_logs   for update using (true);
+create policy "mentor_stats_insert" on public.mentor_intent_stats for insert with check (true);
+create policy "trend_kw_read"       on public.trend_keywords      for select using (true);
+create policy "notif_read"          on public.notifications       for select using (auth.uid() = user_id);
+create policy "notif_update"        on public.notifications       for update using (auth.uid() = user_id);
+create policy "ideas_read"          on public.ideas               for select using (is_public and not is_deleted);
+create policy "ideas_insert"        on public.ideas               for insert with check (auth.uid() = author_id);
+create policy "ideas_update"        on public.ideas               for update using (auth.uid() = author_id);
+create policy "idea_likes_all"      on public.idea_likes          for all    using (auth.uid() = user_id);
+create policy "events_read"         on public.events              for select using (true);
+create policy "event_reg_all"       on public.event_registrations for all    using (auth.uid() = user_id);
+create policy "badges_read"         on public.badges              for select using (true);
+create policy "badges_insert"       on public.badges              for insert with check (true);
+
+-- ── 초기 AI 지식베이스 시드 데이터 ──────────────────────────────
+insert into public.ai_knowledge (content, category, source, keywords, quality) values
+('2024년 한국 AI 스타트업 투자액은 1조 2천억원으로 전년 대비 38.2% 급증했습니다. ChatGPT 등장 이후 VC(벤처캐피탈) 투자 심리가 개선됐고, 정부의 AI 스타트업 육성 정책이 맞물린 결과입니다.', 'market', 'seed', ARRAY['AI','투자','VC','스타트업','2024'], 9),
+('에듀테크 시장은 2024년 7,500억원 규모로 전년 대비 21.4% 성장했습니다. AI 튜터링과 맞춤형 학습 수요가 급증했으며, 청소년 창업가들이 교육 현장의 불편함을 해결하는 에듀테크 창업이 유망합니다.', 'trend', 'seed', ARRAY['에듀테크','교육','AI튜터','청소년','성장'], 9),
+('예비창업패키지는 창업 경험이 없는 예비 창업자를 위한 정부 지원 사업으로, 최대 1억원의 사업화 자금을 지원합니다. 만 39세 이하 청년이라면 추가 가점을 받을 수 있습니다.', 'policy', 'seed', ARRAY['예비창업패키지','정부지원','지원금','창업'], 9),
+('린 스타트업(Lean Startup) 방법론의 핵심은 만들기-측정-학습(Build-Measure-Learn) 피드백 루프입니다. 완벽한 제품 대신 MVP(최소기능제품)로 빠르게 시장을 테스트하는 것이 핵심입니다.', 'guide', 'seed', ARRAY['린스타트업','MVP','피드백루프','방법론'], 9),
+('시리즈A 투자는 일반적으로 제품-시장 적합성(PMF)이 검증된 후 받는 첫 번째 본격 투자 단계입니다. 평균 투자 금액은 10~50억원이며, 투자자들은 팀 구성, 성장 지표, 시장 크기를 중점적으로 봅니다.', 'market', 'seed', ARRAY['시리즈A','PMF','투자','성장'], 9),
+('청소년 창업의 가장 큰 강점은 "잃을 것이 없다"는 것입니다. 실패해도 배움이 남고, 나이 어린 창업가의 스토리는 언론과 투자자 모두에게 강한 인상을 줍니다. 학교 친구들이 곧 첫 번째 사용자이자 최고의 테스트 그룹입니다.', 'guide', 'seed', ARRAY['청소년창업','강점','스토리'], 9),
+('기후테크(ClimaTech) 분야는 2024년 ESG 투자 의무화로 가장 빠르게 성장하는 창업 분야 중 하나입니다. 탄소 발자국 계산기, 제로웨이스트 마켓플레이스, 친환경 소비 습관 앱 등이 주목받고 있습니다.', 'trend', 'seed', ARRAY['기후테크','ESG','친환경','탄소중립'], 8),
+('피벗(Pivot)이란 초기 전략이 실패했을 때 핵심 비전은 유지하면서 전략이나 제품을 전환하는 것입니다. Slack은 원래 게임 회사, Instagram은 위치 기반 SNS였다가 피벗해 성공했습니다.', 'guide', 'seed', ARRAY['피벗','전략','실패','성공사례'], 8)
+on conflict do nothing;
+
+
+-- ════════════════════════════════════════════════════════════════
+-- SCHEMA v2 — 메시지 + 아이디어 댓글 + 팔로우 테이블 추가
+-- ════════════════════════════════════════════════════════════════
+
+-- ── 아이디어 댓글 ──────────────────────────────────────────────
+create table if not exists public.idea_comments (
+  id         uuid primary key default uuid_generate_v4(),
+  idea_id    uuid not null references public.ideas(id) on delete cascade,
+  author_id  uuid not null references public.profiles(id) on delete cascade,
+  content    text not null,
+  is_deleted boolean default false,
+  created_at timestamptz not null default now(),
+  constraint idea_comment_len check (char_length(content) between 1 and 1000)
+);
+create index if not exists idea_comments_idea_idx on public.idea_comments(idea_id, created_at);
+
+-- ── 1:1 메시지 대화방 ─────────────────────────────────────────
+create table if not exists public.messages_conversations (
+  id             uuid primary key default uuid_generate_v4(),
+  participant_a  uuid not null references public.profiles(id) on delete cascade,
+  participant_b  uuid not null references public.profiles(id) on delete cascade,
+  context_type   text not null default 'general',  -- 'general' | 'scout'
+  platform       text,
+  last_msg_at    timestamptz default now(),
+  created_at     timestamptz not null default now(),
+  unique(participant_a, participant_b)
+);
+create index if not exists conv_a_idx on public.messages_conversations(participant_a);
+create index if not exists conv_b_idx on public.messages_conversations(participant_b);
+
+-- ── 메시지 ────────────────────────────────────────────────────
+create table if not exists public.messages (
+  id          uuid primary key default uuid_generate_v4(),
+  conv_id     uuid not null references public.messages_conversations(id) on delete cascade,
+  sender_id   uuid not null references public.profiles(id) on delete cascade,
+  content     text not null,
+  is_read     boolean default false,
+  created_at  timestamptz not null default now(),
+  constraint msg_len check (char_length(content) between 1 and 2000)
+);
+create index if not exists messages_conv_idx on public.messages(conv_id, created_at);
+create index if not exists messages_sender_idx on public.messages(sender_id);
+
+-- ── 팔로우 ────────────────────────────────────────────────────
+create table if not exists public.user_follows (
+  follower_id  uuid not null references public.profiles(id) on delete cascade,
+  following_id uuid not null references public.profiles(id) on delete cascade,
+  created_at   timestamptz not null default now(),
+  primary key (follower_id, following_id),
+  check (follower_id != following_id)
+);
+create index if not exists follows_follower_idx  on public.user_follows(follower_id);
+create index if not exists follows_following_idx on public.user_follows(following_id);
+
+-- ── RLS 활성화 ─────────────────────────────────────────────────
+alter table if exists public.idea_comments           enable row level security;
+alter table if exists public.messages_conversations  enable row level security;
+alter table if exists public.messages                enable row level security;
+alter table if exists public.user_follows            enable row level security;
+
+-- ── RLS 정책 ──────────────────────────────────────────────────
+create policy if not exists "idea_comments_read"   on public.idea_comments
+  for select using (not is_deleted);
+create policy if not exists "idea_comments_insert" on public.idea_comments
+  for insert with check (auth.uid() = author_id);
+create policy if not exists "idea_comments_delete" on public.idea_comments
+  for update using (auth.uid() = author_id);
+
+create policy if not exists "conv_select" on public.messages_conversations
+  for select using (auth.uid() = participant_a or auth.uid() = participant_b);
+create policy if not exists "conv_insert" on public.messages_conversations
+  for insert with check (auth.uid() = participant_a or auth.uid() = participant_b);
+create policy if not exists "conv_update" on public.messages_conversations
+  for update using (auth.uid() = participant_a or auth.uid() = participant_b);
+
+create policy if not exists "messages_select" on public.messages
+  for select using (
+    exists (select 1 from public.messages_conversations c
+      where c.id = conv_id
+      and (c.participant_a = auth.uid() or c.participant_b = auth.uid()))
+  );
+create policy if not exists "messages_insert" on public.messages
+  for insert with check (auth.uid() = sender_id);
+create policy if not exists "messages_update" on public.messages
+  for update using (
+    exists (select 1 from public.messages_conversations c
+      where c.id = conv_id
+      and (c.participant_a = auth.uid() or c.participant_b = auth.uid()))
+  );
+
+create policy if not exists "follows_select" on public.user_follows
+  for select using (true);
+create policy if not exists "follows_insert" on public.user_follows
+  for insert with check (auth.uid() = follower_id);
+create policy if not exists "follows_delete" on public.user_follows
+  for delete using (auth.uid() = follower_id);
+
+
+-- ════════════════════════════════════════════════════════════════
+-- SCHEMA v3 — AI 자율 운영 시스템 테이블
+-- ai_operations_log, newsletter_logs, ai_notices
+-- ════════════════════════════════════════════════════════════════
+
+-- ── AI 운영 작업 로그 ─────────────────────────────────────────
+create table if not exists public.ai_operations_log (
+  id          uuid primary key default uuid_generate_v4(),
+  task_type   text not null,            -- 'daily_notice','community_discussion','monthly_event','platform_monitoring','insight_article','startup_guide','editor_column' 등
+  run_date    date not null default current_date,
+  result      text not null default 'success', -- 'success' | 'error' | 'skipped'
+  details     text,
+  engine      text,                     -- 'ai-platform-operator-v1' | 'ai-content-writer-v1' 등
+  created_at  timestamptz not null default now(),
+  constraint ai_ops_result_check check (result in ('success','error','skipped'))
+);
+create index if not exists ai_ops_task_date_idx on public.ai_operations_log(task_type, run_date desc);
+create index if not exists ai_ops_created_idx  on public.ai_operations_log(created_at desc);
+
+-- ── 뉴스레터 발송 로그 ────────────────────────────────────────
+create table if not exists public.newsletter_logs (
+  id          uuid primary key default uuid_generate_v4(),
+  subject     text,
+  sent_count  int not null default 0,
+  engine      text,
+  sent_at     timestamptz not null default now()
+);
+create index if not exists newsletter_logs_sent_idx on public.newsletter_logs(sent_at desc);
+
+-- ── AI 공지사항 (자율 발행 추적) ─────────────────────────────
+create table if not exists public.ai_notices (
+  id          uuid primary key default uuid_generate_v4(),
+  title       text not null,
+  post_id     uuid references public.community_posts(id) on delete set null,
+  notice_date date not null default current_date,
+  day_of_week smallint,                 -- 0=일 ~ 6=토
+  engine      text,
+  created_at  timestamptz not null default now()
+);
+create index if not exists ai_notices_date_idx on public.ai_notices(notice_date desc);
+
+-- ── RLS (서비스 롤에서만 INSERT, 모두 SELECT 가능) ───────────
+alter table if exists public.ai_operations_log  enable row level security;
+alter table if exists public.newsletter_logs    enable row level security;
+alter table if exists public.ai_notices         enable row level security;
+
+create policy if not exists "ai_ops_read"      on public.ai_operations_log for select using (true);
+create policy if not exists "ai_ops_insert"    on public.ai_operations_log for insert with check (true);
+create policy if not exists "nl_logs_read"     on public.newsletter_logs    for select using (true);
+create policy if not exists "nl_logs_insert"   on public.newsletter_logs    for insert with check (true);
+create policy if not exists "ai_notices_read"  on public.ai_notices         for select using (true);
+create policy if not exists "ai_notices_insert" on public.ai_notices        for insert with check (true);

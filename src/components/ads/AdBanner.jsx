@@ -116,27 +116,27 @@ function AdPlaceholder({ size, style }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         flexDirection: 'column', gap: '4px',
         width: sizeConfig.width, minHeight: sizeConfig.height,
-        background: hovered ? 'var(--c-gray-2)' : 'var(--c-gray-1)',
-        border: '1px dashed var(--c-gray-4)',
+        background: hovered ? 'var(--bg3)' : 'var(--bg2)',
+        border: '1px dashed var(--bg5)',
         textDecoration: 'none', cursor: 'pointer',
         transition: 'background 0.15s',
         maxWidth: '100%', boxSizing: 'border-box', padding: '12px 20px',
         ...style,
       }}
     >
-      <div style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: 'var(--c-gray-5)', letterSpacing: '2px', marginBottom: '4px' }}>
+      <div style={{ fontFamily: 'var(--f-mono)', fontSize: '9px', color: 'var(--t4)', letterSpacing: '2px', marginBottom: '4px' }}>
         {sizeConfig.label}
       </div>
-      <div style={{ fontFamily: 'var(--f-sans)', fontSize: '13px', color: 'var(--c-muted)', textAlign: 'center', fontWeight: 500 }}>
+      <div style={{ fontFamily: 'var(--f-sans)', fontSize: '13px', color: 'var(--t3)', textAlign: 'center', fontWeight: 500 }}>
         이 공간에 광고를 게재하세요 — 청소년 창업가 독자층에게 브랜드를 알리세요
       </div>
-      <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--c-gray-5)', textAlign: 'center' }}>
+      <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', color: 'var(--t4)', textAlign: 'center' }}>
         contact@pacm.kr · 기업/브랜드 환영
       </div>
       {hovered && (
         <div style={{
           marginTop: '6px', padding: '4px 12px',
-          background: 'var(--c-gold)', color: '#000',
+          background: 'var(--amber)', color: '#000',
           fontSize: '10px', fontFamily: 'var(--f-mono)', letterSpacing: '1px',
         }}>
           광고 문의 →

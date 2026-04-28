@@ -1,542 +1,442 @@
-import { useState, useCallback, useEffect } from 'react'
-import { TrendingUp, TrendingDown, Minus, BarChart2, ChevronDown, ChevronUp,
-         ExternalLink, Zap, Calendar, ArrowUp, ArrowDown, Minus as MinusIcon,
-         FileText, RefreshCw } from 'lucide-react'
-import { ArticleCard, ArticleCardSkeleton } from '../components/article/ArticleCard'
-import { useArticles, useTrends, useNewsTrends, useWeeklyReports, useWeeklyTrends } from '../hooks/useData'
+import { useState, useEffect } from 'react'
+import { Helmet } from 'react-helmet-async'
 import { useNavigate } from 'react-router-dom'
+import {
+  TrendingUp, TrendingDown, Minus, BarChart2, Zap, RefreshCw,
+  ChevronRight, Flame, Globe, BrainCircuit, BookOpen, ArrowUpRight,
+  Calendar, Activity, Star, Sparkles, Target, Cpu, DollarSign,
+  Users, Leaf, GraduationCap, Clock
+} from 'lucide-react'
+import { useTrends, useWeeklyReports, useWeeklyTrends, useNewsTrends } from '../hooks/useData'
+import { format } from 'date-fns'
+import { ko } from 'date-fns/locale'
 
-// ── HOT SECTORS (정적 데이터) ──────────────────────────────────────
 const SECTORS = [
-  { name: 'AI / 머신러닝', note: '2026 가장 뜨거운 투자 분야', icon: '🤖', category: 'ai', color: '#818cf8' },
-  { name: '에듀테크', note: '청소년 타깃 급성장 중', icon: '📱', category: 'edutech', color: '#34d399' },
-  { name: '기후테크·그린', note: 'ESG 트렌드 + 탄소중립 수혜', icon: '🌿', category: 'climate', color: '#4ade80' },
-  { name: 'B2B SaaS', note: '수익 모델 명확 → 투자자 선호', icon: '💼', category: 'saas', color: '#60a5fa' },
-  { name: '헬스케어 AI', note: '디지털 헬스 규제 완화 효과', icon: '🏥', category: 'health', color: '#f472b6' },
-  { name: '핀테크', note: '간편결제·BNPL 계속 성장', icon: '💰', category: 'fintech', color: '#fbbf24' },
+  { id:'ai_startup',  label:'AI 스타트업', color:'#A855F7', emoji:'🤖', icon:Cpu },
+  { id:'edutech',     label:'에듀테크',     color:'#F97316', emoji:'📚', icon:GraduationCap },
+  { id:'fintech',     label:'핀테크',       color:'#22C55E', emoji:'💳', icon:DollarSign },
+  { id:'social',      label:'소셜임팩트',   color:'#06B6D4', emoji:'🌱', icon:Users },
+  { id:'youth',       label:'청소년 창업',  color:'#F43F5E', emoji:'🚀', icon:Target },
+  { id:'climate',     label:'기후테크',     color:'#10B981', emoji:'🌍', icon:Leaf },
 ]
 
-const CATEGORY_COLORS = {
-  'AI·테크': '#818cf8', '투자·금융': '#fbbf24', '창업·스타트업': '#f97316',
-  '정책·지원': '#60a5fa', '글로벌': '#34d399', 'ESG·기후': '#4ade80',
-  '핀테크': '#a78bfa', '에듀테크': '#fb923c', '헬스케어': '#f472b6', '기타': '#94a3b8',
+const MOCK_SNAPS = [
+  { metric_name:'AI 스타트업 투자', metric_value:2847, metric_unit:'억원', change_pct:12.4, category:'ai_startup', snapshot_date:new Date().toISOString() },
+  { metric_name:'에듀테크 시장규모', metric_value:1523, metric_unit:'억원', change_pct:8.2, category:'edutech', snapshot_date:new Date().toISOString() },
+  { metric_name:'청소년 창업 법인', metric_value:18342, metric_unit:'개', change_pct:-2.1, category:'youth', snapshot_date:new Date().toISOString() },
+  { metric_name:'핀테크 거래액', metric_value:4291, metric_unit:'억원', change_pct:22.7, category:'fintech', snapshot_date:new Date().toISOString() },
+  { metric_name:'기후테크 펀딩', metric_value:743, metric_unit:'억원', change_pct:31.5, category:'climate', snapshot_date:new Date().toISOString() },
+  { metric_name:'소셜임팩트 투자', metric_value:387, metric_unit:'억원', change_pct:5.8, category:'social', snapshot_date:new Date().toISOString() },
+]
+
+/* ── Skeleton ──────────────────────────────────────── */
+function Sk({ h=16, w='100%', r=6 }) {
+  return <div style={{ height:h, width:w, background:'var(--bg3)',
+    borderRadius:r, animation:'skPulse 1.6s ease-in-out infinite' }}/>
 }
 
-// ── 마크다운 렌더러 ────────────────────────────────────────────────
-function renderMd(text) {
-  if (!text) return null
-  return text.split('\n').map((line, i) => {
-    if (!line.trim()) return <div key={i} style={{ height: '6px' }} />
-    if (line.startsWith('# ')) return (
-      <h2 key={i} style={{ fontFamily:'var(--f-serif)', fontSize:'18px', fontWeight:700, margin:'16px 0 8px', color:'var(--c-paper)' }}>
-        {line.slice(2)}
-      </h2>
-    )
-    if (line.startsWith('## ')) return (
-      <h3 key={i} style={{ fontFamily:'var(--f-serif)', fontSize:'15px', fontWeight:700, margin:'14px 0 6px', color:'var(--c-paper)' }}>
-        {line.slice(3)}
-      </h3>
-    )
-    if (line.startsWith('---')) return (
-      <hr key={i} style={{ border:'none', borderTop:'1px solid var(--c-border)', margin:'12px 0' }} />
-    )
-    const parts = line.split(/\*\*([^*]+)\*\*/g)
-    const isArrow = line.trim().startsWith('→')
-    return (
-      <p key={i} style={{
-        margin: isArrow ? '4px 0' : '3px 0',
-        lineHeight: 1.8, fontSize: '13px',
-        color: isArrow ? 'var(--c-paper)' : 'var(--c-gray-7)',
-        paddingLeft: isArrow ? '4px' : 0,
-      }}>
-        {parts.map((part, j) =>
-          j % 2 === 1
-            ? <strong key={j} style={{ color:'var(--c-paper)', fontWeight:700 }}>{part}</strong>
-            : part
-        )}
-      </p>
-    )
-  })
-}
-
-// ── 키워드 뱃지 ───────────────────────────────────────────────────
-function KeywordBadge({ word, count, category, rank, change, rising }) {
-  const color = CATEGORY_COLORS[category] || '#94a3b8'
-  const size = rank <= 3 ? 14 : rank <= 8 ? 13 : 12
-  const opacity = rank <= 3 ? 1 : rank <= 8 ? 0.85 : 0.7
+/* ── SVG Sparkline ─────────────────────────────────── */
+function Sparkline({ pct, color }) {
+  const base = [0.28,0.42,0.38,0.51,0.47,0.62,0.55,0.7,0.65,Math.min(Math.abs(pct||0)/100+0.45,1)]
+  const h = 32, w = 100
+  const points = base.map((v,i) => `${(i/(base.length-1))*w},${h*(1-v)}`).join(' ')
   return (
-    <div style={{
-      display: 'inline-flex', alignItems: 'center', gap: '5px',
-      background: `${color}15`, border: `1px solid ${color}40`,
-      padding: `${rank <= 3 ? '6px 12px' : '4px 10px'}`,
-      margin: '3px',
-      cursor: 'default', opacity,
-    }}>
-      {rank <= 3 && <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color, fontWeight:700 }}>#{rank}</span>}
-      <span style={{ fontFamily:'var(--f-mono)', fontSize:`${size}px`, color, fontWeight: rank <= 3 ? 700 : 500 }}>
-        {word}
-      </span>
-      <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-gray-5)' }}>
-        {count}
-      </span>
-      {change && (
-        <span style={{ fontSize:'10px', color: rising ? '#34d399' : '#f87171', fontFamily:'var(--f-mono)' }}>
-          {rising ? '↑' : '↓'}{change}
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={`g${Math.abs(pct||0).toFixed(0)}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.35"/>
+          <stop offset="100%" stopColor={color} stopOpacity="0"/>
+        </linearGradient>
+      </defs>
+      <polygon points={`0,${h} ${points} ${w},${h}`}
+        fill={`url(#g${Math.abs(pct||0).toFixed(0)})`}/>
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.8"
+        strokeLinecap="round" strokeLinejoin="round"/>
+      {/* endpoint dot */}
+      <circle cx={(base.length-1)/(base.length-1)*w}
+        cy={h*(1-base[base.length-1])} r="2.5" fill={color}/>
+    </svg>
+  )
+}
+
+/* ── Snapshot card ─────────────────────────────────── */
+function SnapCard({ snap, index }) {
+  const [hov, setHov] = useState(false)
+  if (!snap) return null
+  const up = (snap.change_pct||0) > 0
+  const down = (snap.change_pct||0) < 0
+  const color = up ? '#22C55E' : down ? '#F43F5E' : '#666'
+  const Icon = up ? TrendingUp : down ? TrendingDown : Minus
+  const sec = SECTORS.find(s=>s.id===snap.category)||SECTORS[0]
+  return (
+    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{ padding:'18px 20px', background:'var(--bg2)',
+        border:`1px solid ${hov?sec.color+'45':'var(--b1)'}`,
+        borderRadius:14, transition:'all .22s cubic-bezier(.4,0,.2,1)',
+        transform:hov?'translateY(-4px)':'none',
+        boxShadow:hov?`0 12px 40px rgba(0,0,0,.6),0 0 0 1px ${sec.color}22`:'none',
+        animationDelay:`${index*60}ms`, position:'relative', overflow:'hidden' }}>
+      {hov && <div style={{ position:'absolute', top:-30, right:-30, width:100, height:100,
+        borderRadius:'50%', background:`radial-gradient(circle,${sec.color}12,transparent 70%)`,
+        pointerEvents:'none' }}/>}
+      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:12 }}>
+        <div>
+          <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:5 }}>
+            <span style={{ fontSize:17 }}>{sec.emoji}</span>
+            <span style={{ fontFamily:'var(--f-mono)', fontSize:9, color:sec.color,
+              letterSpacing:'.1em', textTransform:'uppercase' }}>{sec.label}</span>
+          </div>
+          <div style={{ fontSize:11, color:'var(--t3)', marginBottom:4 }}>{snap.metric_name}</div>
+          <div style={{ fontFamily:'var(--f-display)', fontSize:26, fontWeight:800,
+            color:'var(--t1)', lineHeight:1, letterSpacing:'-.025em' }}>
+            {snap.metric_unit==='억원'?'₩':''}{Number(snap.metric_value).toLocaleString()}
+            <span style={{ fontSize:13, color:'var(--t3)', fontWeight:400, marginLeft:4 }}>
+              {snap.metric_unit==='억원'?'억':snap.metric_unit}
+            </span>
+          </div>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:4, padding:'5px 9px',
+          borderRadius:7, background:`${color}12`, border:`1px solid ${color}28`,
+          fontFamily:'var(--f-mono)', fontSize:11, color, fontWeight:700 }}>
+          <Icon size={11}/>{Math.abs(snap.change_pct||0).toFixed(1)}%
+        </div>
+      </div>
+      <Sparkline pct={snap.change_pct||0} color={sec.color}/>
+    </div>
+  )
+}
+
+/* ── Weekly report card ────────────────────────────── */
+function WeeklyCard({ rep }) {
+  const navigate = useNavigate()
+  const [hov, setHov] = useState(false)
+  if (!rep) return null
+  return (
+    <div onClick={()=>navigate(`/article/${rep.slug||rep.id}`)}
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{ padding:'18px 20px', background:'var(--bg2)',
+        border:`1px solid ${hov?'rgba(59,130,246,0.35)':'var(--b1)'}`,
+        borderRadius:12, cursor:'pointer', transition:'all .22s cubic-bezier(.4,0,.2,1)',
+        transform:hov?'translateY(-3px)':'none',
+        boxShadow:hov?'0 10px 36px rgba(0,0,0,.55)':'none',
+        display:'flex', flexDirection:'column', gap:10 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:9 }}>
+        <div style={{ width:33, height:33, borderRadius:9,
+          background:'rgba(59,130,246,0.12)', border:'1px solid rgba(59,130,246,0.22)',
+          display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+          <BookOpen size={14} color="#3B82F6"/>
+        </div>
+        <div style={{ fontFamily:'var(--f-mono)', fontSize:9, color:'#3B82F6',
+          letterSpacing:'.1em' }}>WEEKLY REPORT</div>
+      </div>
+      <div style={{ fontSize:14, fontWeight:700, color:'var(--t1)', lineHeight:1.42,
+        display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+        {rep.title}
+      </div>
+      <div style={{ fontSize:12, color:'var(--t3)', lineHeight:1.65,
+        display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+        {rep.excerpt}
+      </div>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <span style={{ fontFamily:'var(--f-mono)', fontSize:10, color:'var(--t4)' }}>
+          {rep.published_at?format(new Date(rep.published_at),'M월 d일',{locale:ko}):''}
         </span>
-      )}
+        <div style={{ display:'flex', alignItems:'center', gap:4,
+          color:hov?'#3B82F6':'var(--t4)', fontSize:12, transition:'color .15s' }}>
+          읽기 <ArrowUpRight size={11}/>
+        </div>
+      </div>
     </div>
   )
 }
 
-// ── 카테고리 바 차트 ────────────────────────────────────────────────
-function CategoryBar({ categories, total }) {
-  if (!categories || !total) return null
-  const sorted = Object.entries(categories).sort((a, b) => b[1] - a[1]).slice(0, 8)
-  const max = sorted[0]?.[1] || 1
-
-  const catNames = {
-    investment: '투자·금융', tech: '기술·AI', youth: '청소년', policy: '정책',
-    startup: '창업', esg: 'ESG', fintech: '핀테크', edutech: '에듀테크',
-    food: '식품', health: '헬스케어',
-  }
-
+/* ── Keyword badge ─────────────────────────────────── */
+function KwBadge({ kw, rank }) {
+  const colors = ['#3B82F6','#A855F7','#22C55E','#F59E0B','#F43F5E','#06B6D4','#F97316','#818CF8']
+  const c = colors[rank%colors.length]
+  const isTop = rank<3
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
-      {sorted.map(([cat, count]) => {
-        const pct = Math.round(count/total*100)
-        const width = Math.round(count/max*100)
-        const color = CATEGORY_COLORS[catNames[cat]] || '#94a3b8'
-        return (
-          <div key={cat} style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-            <div style={{ width:'70px', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--c-muted)', flexShrink:0, textAlign:'right' }}>
-              {catNames[cat] || cat}
-            </div>
-            <div style={{ flex:1, background:'var(--c-gray-2)', height:'8px' }}>
-              <div style={{ width:`${width}%`, height:'100%', background:color, transition:'width 0.5s ease' }} />
-            </div>
-            <div style={{ width:'48px', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--c-paper)' }}>
-              {count}건 <span style={{ color:'var(--c-gray-5)' }}>{pct}%</span>
-            </div>
-          </div>
-        )
-      })}
-    </div>
+    <span style={{ display:'inline-flex', alignItems:'center', gap:5,
+      padding:`${isTop?'6px 14px':'4px 11px'}`,
+      background:`${c}10`, border:`1px solid ${c}28`,
+      borderRadius:20, fontSize:isTop?14:12, color:c,
+      fontFamily:'var(--f-sans)', fontWeight:isTop?700:500,
+      cursor:'default', transition:'all .18s' }}
+      onMouseEnter={e=>{ e.currentTarget.style.background=`${c}20`; e.currentTarget.style.transform='scale(1.06)'; e.currentTarget.style.boxShadow=`0 4px 14px ${c}30` }}
+      onMouseLeave={e=>{ e.currentTarget.style.background=`${c}10`; e.currentTarget.style.transform='none'; e.currentTarget.style.boxShadow='none' }}>
+      {isTop&&<span style={{ fontFamily:'var(--f-mono)', fontSize:8, opacity:.7 }}>#{rank+1}</span>}
+      {kw}
+      {isTop&&<Flame size={10} color={c}/>}
+    </span>
   )
 }
 
-// ── 주간 보고서 카드 ─────────────────────────────────────────────────
-function WeeklyReportCard({ report, onSelect, selected }) {
-  const ws = report.week_start?.slice(0, 10) || ''
-  const we = report.week_end?.slice(0, 10) || ''
-  const wsShort = ws.slice(5).replace('-', '/')
-  const weShort = we.slice(5).replace('-', '/')
-
-  let topCats = []
-  try { topCats = Object.entries(JSON.parse(report.top_categories || '{}')).slice(0, 3) } catch {}
-
-  const catNames = {
-    investment: '투자', tech: 'AI·테크', youth: '청소년', policy: '정책',
-    startup: '창업', esg: 'ESG', fintech: '핀테크', edutech: '에듀테크',
-    food: '식품', health: '헬스케어',
-  }
-
-  return (
-    <button
-      onClick={() => onSelect(report)}
-      style={{
-        width: '100%', textAlign: 'left', padding: '18px 20px',
-        background: selected ? 'var(--c-gray-2)' : 'var(--c-card)',
-        border: selected ? '2px solid var(--c-gold)' : '1px solid var(--c-border)',
-        cursor: 'pointer', transition: 'var(--t-fast)',
-      }}
-      onMouseEnter={e => { if (!selected) { e.currentTarget.style.borderColor='var(--c-gray-4)' } }}
-      onMouseLeave={e => { if (!selected) { e.currentTarget.style.borderColor='var(--c-border)' } }}
-    >
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'8px' }}>
-        <div style={{ fontFamily:'var(--f-mono)', fontSize:'12px', color: selected ? 'var(--c-gold)' : 'var(--c-paper)', fontWeight:700 }}>
-          {wsShort} ~ {weShort}
-        </div>
-        <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-gray-5)' }}>
-          {report.article_count}건
-        </div>
-      </div>
-      <div style={{ display:'flex', flexWrap:'wrap', gap:'4px' }}>
-        {topCats.map(([cat, count]) => (
-          <span key={cat} style={{
-            fontFamily:'var(--f-mono)', fontSize:'10px',
-            background:'var(--c-gray-3)', color:'var(--c-gray-7)',
-            padding:'2px 6px',
-          }}>
-            {catNames[cat] || cat} {count}
-          </span>
-        ))}
-      </div>
-    </button>
-  )
-}
-
-// ── 주간 트렌드 패널 ─────────────────────────────────────────────────
-function WeeklyTrendPanel({ trendData }) {
-  if (!trendData) return null
-
-  let keywords = []
-  let rising = []
-  let declining = []
-  let categories = {}
-  let hotTopics = []
-
-  try { keywords = JSON.parse(trendData.keywords || '[]') } catch {}
-  try { rising = JSON.parse(trendData.rising_keywords || '[]') } catch {}
-  try { declining = JSON.parse(trendData.declining_keywords || '[]') } catch {}
-  try { categories = JSON.parse(trendData.categories || '{}') } catch {}
-  try { hotTopics = JSON.parse(trendData.hot_topics || '[]') } catch {}
-
-  const ps = trendData.period_start?.slice(0, 10) || ''
-  const pe = trendData.period_end?.slice(0, 10) || ''
-
-  return (
-    <div style={{ display:'flex', flexDirection:'column', gap:'24px' }}>
-
-      {/* 기간 헤더 */}
-      <div style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--c-gold)', letterSpacing:'1px' }}>
-        📅 {ps} ~ {pe} · {trendData.total_articles}건 분석
-      </div>
-
-      {/* 키워드 클라우드 */}
-      {keywords.length > 0 && (
-        <div>
-          <div className="t-eyebrow" style={{ marginBottom:'12px' }}>이번 주 핵심 키워드</div>
-          <div style={{ lineHeight:2 }}>
-            {keywords.slice(0, 25).map((k, i) => (
-              <KeywordBadge key={i} word={k.word} count={k.count} category={k.category} rank={i+1} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 상승/하락 키워드 */}
-      {(rising.length > 0 || declining.length > 0) && (
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'16px' }}>
-          <div>
-            <div style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'10px' }}>
-              <ArrowUp size={12} color="#34d399" />
-              <span className="t-eyebrow" style={{ color:'#34d399' }}>상승 키워드</span>
-            </div>
-            <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
-              {rising.slice(0, 6).map((k, i) => (
-                <div key={i} style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-                  <span style={{ fontFamily:'var(--f-mono)', fontSize:'12px', color:'var(--c-paper)', flex:1 }}>{k.word}</span>
-                  <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'#34d399', background:'#34d39915', padding:'1px 6px' }}>
-                    {k.change}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'10px' }}>
-              <ArrowDown size={12} color="#f87171" />
-              <span className="t-eyebrow" style={{ color:'#f87171' }}>하락 키워드</span>
-            </div>
-            <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
-              {declining.slice(0, 6).map((k, i) => (
-                <div key={i} style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-                  <span style={{ fontFamily:'var(--f-mono)', fontSize:'12px', color:'var(--c-paper)', flex:1 }}>{k.word}</span>
-                  <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'#f87171', background:'#f8717115', padding:'1px 6px' }}>
-                    {k.change}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 카테고리 분포 */}
-      {Object.keys(categories).length > 0 && (
-        <div>
-          <div className="t-eyebrow" style={{ marginBottom:'12px' }}>분야별 분포</div>
-          <CategoryBar categories={categories} total={trendData.total_articles} />
-        </div>
-      )}
-
-      {/* 핫 토픽 */}
-      {hotTopics.length > 0 && (
-        <div>
-          <div className="t-eyebrow" style={{ marginBottom:'12px' }}>이번 주 핫 토픽 TOP 5</div>
-          <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
-            {hotTopics.slice(0, 5).map((t, i) => (
-              <div key={i} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'8px 12px', background:'var(--c-gray-1)', borderLeft:'3px solid var(--c-gold)' }}>
-                <span style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--c-gold)', fontWeight:700, flexShrink:0 }}>
-                  {i+1}
-                </span>
-                <span style={{ fontSize:'13px', color:'var(--c-paper)', flex:1, lineHeight:1.4 }}>{t.title}</span>
-                <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-gray-5)', flexShrink:0 }}>{t.date}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── 섹터 카드 ────────────────────────────────────────────────────────
-function SectorCard({ sector }) {
-  return (
-    <div className="card" style={{ padding:'20px', display:'flex', flexDirection:'column', gap:'10px' }}>
-      <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
-        <span style={{ fontSize:'24px' }}>{sector.icon}</span>
-        <div>
-          <div style={{ fontFamily:'var(--f-serif)', fontSize:'15px', fontWeight:600, color:'var(--c-paper)' }}>
-            {sector.name}
-          </div>
-          <div style={{ fontSize:'12px', color:'var(--c-muted)', marginTop:'2px' }}>{sector.note}</div>
-        </div>
-      </div>
-      <div style={{
-        height:'3px', background:`linear-gradient(90deg, ${sector.color}, ${sector.color}40)`,
-        marginTop:'4px',
-      }} />
-    </div>
-  )
-}
-
-// ── TREND PAGE ────────────────────────────────────────────────────────
+/* ── Main ─────────────────────────────────────────── */
 export default function TrendPage() {
   const navigate = useNavigate()
-  const [selectedReport, setSelectedReport] = useState(null)
-  const [selectedTrend, setSelectedTrend] = useState(null)
-  const [reportTab, setReportTab] = useState('trend')  // 'trend' | 'report'
+  const [activeSector, setActiveSector] = useState('all')
+  const [tab, setTab] = useState('indicators')
 
-  const { data: trendArticles = [], isLoading: articlesLoading } = useArticles({ category:'trend', limit:6 })
-  const { data: weeklyReports = [], isLoading: reportsLoading } = useWeeklyReports(12)
-  const { data: weeklyTrends = [], isLoading: trendsLoading } = useWeeklyTrends(8)
+  const { data:snaps, isLoading:snapLoading } = useTrends()
+  const { data:wReports, isLoading:wRepLoading } = useWeeklyReports(6)
+  const { data:wTrends, isLoading:wTrendLoading } = useWeeklyTrends(4)
+  const { data:newsTrends, isLoading:ntLoading } = useNewsTrends()
 
-  // 최신 트렌드 자동 선택
-  useEffect(() => {
-    if (weeklyTrends.length > 0 && !selectedTrend) {
-      setSelectedTrend(weeklyTrends[0])
-    }
-  }, [weeklyTrends])
-
-  useEffect(() => {
-    if (weeklyReports.length > 0 && !selectedReport) {
-      setSelectedReport(weeklyReports[0])
-    }
-  }, [weeklyReports])
-
-  const noData = weeklyTrends.length === 0 && weeklyReports.length === 0
+  const snapData = (snaps?.length ? snaps : MOCK_SNAPS)
+  const filteredSnaps = activeSector==='all'
+    ? snapData
+    : snapData.filter(s=>s.category===activeSector)
 
   return (
-    <div style={{ paddingBottom:'80px' }}>
+    <div style={{ maxWidth:'var(--max-w)', margin:'0 auto',
+      padding:'0 var(--pad-x)', paddingBottom:80 }}>
+      <Helmet>
+        <title>트렌드 트래커 | Insightship — 청소년 창업 트렌드 분석</title>
+        <meta name="description" content="AI·스타트업·에듀테크·핀테크 최신 트렌드와 시장 지표를 실시간으로 추적합니다. 청소년 창업가를 위한 인사이트."/>
+        <meta property="og:title" content="트렌드 트래커 | Insightship"/>
+        <meta property="og:description" content="창업 트렌드·시장 지표·주간 리포트를 한눈에 확인하세요"/>
+        <meta property="og:type" content="website"/>
+        <meta property="og:url" content="https://insightship.vercel.app/trend"/>
+        <meta name="twitter:card" content="summary"/>
+        <meta name="twitter:title" content="트렌드 트래커 | Insightship"/>
+        <meta name="twitter:description" content="청소년 창업가를 위한 최신 스타트업·AI 트렌드 분석"/>
+        <link rel="canonical" href="https://insightship.vercel.app/trend"/>
+      </Helmet>
 
-      {/* 헤더 */}
-      <div style={{ padding:'32px 0 20px', borderBottom:'1px solid var(--c-border)' }}>
-        <div className="t-eyebrow" style={{ marginBottom:'8px' }}>TREND TRACKER</div>
-        <h1 style={{ fontFamily:'var(--f-serif)', fontSize:'clamp(24px,4vw,34px)', fontWeight:700, marginBottom:'8px', lineHeight:1.2 }}>
-          창업 트렌드 트래커
-        </h1>
-        <p style={{ color:'var(--c-muted)', fontSize:'14px', lineHeight:1.7, maxWidth:'600px' }}>
-          한국 스타트업 생태계의 주간 흐름을 분석합니다.
-          매주 수백 건의 뉴스에서 키워드·트렌드·핫 토픽을 자동 추출합니다.
-        </p>
+      {/* ── PAGE HEADER ── */}
+      <div style={{ padding:'36px 0 24px', borderBottom:'1px solid var(--b1)', marginBottom:32 }}>
+        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between',
+          gap:16, flexWrap:'wrap' }}>
+          <div>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+              <div style={{ width:3, height:18, background:'linear-gradient(to bottom,#F59E0B,#D97706)',
+                borderRadius:2 }}/>
+              <span style={{ fontFamily:'var(--f-mono)', fontSize:9, color:'#F59E0B',
+                letterSpacing:'.16em' }}>INSIGHTSHIP · TREND TRACKER</span>
+              <span style={{ display:'flex', alignItems:'center', gap:3, fontSize:9,
+                padding:'2px 7px', borderRadius:4, background:'rgba(34,197,94,0.1)',
+                border:'1px solid rgba(34,197,94,0.25)', color:'#22C55E',
+                fontFamily:'var(--f-mono)', fontWeight:700 }}>
+                <span style={{ width:5, height:5, borderRadius:'50%', background:'#22C55E',
+                  animation:'pulse 2s ease-in-out infinite', display:'inline-block' }}/>LIVE
+              </span>
+            </div>
+            <h1 style={{ fontFamily:'var(--f-display)', fontSize:'clamp(26px,4vw,38px)',
+              fontWeight:900, color:'var(--t1)', lineHeight:1.1, marginBottom:8,
+              letterSpacing:'-.03em' }}>트렌드 트래커</h1>
+            <p style={{ fontSize:14, color:'var(--t2)', lineHeight:1.65, maxWidth:520 }}>
+              청소년 창업 생태계의 실시간 시장 지표와 주간 인사이트를 한눈에.
+            </p>
+          </div>
+          <div style={{ display:'flex', gap:12 }}>
+            {[
+              { label:'추적 지표', val:snapData.length+'개', color:'#F59E0B' },
+              { label:'주간 리포트', val:(wReports?.length||0)+'개', color:'#3B82F6' },
+              { label:'키워드', val:(newsTrends?.length||20)+'개', color:'#A855F7' },
+            ].map(s=>(
+              <div key={s.label} style={{ padding:'12px 16px', background:'var(--bg2)',
+                border:'1px solid var(--b1)', borderRadius:10, textAlign:'center' }}>
+                <div style={{ fontFamily:'var(--f-display)', fontSize:20, fontWeight:800,
+                  color:s.color, lineHeight:1 }}>{s.val}</div>
+                <div style={{ fontFamily:'var(--f-mono)', fontSize:9, color:'var(--t4)',
+                  marginTop:4 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div style={{ marginTop:'36px', display:'flex', flexDirection:'column', gap:'48px' }}>
+      {/* ── SECTOR FILTER ── */}
+      <div style={{ display:'flex', gap:6, overflowX:'auto', paddingBottom:4,
+        marginBottom:28, scrollbarWidth:'none' }}>
+        <button onClick={()=>setActiveSector('all')}
+          style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 14px',
+            background:activeSector==='all'?'var(--t1)':'var(--bg2)',
+            border:`1px solid ${activeSector==='all'?'var(--t1)':'var(--b1)'}`,
+            borderRadius:20, color:activeSector==='all'?'#000':'var(--t2)',
+            fontSize:12, fontFamily:'var(--f-sans)', fontWeight:activeSector==='all'?700:400,
+            cursor:'pointer', whiteSpace:'nowrap', transition:'all .18s', flexShrink:0 }}>
+          📊 전체
+        </button>
+        {SECTORS.map(s=>(
+          <button key={s.id} onClick={()=>setActiveSector(s.id)}
+            style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 14px',
+              background:activeSector===s.id?s.color:'var(--bg2)',
+              border:`1px solid ${activeSector===s.id?s.color:'var(--b1)'}`,
+              borderRadius:20, color:activeSector===s.id?'#000':'var(--t2)',
+              fontSize:12, fontFamily:'var(--f-sans)', fontWeight:activeSector===s.id?700:400,
+              cursor:'pointer', whiteSpace:'nowrap', transition:'all .18s', flexShrink:0,
+              boxShadow:activeSector===s.id?`0 4px 14px ${s.color}35`:'none' }}>
+            {s.emoji} {s.label}
+          </button>
+        ))}
+      </div>
 
-        {/* HOT SECTORS */}
-        <section>
-          <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:'16px', paddingBottom:'12px', borderBottom:'1px solid var(--c-border)' }}>
-            <div className="t-eyebrow">HOT SECTORS · 2026</div>
-            <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-gray-5)' }}>AI 분석 기반</span>
+      {/* ── MARKET INDICATORS GRID ── */}
+      <div style={{ marginBottom:48 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:18 }}>
+          <Activity size={16} color="#F59E0B"/>
+          <span style={{ fontFamily:'var(--f-mono)', fontSize:11, color:'#F59E0B',
+            letterSpacing:'.1em', textTransform:'uppercase' }}>시장 지표</span>
+          <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6,
+            fontFamily:'var(--f-mono)', fontSize:9, color:'var(--t4)' }}>
+            <Clock size={10}/>
+            {snapData?.[0]?.snapshot_date
+              ? `업데이트: ${format(new Date(snapData[0].snapshot_date),'M.d HH:mm',{locale:ko})}`
+              : '자동 업데이트'}
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px,1fr))', gap:'2px', background:'var(--c-border)', border:'1px solid var(--c-border)' }}>
-            {SECTORS.map((s, i) => (
-              <div key={i} style={{ background:'var(--c-card)' }}>
-                <SectorCard sector={s} />
+        </div>
+        {snapLoading ? (
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))', gap:14 }}>
+            {Array(6).fill(0).map((_,i)=>(
+              <div key={i} style={{ padding:18, background:'var(--bg2)',
+                border:'1px solid var(--b1)', borderRadius:14,
+                display:'flex', flexDirection:'column', gap:10 }}>
+                <Sk h={10} w="50%" r={4}/><Sk h={11} w="70%" r={4}/>
+                <Sk h={30} w="60%" r={6}/><Sk h={32} r={4}/>
               </div>
             ))}
           </div>
-        </section>
+        ) : filteredSnaps.length===0 ? (
+          <div style={{ textAlign:'center', padding:'64px 20px', color:'var(--t3)' }}>
+            <BarChart2 size={52} style={{ marginBottom:16, opacity:.22 }}/>
+            <div style={{ fontSize:15 }}>지표 데이터를 수집 중입니다...</div>
+            <div style={{ fontSize:12, marginTop:6 }}>뉴스 파이프라인이 실행되면 자동으로 표시됩니다.</div>
+          </div>
+        ) : (
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))', gap:14 }}>
+            {filteredSnaps.map((s,i)=><SnapCard key={i} snap={s} index={i}/>)}
+          </div>
+        )}
+      </div>
 
-        {/* 주간 트렌드 분석 */}
-        <section>
-          {/* 탭 */}
-          <div style={{ display:'flex', borderBottom:'1px solid var(--c-border)', marginBottom:'24px' }}>
-            {[
-              { id:'trend', label:'📈 주간 키워드 트렌드', icon:null },
-              { id:'report', label:'📋 주간 보고서', icon:null },
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setReportTab(tab.id)}
-                style={{
-                  padding:'10px 20px', background:'none', border:'none',
-                  borderBottom: reportTab === tab.id ? '2px solid var(--c-gold)' : '2px solid transparent',
-                  color: reportTab === tab.id ? 'var(--c-gold)' : 'var(--c-muted)',
-                  fontFamily:'var(--f-mono)', fontSize:'12px', cursor:'pointer',
-                  letterSpacing:'0.5px', transition:'var(--t-fast)',
-                  marginBottom:'-1px',
-                }}
-              >
-                {tab.label}
-              </button>
+      {/* ── 2-col: keywords + weekly trends ── */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:28, marginBottom:48 }}>
+
+        {/* Hot keywords */}
+        <div>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:18 }}>
+            <Flame size={15} color="#F43F5E"/>
+            <span style={{ fontFamily:'var(--f-mono)', fontSize:11, color:'#F43F5E',
+              letterSpacing:'.1em' }}>HOT KEYWORDS</span>
+          </div>
+          <div style={{ padding:'24px', background:'var(--bg2)', border:'1px solid var(--b1)',
+            borderRadius:14, minHeight:180 }}>
+            {ntLoading ? (
+              <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                {Array(14).fill(0).map((_,i)=><Sk key={i} h={30} w={`${55+i*8}px`} r={20}/>)}
+              </div>
+            ) : (newsTrends||[]).length===0 ? (
+              <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                {['AI 스타트업','청소년 창업','투자 유치','에듀테크','핀테크',
+                  '그린테크','유니콘','시리즈A','해커톤','MVP','린스타트업',
+                  'SaaS','B2B','소셜임팩트'].map((kw,i)=>(
+                  <KwBadge key={i} kw={kw} rank={i}/>
+                ))}
+              </div>
+            ) : (
+              <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                {(newsTrends||[]).slice(0,20).map((kw,i)=>(
+                  <KwBadge key={i} kw={typeof kw==='string'?kw:kw.keyword||kw} rank={i}/>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Weekly trends */}
+        <div>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:18 }}>
+            <TrendingUp size={15} color="#22C55E"/>
+            <span style={{ fontFamily:'var(--f-mono)', fontSize:11, color:'#22C55E',
+              letterSpacing:'.1em' }}>WEEKLY TRENDS</span>
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
+            {wTrendLoading
+              ? Array(5).fill(0).map((_,i)=>(
+                  <div key={i} style={{ padding:'14px 16px', background:'var(--bg2)',
+                    border:'1px solid var(--b1)', borderRadius:11,
+                    display:'flex', flexDirection:'column', gap:6 }}>
+                    <Sk h={10} w="60%" r={4}/><Sk h={14} r={4}/>
+                  </div>
+                ))
+              : (wTrends?.length ? wTrends : [
+                  'AI 스타트업 급성장','에듀테크 투자 확대',
+                  '청소년 창업 지원 정책 강화','기후테크 주목','핀테크 규제 완화'
+                ]).slice(0,5).map((wt,i)=>{
+                const colors = ['#3B82F6','#A855F7','#22C55E','#F59E0B','#F43F5E']
+                const c = colors[i%5]
+                const label = typeof wt==='string'?wt:wt.keyword||wt.title
+                return (
+                  <div key={i} style={{ padding:'14px 16px', background:'var(--bg2)',
+                    border:'1px solid var(--b1)', borderRadius:11,
+                    display:'flex', alignItems:'center', gap:12,
+                    transition:'all .18s', cursor:'default' }}
+                    onMouseEnter={e=>{ e.currentTarget.style.borderColor=`${c}35`; e.currentTarget.style.background='var(--bg3)' }}
+                    onMouseLeave={e=>{ e.currentTarget.style.borderColor='var(--b1)'; e.currentTarget.style.background='var(--bg2)' }}>
+                    <div style={{ width:26, height:26, borderRadius:'50%',
+                      background:`${c}12`, border:`1px solid ${c}25`,
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                      fontFamily:'var(--f-mono)', fontSize:10, color:c,
+                      fontWeight:800, flexShrink:0 }}>{i+1}</div>
+                    <span style={{ fontSize:13, color:'var(--t1)', flex:1,
+                      fontWeight:500 }}>{label}</span>
+                    <TrendingUp size={12} color={c}/>
+                  </div>
+                )
+              })
+            }
+          </div>
+        </div>
+      </div>
+
+      {/* ── WEEKLY REPORTS ── */}
+      <div>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <BookOpen size={15} color="#3B82F6"/>
+            <span style={{ fontFamily:'var(--f-mono)', fontSize:11, color:'#3B82F6',
+              letterSpacing:'.1em' }}>WEEKLY REPORTS</span>
+          </div>
+          <button onClick={()=>navigate('/insight')}
+            style={{ display:'flex', alignItems:'center', gap:4, background:'none',
+              border:'none', cursor:'pointer', color:'var(--t3)',
+              fontSize:12, fontFamily:'var(--f-mono)' }}
+            onMouseEnter={e=>e.currentTarget.style.color='var(--t1)'}
+            onMouseLeave={e=>e.currentTarget.style.color='var(--t3)'}>
+            전체 보기 <ChevronRight size={12}/>
+          </button>
+        </div>
+        {wRepLoading ? (
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))', gap:14 }}>
+            {Array(4).fill(0).map((_,i)=>(
+              <div key={i} style={{ padding:18, background:'var(--bg2)',
+                border:'1px solid var(--b1)', borderRadius:12,
+                display:'flex', flexDirection:'column', gap:10 }}>
+                <Sk h={10} w="40%" r={4}/><Sk h={17} r={5}/><Sk h={12} r={4}/><Sk h={10} w="30%" r={4}/>
+              </div>
             ))}
           </div>
-
-          {/* 트렌드 탭 */}
-          {reportTab === 'trend' && (
-            <>
-              {trendsLoading ? (
-                <div style={{ padding:'40px', textAlign:'center', color:'var(--c-muted)' }}>
-                  <RefreshCw size={20} style={{ animation:'spin 1s linear infinite' }} />
-                  <div style={{ marginTop:'10px', fontFamily:'var(--f-mono)', fontSize:'12px' }}>트렌드 데이터 로딩 중...</div>
-                </div>
-              ) : weeklyTrends.length === 0 ? (
-                <div style={{ padding:'60px 20px', textAlign:'center', border:'1px dashed var(--c-gray-3)' }}>
-                  <div style={{ fontSize:'40px', marginBottom:'14px' }}>📊</div>
-                  <div style={{ fontFamily:'var(--f-serif)', fontSize:'17px', color:'var(--c-paper)', marginBottom:'8px' }}>
-                    주간 트렌드 데이터 준비 중
-                  </div>
-                  <div style={{ fontSize:'13px', color:'var(--c-muted)', lineHeight:1.7, maxWidth:'380px', margin:'0 auto' }}>
-                    매주 월요일 자동으로 지난 주 뉴스를 분석하여<br/>
-                    키워드 트렌드, 상승/하락 키워드, 핫 토픽을 생성합니다.
-                  </div>
-                  <div style={{ marginTop:'20px', fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--c-gray-5)', padding:'10px 16px', background:'var(--c-gray-1)', display:'inline-block' }}>
-                    ⚡ 첫 번째 트렌드 데이터는 다음 월요일에 생성됩니다
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display:'grid', gridTemplateColumns:'200px 1fr', gap:'2px', background:'var(--c-border)' }}>
-                  {/* 주차 선택 */}
-                  <div style={{ background:'var(--c-card)', display:'flex', flexDirection:'column', gap:'1px', background:'var(--c-border)' }}>
-                    {weeklyTrends.map((t, i) => {
-                      const ps = t.period_start?.slice(5).replace('-', '/') || ''
-                      const pe = t.period_end?.slice(5).replace('-', '/') || ''
-                      const sel = selectedTrend?.id === t.id
-                      return (
-                        <button key={i} onClick={() => setSelectedTrend(t)} style={{
-                          padding:'14px 16px', background: sel ? 'var(--c-gray-2)' : 'var(--c-card)',
-                          border:'none', borderLeft: sel ? '3px solid var(--c-gold)' : '3px solid transparent',
-                          cursor:'pointer', textAlign:'left', transition:'var(--t-fast)',
-                        }}>
-                          <div style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color: sel ? 'var(--c-gold)' : 'var(--c-paper)', fontWeight: sel ? 700 : 400 }}>
-                            {ps} ~ {pe}
-                          </div>
-                          <div style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--c-gray-5)', marginTop:'3px' }}>
-                            {t.total_articles}건
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  {/* 트렌드 상세 */}
-                  <div style={{ background:'var(--c-card)', padding:'24px' }}>
-                    {selectedTrend
-                      ? <WeeklyTrendPanel trendData={selectedTrend} />
-                      : <div style={{ color:'var(--c-muted)', fontFamily:'var(--f-mono)', fontSize:'12px' }}>주차를 선택해주세요</div>
-                    }
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* 보고서 탭 */}
-          {reportTab === 'report' && (
-            <>
-              {reportsLoading ? (
-                <div style={{ padding:'40px', textAlign:'center', color:'var(--c-muted)' }}>
-                  <RefreshCw size={20} style={{ animation:'spin 1s linear infinite' }} />
-                  <div style={{ marginTop:'10px', fontFamily:'var(--f-mono)', fontSize:'12px' }}>보고서 로딩 중...</div>
-                </div>
-              ) : weeklyReports.length === 0 ? (
-                <div style={{ padding:'60px 20px', textAlign:'center', border:'1px dashed var(--c-gray-3)' }}>
-                  <div style={{ fontSize:'40px', marginBottom:'14px' }}>📋</div>
-                  <div style={{ fontFamily:'var(--f-serif)', fontSize:'17px', color:'var(--c-paper)', marginBottom:'8px' }}>
-                    주간 보고서 없음
-                  </div>
-                  <div style={{ fontSize:'13px', color:'var(--c-muted)', lineHeight:1.7, maxWidth:'400px', margin:'0 auto' }}>
-                    주간 보고서는 매주 월요일 자동 생성됩니다.<br/>
-                    지난 7일간의 뉴스를 분석한 인사이트 요약입니다.<br/><br/>
-                    <strong style={{ color:'var(--c-paper)' }}>4월 이전 보고서가 없는 이유:</strong><br/>
-                    주간 보고서 시스템이 2026년 4월에 새로 구축되었습니다.
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display:'grid', gridTemplateColumns:'220px 1fr', gap:'2px', background:'var(--c-border)' }}>
-                  {/* 보고서 목록 */}
-                  <div style={{ display:'flex', flexDirection:'column', gap:'1px', background:'var(--c-border)' }}>
-                    {weeklyReports.map((r, i) => (
-                      <WeeklyReportCard
-                        key={i} report={r}
-                        onSelect={setSelectedReport}
-                        selected={selectedReport?.id === r.id}
-                      />
-                    ))}
-                  </div>
-
-                  {/* 보고서 본문 */}
-                  <div style={{ background:'var(--c-card)', padding:'28px', maxHeight:'600px', overflowY:'auto' }}>
-                    {selectedReport ? (
-                      <div>
-                        {renderMd(selectedReport.summary_markdown)}
-                      </div>
-                    ) : (
-                      <div style={{ color:'var(--c-muted)', fontFamily:'var(--f-mono)', fontSize:'12px' }}>
-                        보고서를 선택해주세요
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </section>
-
-        {/* 트렌드 뉴스 (기존 기사 기반) */}
-        <section>
-          <div style={{ marginBottom:'16px', paddingBottom:'12px', borderBottom:'1px solid var(--c-border)' }}>
-            <div className="t-eyebrow" style={{ marginBottom:'4px' }}>TREND ARTICLES</div>
-            <div style={{ fontSize:'12px', color:'var(--c-muted)', fontFamily:'var(--f-mono)' }}>
-              AI가 선별한 트렌드 관련 뉴스
-            </div>
-          </div>
-          {articlesLoading ? (
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:'2px', background:'var(--c-border)', border:'1px solid var(--c-border)' }}>
-              {[0,1,2].map(i => <ArticleCardSkeleton key={i} />)}
-            </div>
-          ) : trendArticles.length > 0 ? (
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:'2px', background:'var(--c-border)', border:'1px solid var(--c-border)' }}>
-              {trendArticles.map(a => (
-                <ArticleCard key={a.id} article={a} onClick={() => navigate(`/article/${a.slug}`)} />
-              ))}
-            </div>
-          ) : (
-            <div style={{ padding:'48px 20px', textAlign:'center', border:'1px dashed var(--c-gray-3)', color:'var(--c-muted)' }}>
-              <div style={{ fontSize:'28px', marginBottom:'10px' }}>📝</div>
-              <div style={{ fontFamily:'var(--f-serif)', fontSize:'15px', color:'var(--c-paper)', marginBottom:'4px' }}>
-                트렌드 아티클 준비 중
+        ) : (
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))', gap:14 }}>
+            {(wReports||[]).map((r,i)=><WeeklyCard key={i} rep={r}/>)}
+            {(!wReports||wReports.length===0) && (
+              <div style={{ gridColumn:'1/-1', padding:'64px 20px',
+                textAlign:'center', color:'var(--t3)' }}>
+                <BookOpen size={44} style={{ marginBottom:14, opacity:.2 }}/>
+                <div style={{ fontSize:15 }}>주간 리포트 준비 중...</div>
+                <div style={{ fontSize:12, marginTop:6 }}>매주 금요일 밤 자동 생성됩니다.</div>
               </div>
-              <div style={{ fontSize:'13px' }}>관련 뉴스가 분류되면 여기에 표시됩니다.</div>
-            </div>
-          )}
-        </section>
-
+            )}
+          </div>
+        )}
       </div>
 
       <style>{`
-        @keyframes spin { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }
-        @media (max-width: 768px) {
-          div[style*="gridTemplateColumns: '200px 1fr'"],
-          div[style*="200px 1fr"] { 
-            grid-template-columns: 1fr !important;
-          }
-          div[style*="220px 1fr"] {
-            grid-template-columns: 1fr !important;
-          }
+        @keyframes skPulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+        @media(max-width:768px){
+          div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns:1fr!important; }
         }
       `}</style>
     </div>
