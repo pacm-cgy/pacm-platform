@@ -301,14 +301,25 @@ function buildMarketReport(label, news) {
 // §4. DB 유틸
 // ══════════════════════════════════════════════════════════════════════
 
-// SAGE 전용 계정 조회 (없으면 admin fallback)
+// SAGE 전용 계정 조회 (없으면 admin fallback, 마지막엔 첫 번째 유저 fallback)
 async function getSageId() {
   try {
+    // 1차: username=ai_sage
     const r1 = await fetch(`${SB_URL}/rest/v1/profiles?username=eq.ai_sage&limit=1&select=id`, { headers: SH() })
     const d1 = await r1.json()
     if (d1?.[0]?.id) return d1[0].id
+    // 2차: role=admin
     const r2 = await fetch(`${SB_URL}/rest/v1/profiles?role=eq.admin&limit=1&select=id`, { headers: SH() })
-    return (await r2.json())?.[0]?.id || null
+    const d2 = await r2.json()
+    if (d2?.[0]?.id) return d2[0].id
+    // 3차: username=insightship or pacm
+    const r3 = await fetch(`${SB_URL}/rest/v1/profiles?or=(username.eq.insightship,username.eq.pacm,username.eq.admin)&limit=1&select=id`, { headers: SH() })
+    const d3 = await r3.json()
+    if (d3?.[0]?.id) return d3[0].id
+    // 4차: 가장 오래된 계정 (최후 fallback)
+    const r4 = await fetch(`${SB_URL}/rest/v1/profiles?select=id&order=created_at.asc&limit=1`, { headers: SH() })
+    const d4 = await r4.json()
+    return d4?.[0]?.id || null
   } catch { return null }
 }
 
@@ -386,29 +397,57 @@ export default async function handler(req) {
   const fromISO = from.toISOString()
   const toISO   = to.toISOString()
 
-  // 해당 주 뉴스 조회
-  const newsR = await fetch(
-    `${SB_URL}/rest/v1/articles?status=eq.published&category=eq.news` +
-    `&published_at=gte.${encodeURIComponent(fromISO)}&published_at=lte.${encodeURIComponent(toISO)}` +
-    `&select=id,title,ai_summary,category,tags&order=published_at.desc&limit=60`,
-    { headers: SH() }
-  )
-  const news = await newsR.json()
-
-  if (!Array.isArray(news) || !news.length) {
-    // 뉴스 없으면 최근 3일치로 폴백
-    const fallbackFrom = new Date(Date.now()-3*86400000).toISOString()
-    const fallbackR = await fetch(
+  // ── 해당 주 뉴스 조회 (news 카테고리 우선, 없으면 source_name 있는 전체 published 기사)
+  let news = []
+  try {
+    // 1차: category=news (자동수집 뉴스)
+    const newsR = await fetch(
       `${SB_URL}/rest/v1/articles?status=eq.published&category=eq.news` +
-      `&published_at=gte.${encodeURIComponent(fallbackFrom)}` +
-      `&select=id,title,ai_summary,category,tags&order=published_at.desc&limit=40`,
+      `&published_at=gte.${encodeURIComponent(fromISO)}&published_at=lte.${encodeURIComponent(toISO)}` +
+      `&select=id,title,ai_summary,category,tags&order=published_at.desc&limit=60`,
       { headers: SH() }
     )
-    const fallbackNews = await fallbackR.json()
-    if (!Array.isArray(fallbackNews) || !fallbackNews.length) {
-      return new Response(JSON.stringify({ error: '분석할 뉴스 없음', from: fromISO, to: toISO, label }), { status: 200 })
-    }
-    news.push(...fallbackNews)
+    const d1 = await newsR.json()
+    if (Array.isArray(d1)) news = d1
+  } catch {}
+
+  // 2차: source_name 있는 기사 (뉴스와 동일 기간)
+  if (news.length < 5) {
+    try {
+      const r2 = await fetch(
+        `${SB_URL}/rest/v1/articles?status=eq.published&source_name=not.is.null` +
+        `&published_at=gte.${encodeURIComponent(fromISO)}&published_at=lte.${encodeURIComponent(toISO)}` +
+        `&select=id,title,ai_summary,category,tags&order=published_at.desc&limit=60`,
+        { headers: SH() }
+      )
+      const d2 = await r2.json()
+      if (Array.isArray(d2)) {
+        const existIds = new Set(news.map(n => n.id))
+        news.push(...d2.filter(n => !existIds.has(n.id)))
+      }
+    } catch {}
+  }
+
+  // 3차: 최근 7일 전체 published (주차 범위에 뉴스 없을 경우)
+  if (news.length < 3) {
+    try {
+      const fallbackFrom = new Date(Date.now() - 7 * 86400000).toISOString()
+      const r3 = await fetch(
+        `${SB_URL}/rest/v1/articles?status=eq.published` +
+        `&published_at=gte.${encodeURIComponent(fallbackFrom)}` +
+        `&select=id,title,ai_summary,category,tags&order=published_at.desc&limit=50`,
+        { headers: SH() }
+      )
+      const d3 = await r3.json()
+      if (Array.isArray(d3)) {
+        const existIds = new Set(news.map(n => n.id))
+        news.push(...d3.filter(n => !existIds.has(n.id)))
+      }
+    } catch {}
+  }
+
+  if (news.length === 0) {
+    return new Response(JSON.stringify({ error: '분석할 뉴스 없음', from: fromISO, to: toISO, label }), { status: 200 })
   }
 
   const adminId = await getSageId()

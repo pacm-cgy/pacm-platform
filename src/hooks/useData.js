@@ -150,7 +150,7 @@ export function usePosts({ postType, post_type, limit = 20, page = 0 } = {}) {
           profiles!author_id (id, display_name, avatar_url, startup_name, school)
         `)
         .eq('is_deleted', false)
-        .order('created_at', { ascending: false })
+        .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false })
         .range(page * limit, (page + 1) * limit - 1)
 
@@ -262,7 +262,6 @@ export function useProjects() {
         .select('*')
         .in('status', ['open', 'coming_soon'])
         .order('created_at', { ascending: false })
-        .order('created_at', { ascending: false })
       if (error) throw error
       return data
     },
@@ -346,7 +345,7 @@ export function useReport() {
         reporter_id: user.id,
         target_type: targetType,
         target_id: targetId,
-        reason: reason.trim().slice(10, 500),
+        reason: reason.trim().slice(0, 500),  // fix: 0부터 잘라야 함
       })
       if (error) throw error
     },

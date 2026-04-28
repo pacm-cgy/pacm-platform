@@ -349,18 +349,33 @@ export default async function handler(req) {
     Authorization:   `Bearer ${SUPABASE_KEY}`,
   }
 
-  // 관리자(author) ID 조회
+  // 관리자(author) ID 조회 — role=admin 우선, 없으면 username=insightship, 그래도 없으면 첫 번째 유저 fallback
   let authorId = null
   try {
+    // 1차: role=admin
     const pRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?role=eq.admin&limit=1&select=id`, { headers: H })
     const profiles = await pRes.json()
     authorId = profiles?.[0]?.id || null
+
+    // 2차: username=insightship or username=ai_sage
+    if (!authorId) {
+      const p2 = await fetch(`${SUPABASE_URL}/rest/v1/profiles?or=(username.eq.insightship,username.eq.ai_sage,username.eq.pacm)&limit=1&select=id`, { headers: H })
+      const d2 = await p2.json()
+      authorId = d2?.[0]?.id || null
+    }
+
+    // 3차: 가장 오래된 계정 fallback
+    if (!authorId) {
+      const p3 = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id&order=created_at.asc&limit=1`, { headers: H })
+      const d3 = await p3.json()
+      authorId = d3?.[0]?.id || null
+    }
   } catch {}
   if (!authorId) {
-    return new Response(JSON.stringify({ error: '관리자 계정 없음 — profiles 테이블에 role=admin 계정 필요' }), { status: 500 })
+    return new Response(JSON.stringify({ error: '관리자 계정 없음 — profiles 테이블에 계정 필요', hint: 'profiles 테이블에 role=admin 또는 임의 계정 필요' }), { status: 500 })
   }
 
-  const results = { inserted: 0, skipped: 0, errors: [], sources: {} }
+  const results = { inserted: 0, skipped: 0, errors: [], sources: {}, warnings: [] }
 
   // ── A. 네이버 뉴스 API 수집 ────────────────────────────────────────
   if (NAVER_ID && NAVER_SECRET) {
@@ -412,7 +427,7 @@ export default async function handler(req) {
       }
     }
   } else {
-    results.errors.push('NAVER_CLIENT_ID/NAVER_CLIENT_SECRET 미설정 — 네이버 수집 건너뜀')
+    results.warnings.push('NAVER_CLIENT_ID/NAVER_CLIENT_SECRET 미설정 — 네이버 수집 건너뜀')
   }
 
   // ── B. RSS 피드 수집 (설계서 §10) ─────────────────────────────────
@@ -421,6 +436,9 @@ export default async function handler(req) {
   for (let si = 0; si < RSS_SOURCES.length; si++) {
     const src   = RSS_SOURCES[si]
     const items = rssResults[si].status === 'fulfilled' ? rssResults[si].value : []
+    if (rssResults[si].status === 'rejected') {
+      results.warnings.push(`RSS[${src.name}]: fetch 실패 — ${String(rssResults[si].reason).slice(0, 60)}`)
+    }
 
     for (const item of items) {
       try {

@@ -433,8 +433,24 @@ export default function MentorPage() {
   const [lastThinking, setLastThinking]   = useState(null)
   const bottomRef = useRef(null)
   const inputRef  = useRef(null)
+  const chatAreaRef = useRef(null)
 
-  useEffect(()=>{ bottomRef.current?.scrollIntoView({ behavior:'smooth' }) },[msgs, loading])
+  // 스크롤 — 채팅창 컨테이너만 스크롤 (페이지 전체 스크롤 버그 완전 수정)
+  useEffect(() => {
+    const el = chatAreaRef.current
+    if (!el) return
+    // 유저가 직접 위로 스크롤한 경우는 자동스크롤 하지 않음
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    const isNearBottom = distFromBottom < 180
+    if (isNearBottom || loading || streaming) {
+      // requestAnimationFrame 두 번 중첩 → DOM paint 완료 후 스크롤 보장
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (el) el.scrollTop = el.scrollHeight
+        })
+      })
+    }
+  }, [msgs, loading, streaming])
 
   /* ── 스트리밍 send ─────────────────────── */
   const send = useCallback(async (text) => {
@@ -630,14 +646,13 @@ export default function MentorPage() {
             />
 
             {/* 채팅창 */}
-            <div style={{ background:'var(--bg1)', border:'1px solid var(--b1)', borderRadius:14,
-              padding:20, minHeight:420, maxHeight:560, overflowY:'auto', marginBottom:10,
-              scrollbarWidth:'thin' }}>
+            <div ref={chatAreaRef} style={{ background:'var(--bg1)', border:'1px solid var(--b1)', borderRadius:14,
+              padding:20, minHeight:420, maxHeight:'clamp(420px,55vh,620px)', overflowY:'auto', marginBottom:10,
+              scrollbarWidth:'thin', overscrollBehavior:'contain' }}>
               {msgs.map((m,i)=>(
                 <Bubble key={m.id||i} msg={m} streaming={m.streaming && streaming}/>
               ))}
               {loading && !streaming && <TypingDots/>}
-              <div ref={bottomRef}/>
             </div>
 
             {/* 빠른 질문 칩 */}
@@ -792,6 +807,8 @@ export default function MentorPage() {
         @keyframes fbUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
         @media(max-width:900px){ .mentor-grid{grid-template-columns:1fr!important} }
+        /* 채팅창 자체 스크롤만 — 페이지 스크롤 전파 차단 */
+        [data-chat-area] { overscroll-behavior: contain; }
       `}</style>
     </div>
   )

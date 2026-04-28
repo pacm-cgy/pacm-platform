@@ -222,6 +222,8 @@ export default function ProfilePage() {
   const [bookmarks, setBookmarks]     = useState([])
   const [likedArts, setLikedArts]     = useState([])
   const [postsLoading, setPostsLoading] = useState(false)
+  const [isFollowing, setIsFollowing]   = useState(false)
+  const [followLoading, setFollowLoading] = useState(false)
   const fileRef = useRef(null)
 
   const isOwn = !paramId || (user && paramId === user.id)
@@ -255,13 +257,27 @@ export default function ProfilePage() {
       .catch(() => setLoading(false))
   }, [uid])
 
-  /* load posts */
+  /* load follow state — 타인 프로필 조회 시 팔로우 여부 확인 */
+  useEffect(() => {
+    if (!user || isOwn || !uid) { setIsFollowing(false); return }
+    supabase.from('follows')
+      .select('id')
+      .eq('follower_id', user.id)
+      .eq('following_id', uid)
+      .maybeSingle()
+      .then(({ data }) => setIsFollowing(!!data))
+      .catch(() => {})
+  }, [user, uid, isOwn])
+
+  /* load posts — community_posts 테이블 사용 (posts가 아님) */
   useEffect(() => {
     if (!uid || tab !== 'posts') return
     setPostsLoading(true)
-    supabase.from('posts')
+    supabase.from('community_posts')
       .select('id,title,post_type,created_at,like_count,comment_count,reply_count')
-      .eq('author_id', uid).order('created_at', { ascending: false }).limit(30)
+      .eq('author_id', uid)
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: false }).limit(30)
       .then(({ data }) => { if (data) setMyPosts(data); setPostsLoading(false) })
       .catch(() => setPostsLoading(false))
   }, [uid, tab])
@@ -270,8 +286,8 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!user || !isOwn || tab !== 'bookmarks') return
     setPostsLoading(true)
-    supabase.from('bookmarks')
-      .select('article_id, articles(id,title,slug,category,cover_image,published_at)')
+    supabase.from('article_bookmarks')
+      .select('article_id, articles(id,title,slug,category,cover_image,published_at,excerpt,source_name)')
       .eq('user_id', user.id).order('created_at', { ascending: false }).limit(30)
       .then(({ data }) => {
         if (data) setBookmarks(data.map(b => b.articles).filter(Boolean))
@@ -392,7 +408,7 @@ export default function ProfilePage() {
 
         {loading ? (
           /* skeleton */
-          <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 24 }}>
+          <div className="profile-skeleton-grid">
             <div style={{ background: 'var(--bg2)', border: '1px solid var(--b1)', borderRadius: 14, padding: 24 }}>
               <Sk h={80} w={80} r={40} mb={16} />
               <Sk h={18} w="70%" mb={8} />
@@ -410,14 +426,10 @@ export default function ProfilePage() {
             </div>
           </div>
         ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '260px 1fr',
-            gap: 24, alignItems: 'start',
-          }}>
+          <div className="profile-grid">
 
             {/* ── LEFT SIDEBAR ── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="profile-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
               {/* Profile card */}
               <div style={{
@@ -563,14 +575,41 @@ export default function ProfilePage() {
                     </div>
                   ) : (
                     <button
+                      disabled={followLoading}
+                      onClick={async () => {
+                        if (!user) { navigate('/login'); return }
+                        setFollowLoading(true)
+                        try {
+                          if (isFollowing) {
+                            await supabase.from('follows').delete()
+                              .eq('follower_id', user.id).eq('following_id', uid)
+                            setIsFollowing(false)
+                          } else {
+                            await supabase.from('follows').insert({ follower_id: user.id, following_id: uid })
+                            setIsFollowing(true)
+                          }
+                          // 팔로워 카운트 반영을 위해 프로필 리프레시
+                          const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle()
+                          if (refreshed) setProfileData(refreshed)
+                        } catch {}
+                        setFollowLoading(false)
+                      }}
                       style={{
                         width: '100%', padding: '9px',
-                        background: 'linear-gradient(135deg,#3B82F6,#1D4ED8)',
-                        border: 'none', borderRadius: 8, color: '#fff',
+                        background: isFollowing
+                          ? 'var(--bg3)'
+                          : 'linear-gradient(135deg,#3B82F6,#1D4ED8)',
+                        border: isFollowing ? '1px solid var(--b2)' : 'none',
+                        borderRadius: 8,
+                        color: isFollowing ? 'var(--t2)' : '#fff',
                         fontFamily: 'var(--f-sans)', fontWeight: 600, fontSize: 12.5,
-                        cursor: 'pointer',
-                      }}>
-                      팔로우
+                        cursor: followLoading ? 'not-allowed' : 'pointer',
+                        opacity: followLoading ? 0.6 : 1,
+                        transition: 'all .15s',
+                      }}
+                      onMouseEnter={e => { if (!followLoading) e.currentTarget.style.opacity = '.8' }}
+                      onMouseLeave={e => { if (!followLoading) e.currentTarget.style.opacity = '1' }}>
+                      {followLoading ? '...' : isFollowing ? '팔로잉 ✓' : '팔로우'}
                     </button>
                   )}
                 </div>
@@ -627,8 +666,8 @@ export default function ProfilePage() {
             {/* ── RIGHT CONTENT ── */}
             <div>
               {/* Tab bar */}
-              <div style={{
-                display: 'flex', gap: 0, background: 'var(--bg2)',
+              <div className="profile-tabs" style={{
+                background: 'var(--bg2)',
                 border: '1px solid var(--b1)', borderRadius: '14px 14px 0 0',
                 overflow: 'hidden', borderBottom: 'none',
               }}>
@@ -637,6 +676,7 @@ export default function ProfilePage() {
                   return (
                     <button
                       key={t.id} onClick={() => setTab(t.id)}
+                      className="profile-tab-btn"
                       style={{
                         display: 'flex', alignItems: 'center', gap: 6, padding: '14px 18px',
                         background: active ? 'var(--bg3)' : 'transparent',
@@ -817,7 +857,7 @@ export default function ProfilePage() {
                               전체 보기 <ChevronRight size={10} />
                             </button>
                           </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
+                          <div className="profile-badges-grid" style={{ gap: 8 }}>
                             {MOCK_BADGES.filter(b => b.earned).slice(0, 4).map((b, i) => (
                               <BadgeCard key={i} badge={b} locked={false} />
                             ))}
@@ -942,7 +982,7 @@ export default function ProfilePage() {
                         transition: 'width 1s ease',
                       }} />
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+                    <div className="profile-badges-grid">
                       {MOCK_BADGES.map((b, i) => (
                         <BadgeCard key={i} badge={b} locked={!b.earned} />
                       ))}
@@ -958,7 +998,7 @@ export default function ProfilePage() {
                       <div style={{ fontFamily: 'var(--f-mono)', fontSize: 9.5, color: 'var(--t4)', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: 14 }}>
                         활동 통계
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+                      <div className="profile-activity-grid">
                         {[
                           { icon: FileText,      label: '게시글',    value: myPosts.length,        color: '#3B82F6' },
                           { icon: Bookmark,      label: '북마크',    value: bookmarks.length,      color: '#A855F7' },
@@ -1035,8 +1075,57 @@ export default function ProfilePage() {
 
       <style>{`
         @keyframes skPulse { 0%,100%{opacity:1} 50%{opacity:.5} }
-        @media (max-width: 780px) {
-          .profile-grid { grid-template-columns: 1fr !important; }
+        .profile-grid {
+          display: grid;
+          grid-template-columns: 260px 1fr;
+          gap: 24px;
+          align-items: start;
+        }
+        .profile-skeleton-grid {
+          display: grid;
+          grid-template-columns: 260px 1fr;
+          gap: 24px;
+        }
+        .profile-tabs {
+          display: flex;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
+        }
+        .profile-tabs::-webkit-scrollbar { display: none; }
+        .profile-tab-btn {
+          flex-shrink: 0;
+        }
+        .profile-badges-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 10px;
+        }
+        .profile-activity-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 10px;
+        }
+        @media (max-width: 900px) {
+          .profile-grid, .profile-skeleton-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .profile-sidebar {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+          }
+        }
+        @media (max-width: 640px) {
+          .profile-sidebar {
+            grid-template-columns: 1fr !important;
+          }
+          .profile-badges-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+          .profile-activity-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
         }
       `}</style>
     </div>
