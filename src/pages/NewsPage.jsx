@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import {
   RefreshCw, Search, X, Zap, Clock, Eye,
@@ -377,9 +377,11 @@ function SkCard() {
 
 /* ─── MAIN PAGE ──────────────────────────────────────────────────── */
 export default function NewsPage() {
+  const location = useLocation()
+  const initQ = new URLSearchParams(location.search).get('q') || ''
   const [activeFilter, setActiveFilter] = useState('전체')
-  const [searchQuery,  setSearchQuery]  = useState('')
-  const [searchInput,  setSearchInput]  = useState('')
+  const [searchQuery,  setSearchQuery]  = useState(initQ)
+  const [searchInput,  setSearchInput]  = useState(initQ)
   const [articles,     setArticles]     = useState([])
   const [page,         setPage]         = useState(0)
   const [hasMore,      setHasMore]      = useState(true)

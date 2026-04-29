@@ -687,3 +687,78 @@ export function useSaveEduProgress() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['edu_progress'] }),
   })
 }
+
+// ── 관련 아티클 추천 (현재 보는 아티클 기반) ─────────────────────
+export function useRelatedArticles(articleId, category, tags = [], limit = 4) {
+  return useQuery({
+    queryKey: ['related', articleId, category],
+    queryFn: async () => {
+      if (!articleId) return []
+      try {
+        // 1) 같은 카테고리 최신 아티클 (현재 글 제외)
+        const { data: catData } = await supabase
+          .from('articles')
+          .select('id,title,slug,excerpt,cover_image,category,published_at,read_time,view_count')
+          .eq('status','published')
+          .eq('category', category)
+          .neq('id', articleId)
+          .is('source_name', null)
+          .order('published_at', { ascending: false })
+          .limit(limit * 2)
+        const pool = catData || []
+
+        // 2) 태그 매칭 스코어 계산
+        const tagSet = new Set(tags || [])
+        const scored = pool.map(a => {
+          const aTags = a.tags || []
+          const overlap = aTags.filter(t => tagSet.has(t)).length
+          return { ...a, _score: overlap }
+        }).sort((a, b) => b._score - a._score || new Date(b.published_at) - new Date(a.published_at))
+
+        return scored.slice(0, limit)
+      } catch { return [] }
+    },
+    enabled: !!articleId && !!category,
+    staleTime: 10 * 60 * 1000,
+  })
+}
+
+// ── 인기 아티클 (조회수 기반) ─────────────────────────────────────
+export function usePopularArticles(category, limit = 5) {
+  return useQuery({
+    queryKey: ['popular', category, limit],
+    queryFn: async () => {
+      try {
+        let q = supabase
+          .from('articles')
+          .select('id,title,slug,cover_image,category,published_at,view_count,read_time')
+          .eq('status','published')
+          .is('source_name', null)
+          .order('view_count', { ascending: false })
+          .limit(limit)
+        if (category && category !== 'all') q = q.eq('category', category)
+        const { data } = await q
+        return data || []
+      } catch { return [] }
+    },
+    staleTime: 15 * 60 * 1000,
+  })
+}
+
+// ── 알림 생성 (관리자용 — 사용자에게 알림 전송) ──────────────────
+export function useSendNotification() {
+  return useMutation({
+    mutationFn: async ({ userId, type, title, message, link }) => {
+      const { error } = await supabase.from('notifications').insert({
+        user_id: userId,
+        type: type || 'system',
+        title,
+        message,
+        link: link || null,
+        is_read: false,
+        created_at: new Date().toISOString(),
+      })
+      if (error) throw error
+    },
+  })
+}
