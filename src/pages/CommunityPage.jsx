@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   MessageCircle, Heart, Eye, PenSquare, AlertCircle, Pin,
   ChevronRight, Search, X, Flame, Filter, Users, TrendingUp,
@@ -267,10 +267,10 @@ function renderInline(text) {
 }
 
 /* ── Write modal ────────────────────────────────────── */
-function WriteModal({ onClose, onSubmit }) {
+function WriteModal({ onClose, onSubmit, initialType = 'question' }) {
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
-  const [type, setType] = useState('question')
+  const [type, setType] = useState(initialType)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [editorTab, setEditorTab] = useState('write') // 'write' | 'preview'
@@ -448,14 +448,34 @@ function WriteModal({ onClose, onSubmit }) {
 /* ── Main ─────────────────────────────────────────────── */
 export default function CommunityPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, profile } = useAuthStore()
   const [tab, setTab] = useState('all')
   const [sort, setSort] = useState('latest')
   const [query, setQuery] = useState('')
   const [searchOn, setSearchOn] = useState(false)
   const [showWrite, setShowWrite] = useState(false)
+  const [writeInitialType, setWriteInitialType] = useState('question')
   const [page, setPage] = useState(0)
   const [reportTarget, setReportTarget] = useState(null) // { type, id }
+
+  // URL 파라미터로 글쓰기 모달 열기 (?write=feedback 등)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const writeParam = params.get('write')
+    if (writeParam) {
+      const validTypes = ['question', 'feedback', 'recruit', 'free']
+      const resolvedType = validTypes.includes(writeParam) ? writeParam : 'feedback'
+      if (user) {
+        setWriteInitialType(resolvedType)
+        setShowWrite(true)
+      } else {
+        navigate('/login')
+      }
+      // URL 파라미터 제거 (히스토리 교체)
+      navigate(location.pathname, { replace: true })
+    }
+  }, [location.search, user])
 
   const { data:posts=[], isLoading } = usePosts({ type:tab==='all'?undefined:tab, page })
   const createPost = useCreatePost()
@@ -765,7 +785,7 @@ export default function CommunityPage() {
       </div>
 
       {showWrite && (
-        <WriteModal onClose={()=>setShowWrite(false)} onSubmit={handleWrite}/>
+        <WriteModal onClose={()=>setShowWrite(false)} onSubmit={handleWrite} initialType={writeInitialType}/>
       )}
 
       {/* 신고 모달 */}
