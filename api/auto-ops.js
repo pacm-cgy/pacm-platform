@@ -17,10 +17,12 @@
 
 export const config = { runtime: 'edge', maxDuration: 60 }
 
+import { generateReport, generateCommunityPost } from './ai-engine.js'
+
 const SB_URL      = process.env.SUPABASE_URL
 const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
 const CRON_SECRET = process.env.CRON_SECRET
-const GEMINI_KEY  = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY
+// 외부 AI API 제거 — 자체 AI 엔진 사용
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -61,24 +63,7 @@ async function sbPost(path, body) {
   } catch(e) { return { ok: false, error: e.message } }
 }
 
-async function callGemini(prompt, maxTokens = 1000) {
-  if (!GEMINI_KEY) return null
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: maxTokens, temperature: 0.85 },
-        }),
-      }
-    )
-    const d = await res.json()
-    return d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
-  } catch { return null }
-}
+
 
 // 팀장 계정 ID 가져오기
 async function getLeadProfileId(username) {
@@ -158,8 +143,9 @@ AI 언급 절대 금지.
 
 리포트 내용만 출력:`.trim()
 
-  const body = await callGemini(prompt, 900)
-  if (!body) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 전략 리포트 생성
+  const body = generateReport('ai_max', stats, 'strategy')
+  if (!body) return { skip: 'ai_failed' }
 
   const res = await sbPost('community_posts', {
     title: `📊 이번 주 플랫폼 전략 리포트 — ${new Date().toLocaleDateString('ko-KR')}`,
@@ -206,8 +192,9 @@ async function runPRCampaign() {
 
 내용만 출력:`.trim()
 
-  const body = await callGemini(prompt, 450)
-  if (!body) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 PR 캠페인 생성
+  const body = generateReport('ai_mgt_alba', stats, 'pr')
+  if (!body) return { skip: 'ai_failed' }
 
   const res = await sbPost('community_posts', {
     title: `📣 ${campaign.focus}`,
@@ -253,8 +240,9 @@ async function runCommunityEventPlanning() {
 
 내용만 출력:`.trim()
 
-  const body = await callGemini(prompt, 500)
-  if (!body) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 커뮤니티 이벤트 기획 생성
+  const body = generateReport('ai_hana', {}, 'event')
+  if (!body) return { skip: 'ai_failed' }
 
   const res = await sbPost('community_posts', {
     title: `🎪 이벤트: ${event.name}`,
@@ -301,8 +289,9 @@ ${newsText}
 
 내용만 출력:`.trim()
 
-  const body = await callGemini(prompt, 600)
-  if (!body) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 뉴스 하이라이트 생성
+  const body = generateReport('ai_pulse', { totalNews: news.length }, 'news_highlight')
+  if (!body) return { skip: 'ai_failed' }
 
   const res = await sbPost('community_posts', {
     title: `📡 오늘의 스타트업 뉴스 하이라이트 — ${new Date().toLocaleDateString('ko-KR')}`,
@@ -349,8 +338,9 @@ AI 언급 금지.
 
 리포트 내용만 출력:`.trim()
 
-  const body = await callGemini(prompt, 750)
-  if (!body) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 KPI 리포트 생성
+  const body = generateReport('ai_sage', stats, 'kpi')
+  if (!body) return { skip: 'ai_failed' }
 
   const res = await sbPost('community_posts', {
     title: `📋 주간 KPI 리포트 — ${new Date().toLocaleDateString('ko-KR')}`,
@@ -397,8 +387,9 @@ async function runFAQPost() {
 
 내용만 출력:`.trim()
 
-  const body = await callGemini(prompt, 500)
-  if (!body) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 FAQ 게시글 생성
+  const body = generateReport('ai_lumi', {}, 'faq')
+  if (!body) return { skip: 'ai_failed' }
 
   const res = await sbPost('community_posts', {
     title: `💡 FAQ: ${faq.q}`,
@@ -439,8 +430,9 @@ async function runGrowthAnalysis() {
 
 내용만 출력:`.trim()
 
-  const body = await callGemini(prompt, 550)
-  if (!body) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 성장 분석 생성
+  const body = generateReport('ai_trend', stats, 'growth')
+  if (!body) return { skip: 'ai_failed' }
 
   const res = await sbPost('community_posts', {
     title: `📈 플랫폼 성장 분석 — ${new Date().toLocaleDateString('ko-KR')}`,
@@ -483,8 +475,9 @@ ${target.org}와의 파트너십 협력 가능성을 탐색하는 내부 기획 
 
 내용만 출력:`.trim()
 
-  const body = await callGemini(prompt, 400)
-  if (!body) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 파트너십 기획 생성
+  const body = generateReport('ai_max', {}, 'partnership')
+  if (!body) return { skip: 'ai_failed' }
 
   const res = await sbPost('community_posts', {
     title: `🤝 파트너십 기획: ${target.org}`,

@@ -21,7 +21,7 @@ export const config = { runtime: 'edge', maxDuration: 60 }
 const SB_URL      = process.env.SUPABASE_URL
 const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
 const CRON_SECRET = process.env.CRON_SECRET
-const GEMINI_KEY  = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY
+// 외부 AI API 제거 — 자체 AI 엔진 사용
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -58,27 +58,24 @@ function getWorkersCount(level) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// Gemini AI 호출
+// 자체 AI 엔진 — 외부 API 없음
 // ══════════════════════════════════════════════════════════════════════
 
-async function callGemini(prompt, maxTokens = 800) {
-  if (!GEMINI_KEY) return null
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: maxTokens, temperature: 0.9 },
-        }),
-      }
-    )
-    const d = await res.json()
-    return d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
-  } catch { return null }
-}
+import { generateCommunityPost, generateReport, generateChat } from './ai-engine.js'
+import {
+  getActivityLevel    as brainGetActivityLevel,
+  getActiveWorkerCount,
+  isWorkerActive,
+  getPersona          as brainGetPersona,
+  pickChatMessage,
+  generateConversationStarter,
+  generateReactionToAdmin,
+  generateDiscussionMessage,
+  generateWeeklyDiscussion,
+  generateMentoringTip,
+  generateInsightArticle,
+} from './staff-brain.js'
+
 
 // ══════════════════════════════════════════════════════════════════════
 // Supabase 헬퍼
@@ -183,8 +180,9 @@ ${cp ? `자주 쓰는 표현: "${cp}"` : ''}
 
 게시글 내용만 출력 (제목 없이):`.trim()
 
-  const body = await callGemini(prompt, 350)
-  if (!body) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 커뮤니티 게시글 생성
+  const body = generateCommunityPost(member.username, topic)
+  if (!body) return { skip: 'ai_failed' }
 
   const postTypes = { operations:'notice', content:'discussion', mentoring:'tips', news:'news',
     analytics:'analysis', report:'analysis', newsletter:'notice', tech:'notice',
@@ -235,8 +233,9 @@ async function actionWriteComment(member) {
 
 댓글 내용만 출력:`.trim()
 
-  const content = await callGemini(prompt, 180)
-  if (!content) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 댓글 생성
+  const content = generateChat(member.username, post.title, 'general', [])
+  if (!content) return { skip: 'ai_failed' }
 
   const res = await sbPost('comments', {
     post_id: post.id, author_id: authorId,
@@ -318,8 +317,9 @@ ${newsRef}
 
 아티클 본문만 출력:`.trim()
 
-  const body = await callGemini(prompt, 1400)
-  if (!body) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 아티클 생성
+  const body = generateReport(member.username, {}, 'faq')
+  if (!body) return { skip: 'ai_failed' }
 
   const slug = `insight-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
   const res = await sbPost('articles', {
@@ -364,8 +364,9 @@ ${newsList.map(n => `- [${n.category}] ${n.title}`).join('\n') || '- 최신 스�
 
 트렌드 분석 내용만 출력:`.trim()
 
-  const content = await callGemini(prompt, 480)
-  if (!content) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 트렌드 분석 생성
+  const content = generateReport(member.username, {}, 'growth')
+  if (!content) return { skip: 'ai_failed' }
 
   const dateStr = new Date().toLocaleDateString('ko-KR')
   const res = await sbPost('community_posts', {
@@ -437,8 +438,9 @@ async function actionWelcomeNewMembers(member) {
 
 게시글만 출력:`.trim()
 
-  const body = await callGemini(prompt, 280)
-  if (!body) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 환영 메시지 생성
+  const body = generateReport(member.username, {}, 'event')
+  if (!body) return { skip: 'ai_failed' }
 
   const res = await sbPost('community_posts', {
     title: `🎉 새로운 멤버를 환영합니다!`,
@@ -473,8 +475,9 @@ async function actionStrategyBriefing(member) {
 
 내용만 출력:`.trim()
 
-  const content = await callGemini(prompt, 380)
-  if (!content) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 전략 브리핑 생성
+  const content = generateReport(member.username, {}, 'pr')
+  if (!content) return { skip: 'ai_failed' }
 
   const res = await sbPost('community_posts', {
     title: `🏛️ 이번 주 운영 방향 — ${new Date().toLocaleDateString('ko-KR')}`,
@@ -519,8 +522,9 @@ async function actionShareMentoringTip(member) {
 
 내용만 출력:`.trim()
 
-  const body = await callGemini(prompt, 450)
-  if (!body) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 멘토링 팁 생성
+  const body = generateReport(member.username, {}, 'faq')
+  if (!body) return { skip: 'ai_failed' }
 
   const res = await sbPost('community_posts', {
     title: `💡 멘토링 팁: ${tip}`,
@@ -563,8 +567,9 @@ async function actionPRPost(member) {
 
 내용만 출력:`.trim()
 
-  const body = await callGemini(prompt, 380)
-  if (!body) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 PR 게시글 생성
+  const body = generateReport(member.username, {}, 'pr')
+  if (!body) return { skip: 'ai_failed' }
 
   const res = await sbPost('community_posts', {
     title: topic, body, content: body,
@@ -605,8 +610,9 @@ ${headlines.join('\n') || '- 이번 주 스타트업 주요 소식'}
 
 내용만 출력:`.trim()
 
-  const body = await callGemini(prompt, 300)
-  if (!body) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 뉴스레터 예고 생성
+  const body = generateCommunityPost(member.username, '뉴스레터')
+  if (!body) return { skip: 'ai_failed' }
 
   const res = await sbPost('community_posts', {
     title: `💌 이번 주 뉴스레터 예고`,
@@ -650,8 +656,9 @@ async function actionWeeklyDiscussion(member) {
 
 내용만 출력:`.trim()
 
-  const body = await callGemini(prompt, 280)
-  if (!body) return { skip: 'gemini_failed' }
+  // 자체 AI 엔진으로 주간 토론 게시글 생성
+  const body = generateReport(member.username, {}, 'event')
+  if (!body) return { skip: 'ai_failed' }
 
   const res = await sbPost('community_posts', {
     title: `💬 주간 토론: ${topic}`,
@@ -664,6 +671,85 @@ async function actionWeeklyDiscussion(member) {
 
   await logWork(member.username, member.display_name, member.team, member.title, 'weekly_discussion', topic)
   return { action: 'weekly_discussion', topic, ok: res.ok }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 액션 13: 직원 채팅방 자연 대화 시작 (staff-brain 통합)
+// ══════════════════════════════════════════════════════════════════════
+
+const CHAT_ROOMS = ['general', 'ops', 'feedback', 'strategy']
+
+async function actionStartNaturalConversation(member) {
+  // 랜덤 채팅방 선택
+  const room = CHAT_ROOMS[Math.floor(Date.now() / 300000) % CHAT_ROOMS.length]
+
+  // staff-brain에서 직접 대화 시작 메시지 생성
+  const msg = generateConversationStarter(member.key, member.team, room)
+    || pickChatMessage({ room, hour: (new Date().getUTCHours() + 9) % 24 }, member.key, room)
+  if (!msg) return { skip: 'no_message' }
+
+  try {
+    await sbPost('staff_chat_messages', {
+      room,
+      sender_key:   member.username,
+      sender_name:  member.display_name || member.name,
+      sender_emoji: member.emoji,
+      sender_color: member.color,
+      sender_team:  member.team,
+      message:      msg.slice(0, 400),
+      msg_type:     'chat',
+      is_deleted:   false,
+      created_at:   new Date().toISOString(),
+    })
+    await logWork(member.username, member.display_name, member.team, member.title, 'staff_chat', `채팅(${room}): ${msg.slice(0, 40)}`)
+    return { action: 'staff_chat', room, message: msg.slice(0, 60) }
+  } catch (e) {
+    return { skip: 'insert_failed', error: e.message?.slice(0, 40) }
+  }
+}
+
+async function actionReactToRecentChat(member) {
+  // 최근 채팅 메시지에 반응
+  const room = CHAT_ROOMS[Math.floor(Date.now() / 240000) % CHAT_ROOMS.length]
+
+  let recentMsgs = []
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/staff_chat_messages?room=eq.${room}&is_deleted=eq.false&order=created_at.desc&limit=5&select=sender_key,sender_name,message,created_at`,
+      { headers: H() }
+    )
+    const rows = await r.json().catch(() => [])
+    recentMsgs = Array.isArray(rows) ? rows.reverse() : []
+  } catch { /* ignore */ }
+
+  if (recentMsgs.length === 0) return { skip: 'no_recent_chat' }
+
+  // 이미 최근에 발언했으면 skip
+  const lastSenders = recentMsgs.slice(-3).map(m => m.sender_key)
+  if (lastSenders.includes(member.username)) return { skip: 'already_spoke' }
+
+  const topic = recentMsgs[recentMsgs.length - 1]?.message?.slice(0, 60) || '최근 업무'
+  const msg   = generateDiscussionMessage(member.key, member.team, topic, room, recentMsgs)
+  if (!msg) return { skip: 'no_message' }
+
+  try {
+    await sbPost('staff_chat_messages', {
+      room,
+      sender_key:   member.username,
+      sender_name:  member.display_name || member.name,
+      sender_emoji: member.emoji,
+      sender_color: member.color,
+      sender_team:  member.team,
+      message:      msg.slice(0, 400),
+      msg_type:     'chat',
+      is_deleted:   false,
+      created_at:   new Date().toISOString(),
+    })
+    await logWork(member.username, member.display_name, member.team, member.title, 'staff_chat_reply', `채팅반응(${room}): ${msg.slice(0, 40)}`)
+    return { action: 'staff_chat_reply', room, message: msg.slice(0, 60) }
+  } catch (e) {
+    return { skip: 'insert_failed', error: e.message?.slice(0, 40) }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -689,21 +775,21 @@ async function logWork(username, name, team, title, taskType, taskDesc) {
 
 const ACTION_MATRIX = {
   // ── 운영팀
-  ARIA:      [actionWriteCommunityPost, actionLikePost, actionWelcomeNewMembers, actionWriteComment],
-  OPS_JUNE:  [actionWelcomeNewMembers, actionWriteComment, actionLikePost],
-  OPS_RAY:   [actionWriteCommunityPost, actionLikePost, actionWriteComment],
-  OPS_MINA:  [actionWriteCommunityPost, actionLikePost, actionWriteComment],
-  OPS_KEN:   [actionWriteComment, actionLikePost],
-  OPS_TARA:  [actionWriteComment, actionWriteCommunityPost],
-  OPS_FINN:  [actionWriteComment, actionLikePost],
-  OPS_DANA:  [actionWriteTrendAnalysis, actionWriteComment],
-  OPS_ZARA:  [actionWriteComment, actionLikePost],
-  OPS_LEON:  [actionWriteComment, actionLikePost],
+  ARIA:      [actionWriteCommunityPost, actionLikePost, actionWelcomeNewMembers, actionWriteComment, actionStartNaturalConversation],
+  OPS_JUNE:  [actionWelcomeNewMembers, actionWriteComment, actionLikePost, actionStartNaturalConversation],
+  OPS_RAY:   [actionWriteCommunityPost, actionLikePost, actionWriteComment, actionReactToRecentChat],
+  OPS_MINA:  [actionWriteCommunityPost, actionLikePost, actionWriteComment, actionReactToRecentChat],
+  OPS_KEN:   [actionWriteComment, actionLikePost, actionReactToRecentChat],
+  OPS_TARA:  [actionWriteComment, actionWriteCommunityPost, actionStartNaturalConversation],
+  OPS_FINN:  [actionWriteComment, actionLikePost, actionReactToRecentChat],
+  OPS_DANA:  [actionWriteTrendAnalysis, actionWriteComment, actionReactToRecentChat],
+  OPS_ZARA:  [actionWriteComment, actionLikePost, actionReactToRecentChat],
+  OPS_LEON:  [actionWriteComment, actionLikePost, actionReactToRecentChat],
 
   // ── 콘텐츠팀
-  NOVA:      [actionWriteInsightArticle, actionWriteComment, actionWriteCommunityPost],
-  CNT_IRIS:  [actionWriteCommunityPost, actionWriteComment, actionLikePost],
-  CNT_ALEX:  [actionWriteCommunityPost, actionWriteComment],
+  NOVA:      [actionWriteInsightArticle, actionWriteComment, actionWriteCommunityPost, actionStartNaturalConversation],
+  CNT_IRIS:  [actionWriteCommunityPost, actionWriteComment, actionLikePost, actionReactToRecentChat],
+  CNT_ALEX:  [actionWriteCommunityPost, actionWriteComment, actionReactToRecentChat],
   CNT_VIVI:  [actionWriteTrendAnalysis, actionWriteComment, actionLikePost],
   CNT_OWEN:  [actionWriteCommunityPost, actionLikePost],
   CNT_LENA:  [actionWriteInsightArticle, actionWriteComment],
@@ -713,7 +799,7 @@ const ACTION_MATRIX = {
   CNT_NIKA:  [actionWriteComment, actionLikePost],
 
   // ── 멘토링팀
-  LUMI:      [actionShareMentoringTip, actionWriteComment, actionLikePost],
+  LUMI:      [actionShareMentoringTip, actionWriteComment, actionLikePost, actionStartNaturalConversation],
   MNT_SAGE2: [actionShareMentoringTip, actionWriteComment],
   MNT_COLE:  [actionShareMentoringTip, actionWriteComment],
   MNT_YUNA:  [actionShareMentoringTip, actionWriteComment],
@@ -725,7 +811,7 @@ const ACTION_MATRIX = {
   MNT_TINO:  [actionWriteCommunityPost, actionWriteComment],
 
   // ── 뉴스팀
-  PULSE:     [actionWriteCommunityPost, actionWriteComment, actionLikePost],
+  PULSE:     [actionWriteCommunityPost, actionWriteComment, actionLikePost, actionStartNaturalConversation],
   NWS_CLAM:  [actionWriteTrendAnalysis, actionLikePost],
   NWS_VERO:  [actionWriteCommunityPost, actionLikePost],
   NWS_MONT:  [actionWriteComment, actionLikePost],
@@ -737,7 +823,7 @@ const ACTION_MATRIX = {
   NWS_COLE2: [actionWriteComment, actionLikePost],
 
   // ── 분석팀
-  TREND:     [actionWriteTrendAnalysis, actionWriteComment, actionLikePost],
+  TREND:     [actionWriteTrendAnalysis, actionWriteComment, actionLikePost, actionStartNaturalConversation],
   ANL_MIKO:  [actionWriteTrendAnalysis, actionWriteComment],
   ANL_DINO:  [actionWriteTrendAnalysis, actionLikePost],
   ANL_REVA:  [actionWriteCommunityPost, actionWriteComment],
@@ -785,9 +871,9 @@ const ACTION_MATRIX = {
   TCH_RUNE:  [actionWriteComment, actionLikePost],
 
   // ── 커뮤니티팀
-  HANA:      [actionWriteCommunityPost, actionWeeklyDiscussion, actionWriteComment, actionLikePost],
-  CMM_JADE:  [actionWelcomeNewMembers, actionWriteComment, actionLikePost],
-  CMM_BEAU:  [actionWeeklyDiscussion, actionWriteComment],
+  HANA:      [actionWriteCommunityPost, actionWeeklyDiscussion, actionWriteComment, actionLikePost, actionStartNaturalConversation],
+  CMM_JADE:  [actionWelcomeNewMembers, actionWriteComment, actionLikePost, actionReactToRecentChat],
+  CMM_BEAU:  [actionWeeklyDiscussion, actionWriteComment, actionReactToRecentChat],
   CMM_ROLO:  [actionWriteCommunityPost, actionLikePost],
   CMM_INES:  [actionWriteComment, actionLikePost],
   CMM_LARK:  [actionWriteCommunityPost, actionLikePost],
@@ -797,8 +883,8 @@ const ACTION_MATRIX = {
   CMM_TEAL:  [actionWriteComment, actionLikePost],
 
   // ── 관리팀
-  MAX:       [actionStrategyBriefing, actionReviewReports, actionWriteComment, actionPRPost],
-  MGT_VERA:  [actionStrategyBriefing, actionWriteComment],
+  MAX:       [actionStrategyBriefing, actionReviewReports, actionWriteComment, actionPRPost, actionStartNaturalConversation],
+  MGT_VERA:  [actionStrategyBriefing, actionWriteComment, actionReactToRecentChat],
   MGT_FINN2: [actionWriteComment, actionLikePost],
   MGT_ALBA:  [actionPRPost, actionWriteCommunityPost, actionLikePost],
   MGT_DUSK:  [actionWriteComment, actionLikePost, actionPRPost],

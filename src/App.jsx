@@ -25,14 +25,27 @@ class ErrorBoundary extends React.Component {
 
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Suspense, lazy, useEffect } from 'react'
+import { Suspense, lazy, useEffect, memo } from 'react'
 import { HelmetProvider } from 'react-helmet-async'
 import Header from './components/layout/Header'
 import Footer from './components/layout/Footer'
-import StaffChatPopup from './components/StaffChatPopup'
 import FeedbackPopup from './components/FeedbackPopup'
 import { useAuthStore } from './store'
 import './styles/global.css'
+
+// ── admin 전용 — 번들에서 일반 유저에게 로드되지 않도록 lazy로 분리 ──
+const StaffChatPopup = lazy(() => import('./components/StaffChatPopup'))
+
+// admin role 확인 후에만 StaffChatPopup 마운트 (이중 방어)
+const AdminOnlyStaffChat = memo(function AdminOnlyStaffChat() {
+  const { profile } = useAuthStore()
+  if (!profile || profile.role !== 'admin') return null
+  return (
+    <Suspense fallback={null}>
+      <StaffChatPopup />
+    </Suspense>
+  )
+})
 
 const HomePage       = lazy(() => import('./pages/HomePage'))
 const InsightPage    = lazy(() => import('./pages/InsightPage'))
@@ -143,8 +156,8 @@ export default function App() {
                   </Suspense>
                 </div>
                 <Footer />
-                {/* 전역 팝업: admin에게만 직원 채팅방, 모든 유저에게 피드백 유도 */}
-                <StaffChatPopup />
+                {/* 전역 팝업: admin에게만 직원 채팅방 (lazy + 이중 role 방어), 모든 유저에게 피드백 유도 */}
+                <AdminOnlyStaffChat />
                 <FeedbackPopup />
               </div>
             </AppInit>

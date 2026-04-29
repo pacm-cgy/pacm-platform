@@ -12,10 +12,11 @@
  */
 export const config = { runtime: 'edge' }
 
+import { generateFeedbackReply } from './ai-engine.js'
+
 const SB_URL      = process.env.SUPABASE_URL
 const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
 const CRON_SECRET = process.env.CRON_SECRET
-const GEMINI_KEY  = process.env.GEMINI_API_KEY
 
 const H = () => ({
   apikey:         SB_KEY,
@@ -32,25 +33,7 @@ const json = (d, s = 200) =>
     status: s, headers: { 'Content-Type': 'application/json', ...CORS },
   })
 
-// ── Gemini 호출 ───────────────────────────────────────────────────
-async function callGemini(prompt) {
-  if (!GEMINI_KEY) return null
-  try {
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.8, maxOutputTokens: 400 },
-        }),
-      }
-    )
-    const d = await r.json()
-    return d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
-  } catch { return null }
-}
+// ── 자체 AI 엔진 사용 — 외부 API 없음 ────────────────────────────
 
 // ── AI 답변자 배정 — 피드백 내용에 따라 적합한 팀 매핑 ──────────
 const FEEDBACK_RESPONDERS = [
@@ -157,24 +140,9 @@ async function replyToFeedback(post) {
   const profileId = profiles?.[0]?.id
   if (!profileId) return { status: 'no_profile', username: responder.username }
 
-  // 2. Gemini로 답변 생성
-  const prompt = `당신은 Insightship 플랫폼의 ${responder.team} ${responder.name}입니다.
-유저가 다음 피드백/건의를 남겼습니다. 진심 어린 답변을 작성하세요.
-
-제목: ${post.title}
-내용: ${post.content?.slice(0, 300) || '(내용 없음)'}
-
-답변 규칙:
-- 3~5문장 이내, 자연스러운 한국어 존댓말
-- 피드백에 진심으로 감사하고 구체적으로 반응할 것
-- 개선에 반영하겠다는 의지 표현
-- 이모지 1~2개 사용
-- "AI입니다", "자동 생성" 같은 표현 절대 금지
-- ${responder.team} 전문성을 살린 답변
-답변만 출력하세요.`
-
-  const replyText = await callGemini(prompt)
-  if (!replyText) return { status: 'gemini_failed', post_id: post.id }
+  // 2. 자체 AI 엔진으로 답변 생성
+  const replyText = generateFeedbackReply(responder.username, post)
+  if (!replyText) return { status: 'reply_failed', post_id: post.id }
 
   // 3. 댓글 삽입
   const cr = await fetch(`${SB_URL}/rest/v1/post_comments`, {
