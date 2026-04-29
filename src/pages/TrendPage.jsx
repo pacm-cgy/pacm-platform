@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -21,13 +21,13 @@ const SECTORS = [
   { id:'climate',     label:'기후테크',     color:'#10B981', emoji:'🌍', icon:Leaf },
 ]
 
-/* ── Skeleton ──────────────────────────────────────── */
+/* ── Skeleton ──────────────────────────────────────────────────── */
 function Sk({ h=16, w='100%', r=6 }) {
   return <div style={{ height:h, width:w, background:'var(--bg3)',
     borderRadius:r, animation:'skPulse 1.6s ease-in-out infinite' }}/>
 }
 
-/* ── SVG Sparkline ─────────────────────────────────── */
+/* ── SVG Sparkline ─────────────────────────────────────────────── */
 function Sparkline({ pct, color }) {
   const base = [0.28,0.42,0.38,0.51,0.47,0.62,0.55,0.7,0.65,Math.min(Math.abs(pct||0)/100+0.45,1)]
   const h = 32, w = 100
@@ -51,7 +51,7 @@ function Sparkline({ pct, color }) {
   )
 }
 
-/* ── Snapshot card ─────────────────────────────────── */
+/* ── Snapshot card ─────────────────────────────────────────────── */
 function SnapCard({ snap, index }) {
   const [hov, setHov] = useState(false)
   if (!snap) return null
@@ -59,7 +59,6 @@ function SnapCard({ snap, index }) {
   const down = (snap.change_pct||0) < 0
   const color = up ? '#22C55E' : down ? '#F43F5E' : '#666'
   const Icon = up ? TrendingUp : down ? TrendingDown : Minus
-  // category matching — DB stores Korean categories, SECTORS use English ids
   const sec = SECTORS.find(s=>
     s.id===snap.category ||
     snap.category?.includes(s.label) ||
@@ -103,7 +102,7 @@ function SnapCard({ snap, index }) {
   )
 }
 
-/* ── Weekly report card ────────────────────────────── */
+/* ── Weekly report card ────────────────────────────────────────── */
 function WeeklyCard({ rep }) {
   const navigate = useNavigate()
   const [hov, setHov] = useState(false)
@@ -148,7 +147,7 @@ function WeeklyCard({ rep }) {
   )
 }
 
-/* ── Keyword badge ─────────────────────────────────── */
+/* ── Keyword badge ─────────────────────────────────────────────── */
 function KwBadge({ kw, rank }) {
   const colors = ['#3B82F6','#A855F7','#22C55E','#F59E0B','#F43F5E','#06B6D4','#F97316','#818CF8']
   const c = colors[rank%colors.length]
@@ -169,7 +168,7 @@ function KwBadge({ kw, rank }) {
   )
 }
 
-/* ── Safe trend hooks (no missing table crash) ─────── */
+/* ── Safe trend hooks ──────────────────────────────────────────── */
 function useTrendSnapshots() {
   return useQuery({
     queryKey: ['trend_snapshots_page'],
@@ -182,7 +181,14 @@ function useTrendSnapshots() {
           .order('metric_value', { ascending: false })
           .limit(30)
         if (error) return []
-        return data || []
+        // Deduplicate by metric_name + category to prevent duplicate cards
+        const seen = new Set()
+        return (data || []).filter(row => {
+          const key = `${(row.metric_name||'').toLowerCase()}|${row.category||''}`
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
       } catch { return [] }
     },
     staleTime: 30 * 60 * 1000,
@@ -203,7 +209,7 @@ function useWeeklyArticles(limit = 6) {
           .limit(limit)
         if (!wrErr && wr?.length) return wr
 
-        // Fallback: articles with AI 리포트 tag
+        // Fallback: articles with AI리포트 tag or trend category
         const { data: arts, error: artsErr } = await supabase
           .from('articles')
           .select('id,title,slug,excerpt,published_at,category,tags')
@@ -233,14 +239,13 @@ function useWeeklyTrendsSafe() {
           .order('rank', { ascending: true })
           .limit(10)
         if (!wtErr && wt?.length) {
-          // Get latest week's keywords
           const latestWeek = wt[0].week_code
           const seen = new Set()
           return wt
             .filter(t => t.week_code === latestWeek)
             .filter(t => {
-              const key = (t.keyword||'').toLowerCase()
-              if (seen.has(key)) return false
+              const key = (t.keyword||'').toLowerCase().trim()
+              if (!key || seen.has(key)) return false
               seen.add(key)
               return true
             })
@@ -278,14 +283,13 @@ function useHotKeywords() {
     queryKey: ['hot_keywords_trend'],
     queryFn: async () => {
       try {
-        // Try trend_keywords table first (dedicated keyword table)
+        // Try trend_keywords table first
         const { data: kw, error: kwErr } = await supabase
           .from('trend_keywords')
           .select('keyword, count')
           .order('count', { ascending: false })
           .limit(30)
         if (!kwErr && kw?.length) {
-          // deduplicate by keyword string
           const seen = new Set()
           return kw.filter(k => {
             const key = (k.keyword||'').trim().toLowerCase()
@@ -294,7 +298,7 @@ function useHotKeywords() {
             return true
           }).map(k => k.keyword).slice(0, 20)
         }
-        // Fallback: metric_name from trend_snapshots, deduplicated
+        // Fallback: metric_name from trend_snapshots (deduplicated) — NO static dummy list
         const { data, error } = await supabase
           .from('trend_snapshots')
           .select('metric_name, metric_value, category')
@@ -319,11 +323,10 @@ function useHotKeywords() {
   })
 }
 
-/* ── Main ─────────────────────────────────────────── */
+/* ── Main ─────────────────────────────────────────────────────── */
 export default function TrendPage() {
   const navigate = useNavigate()
   const [activeSector, setActiveSector] = useState('all')
-  const [tab, setTab] = useState('indicators')
 
   const { data:snaps=[], isLoading:snapLoading } = useTrendSnapshots()
   const { data:wReports=[], isLoading:wRepLoading } = useWeeklyArticles(6)
@@ -457,7 +460,7 @@ export default function TrendPage() {
           </div>
         ) : (
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))', gap:14 }}>
-            {filteredSnaps.map((s,i)=><SnapCard key={s.id||i} snap={s} index={i}/>)}
+            {filteredSnaps.map((s,i)=><SnapCard key={`${s.id||i}-${s.metric_name}`} snap={s} index={i}/>)}
           </div>
         )}
       </div>
@@ -479,17 +482,16 @@ export default function TrendPage() {
                 {Array(14).fill(0).map((_,i)=><Sk key={i} h={30} w={`${55+i*8}px`} r={20}/>)}
               </div>
             ) : hotKw.length===0 ? (
-              <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
-                {['AI 스타트업','청소년 창업','투자 유치','에듀테크','핀테크',
-                  '그린테크','유니콘','시리즈A','해커톤','MVP','린스타트업',
-                  'SaaS','B2B','소셜임팩트'].map((kw,i)=>(
-                  <KwBadge key={i} kw={kw} rank={i}/>
-                ))}
+              <div style={{ padding:'32px 0', textAlign:'center', color:'var(--t4)' }}>
+                <Flame size={32} style={{ marginBottom:10, opacity:.2 }}/>
+                <div style={{ fontSize:13 }}>키워드 데이터 수집 중...</div>
+                <div style={{ fontSize:11, marginTop:6 }}>뉴스 수집 후 자동 생성됩니다.</div>
               </div>
             ) : (
               <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
                 {hotKw.slice(0,20).map((kw,i)=>(
-                  <KwBadge key={i} kw={typeof kw==='string'?kw:kw.keyword||kw} rank={i}/>
+                  <KwBadge key={`kw-${i}-${typeof kw==='string'?kw:kw.keyword}`}
+                    kw={typeof kw==='string'?kw:kw.keyword||kw} rank={i}/>
                 ))}
               </div>
             )}
@@ -512,15 +514,18 @@ export default function TrendPage() {
                     <Sk h={10} w="60%" r={4}/><Sk h={14} r={4}/>
                   </div>
                 ))
-              : (wTrends?.length ? wTrends : [
-                  'AI 스타트업 급성장','에듀테크 투자 확대',
-                  '청소년 창업 지원 정책 강화','기후테크 주목','핀테크 규제 완화'
-                ]).slice(0,5).map((wt,i)=>{
+              : wTrends?.length === 0 ? (
+                <div style={{ padding:'32px 16px', textAlign:'center', color:'var(--t3)' }}>
+                  <TrendingUp size={32} style={{ marginBottom:12, opacity:.2 }}/>
+                  <div style={{ fontSize:13 }}>주간 트렌드 데이터 수집 중...</div>
+                  <div style={{ fontSize:11, marginTop:6 }}>뉴스 파이프라인이 실행되면 자동으로 표시됩니다.</div>
+                </div>
+              ) : (wTrends||[]).slice(0,5).map((wt,i)=>{
               const colors = ['#3B82F6','#A855F7','#22C55E','#F59E0B','#F43F5E']
               const c = colors[i%5]
               const label = typeof wt==='string'?wt:wt.keyword||wt.title||wt.metric_name
               return (
-                <div key={i} style={{ padding:'14px 16px', background:'var(--bg2)',
+                <div key={`wt-${i}-${label}`} style={{ padding:'14px 16px', background:'var(--bg2)',
                   border:'1px solid var(--b1)', borderRadius:11,
                   display:'flex', alignItems:'center', gap:12,
                   transition:'all .18s', cursor:'default' }}

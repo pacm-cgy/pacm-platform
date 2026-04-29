@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Helmet } from 'react-helmet-async'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { Briefcase, Mail, Building2, CheckCircle, ChevronRight, Users, Zap, Star } from 'lucide-react'
@@ -153,6 +154,16 @@ export default function ConnectPage() {
 
   return (
     <div style={{ paddingBottom: 80 }}>
+      <Helmet>
+        <title>기업·청소년 연결 | Insightship — PACM Connect</title>
+        <meta name="description" content="실제 기업 프로젝트에 참여하고 경험을 쌓으세요. 기업은 신선한 시각의 청소년 인재를 만납니다. PACM Connect 파트너십 신청."/>
+        <meta property="og:title" content="PACM Connect | Insightship"/>
+        <meta property="og:description" content="기업과 청소년 창업가를 연결하는 PACM Connect 플랫폼"/>
+        <meta property="og:type" content="website"/>
+        <meta property="og:url" content="https://insightship.vercel.app/connect"/>
+        <meta name="twitter:card" content="summary"/>
+        <link rel="canonical" href="https://insightship.vercel.app/connect"/>
+      </Helmet>
       {selectedProject && <ApplyModal project={selectedProject} onClose={() => setSelectedProject(null)} />}
 
       {/* ── 헤더 */}

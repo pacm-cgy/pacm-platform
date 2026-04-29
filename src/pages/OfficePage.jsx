@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { Helmet } from 'react-helmet-async'
 import { Terminal, Zap, ChevronRight } from 'lucide-react'
 
 const QUICK_CMDS = [
@@ -85,6 +86,11 @@ export default function OfficePage() {
 
   return (
     <div style={{ minHeight: 'calc(100vh - 60px)', background: '#060606', padding: '24px' }}>
+      <Helmet>
+        <title>PACM AI Office | Insightship</title>
+        <meta name="description" content="PACM AI Office Terminal — 9대 부서 90명 AI 에이전트가 운영하는 가상 오피스 터미널"/>
+        <meta name="robots" content="noindex"/>
+      </Helmet>
       <div style={{ maxWidth: 1000, margin: '0 auto' }}>
 
         {/* 헤더 */}

@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import { Helmet } from 'react-helmet-async'
 import { ArrowRight, Zap, BarChart2, Users, BookOpen, Globe, Shield, TrendingUp } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
@@ -48,6 +49,16 @@ export default function AboutPage() {
 
   return (
     <div style={{ paddingBottom: 100 }}>
+      <Helmet>
+        <title>소개 | Insightship — 청소년 창업 플랫폼 PACM</title>
+        <meta name="description" content="Insightship는 PACM이 운영하는 청소년 창업가를 위한 무료 AI 기반 인사이트 플랫폼입니다."/>
+        <meta property="og:title" content="소개 | Insightship"/>
+        <meta property="og:description" content="청소년 창업가를 위한 무료 AI 기반 인사이트 플랫폼"/>
+        <meta property="og:type" content="website"/>
+        <meta property="og:url" content="https://insightship.vercel.app/about"/>
+        <meta name="twitter:card" content="summary"/>
+        <link rel="canonical" href="https://insightship.vercel.app/about"/>
+      </Helmet>
 
       {/* ── 히어로 */}
       <div style={{ background: 'linear-gradient(135deg, #050505 0%, #0a0a1a 50%, #050505 100%)', padding: 'clamp(56px,9vw,96px) var(--pad-x)', textAlign: 'center', position: 'relative', overflow: 'hidden', borderBottom: '1px solid var(--b1)' }}>

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { usePosts, useCreatePost } from '../hooks/useData'
+import { usePosts, useCreatePost, useHotPosts } from '../hooks/useData'
 import { useAuthStore } from '../store'
 import { validateInput, checkRateLimit } from '../lib/security'
 
@@ -362,6 +362,7 @@ export default function CommunityPage() {
 
   const { data:posts=[], isLoading } = usePosts({ type:tab==='all'?undefined:tab, page })
   const createPost = useCreatePost()
+  const { data:hotPosts=[] } = useHotPosts(5)
 
   const handleWrite = async data => {
     if (!user) { navigate('/login'); return }
@@ -383,15 +384,15 @@ export default function CommunityPage() {
     <div style={{ maxWidth:'var(--max-w)', margin:'0 auto',
       padding:'0 var(--pad-x)', paddingBottom:80 }}>
       <Helmet>
-        <title>커뮤니티 | Insightship — 청소년 창업 코치 컴뮤니티</title>
-        <meta name="description" content="청소년 창업가들의 진짜 질문, 피드백, 팀원 모집. 아이디어를 공유하고 함께 성장하는 코치 컴뮤니티."/>
+        <title>커뮤니티 | Insightship — 청소년 창업 커뮤니티</title>
+        <meta name="description" content="청소년 창업가들의 진짜 질문, 피드백, 팀원 모집. 아이디어를 공유하고 함께 성장하는 창업 커뮤니티."/>
         <meta property="og:title" content="커뮤니티 | Insightship"/>
-        <meta property="og:description" content="청소년 창업가들의 진짜 질문 응답 코치 컴뮤니티"/>
+        <meta property="og:description" content="청소년 창업가들의 질문·피드백·팀원 모집 커뮤니티"/>
         <meta property="og:type" content="website"/>
         <meta property="og:url" content="https://insightship.vercel.app/community"/>
         <meta name="twitter:card" content="summary"/>
         <meta name="twitter:title" content="커뮤니티 | Insightship"/>
-        <meta name="twitter:description" content="청소년 창업가들의 질문, 피드백, 팀원 모집 코치 컴뮤니티"/>
+        <meta name="twitter:description" content="청소년 창업가들의 질문, 피드백, 팀원 모집 커뮤니티"/>
         <link rel="canonical" href="https://insightship.vercel.app/community"/>
       </Helmet>
 
@@ -576,6 +577,49 @@ export default function CommunityPage() {
               </div>
             ))}
           </div>
+
+          {/* 🔥 Hot Posts */}
+          {hotPosts.length > 0 && (
+            <div style={{ background:'var(--bg2)', border:'1px solid var(--b1)',
+              borderRadius:14, padding:'18px 20px' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:6,
+                fontFamily:'var(--f-mono)', fontSize:9, color:'#F43F5E',
+                letterSpacing:'.14em', marginBottom:14, textTransform:'uppercase' }}>
+                <Flame size={11} color="#F43F5E"/> 이번 주 핫 게시글
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {hotPosts.map((p,i) => (
+                  <div key={p.id} onClick={()=>navigate(`/community/${p.id}`)}
+                    style={{ display:'flex', gap:8, cursor:'pointer', padding:'6px 0',
+                      borderBottom:'1px solid var(--b0)', transition:'all .15s' }}
+                    onMouseEnter={e=>e.currentTarget.style.opacity='.75'}
+                    onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
+                    <span style={{ fontFamily:'var(--f-mono)', fontSize:11, fontWeight:700,
+                      color:i===0?'#F43F5E':i===1?'#F59E0B':'var(--t4)', minWidth:14, flexShrink:0 }}>
+                      {i+1}
+                    </span>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:12, fontWeight:600, color:'var(--t1)',
+                        lineHeight:1.4, overflow:'hidden', textOverflow:'ellipsis',
+                        display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical' }}>
+                        {p.title}
+                      </div>
+                      <div style={{ display:'flex', gap:8, marginTop:3 }}>
+                        <span style={{ display:'flex', alignItems:'center', gap:2,
+                          fontFamily:'var(--f-mono)', fontSize:9, color:'var(--t4)' }}>
+                          <ThumbsUp size={8}/>{p.like_count||0}
+                        </span>
+                        <span style={{ display:'flex', alignItems:'center', gap:2,
+                          fontFamily:'var(--f-mono)', fontSize:9, color:'var(--t4)' }}>
+                          <MessageCircle size={8}/>{p.reply_count||0}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Write CTA */}
           <div style={{ background:'linear-gradient(135deg,rgba(34,197,94,0.1),rgba(16,185,129,0.06))',

@@ -1,155 +1,393 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { RefreshCw, Search, X } from 'lucide-react'
+import { Helmet } from 'react-helmet-async'
+import {
+  RefreshCw, Search, X, Zap, Clock, Eye,
+  ArrowUpRight, TrendingUp, Hash, Calendar,
+  BookOpen, Flame
+} from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { supabase } from '../lib/supabase'
 
+/* ─── CONSTANTS ──────────────────────────────────────────────────── */
 const CATEGORY_COLORS = {
-  funding: '#F59E0B', ai: '#818cf8', ai_startup: '#818cf8', edutech: '#38bdf8',
-  youth: '#34d399', entrepreneurship: '#c4b5fd', unicorn: '#fb7185',
-  climate: '#86efac', health: '#67e8f9', fintech: '#fb923c', general: '#9CA3AF',
-  investment: '#F59E0B', tech: '#818cf8', startup: '#60A5FA',
-  policy: '#a78bfa', esg: '#86efac',
-}
-const CATEGORY_BG = {
-  funding: 'rgba(245,158,11,0.12)', ai: 'rgba(129,140,248,0.12)', ai_startup: 'rgba(129,140,248,0.12)',
-  edutech: 'rgba(56,189,248,0.12)', youth: 'rgba(52,211,153,0.12)',
-  entrepreneurship: 'rgba(196,181,253,0.12)', unicorn: 'rgba(251,113,133,0.12)',
-  climate: 'rgba(134,239,172,0.12)', health: 'rgba(103,232,249,0.12)',
-  fintech: 'rgba(251,146,60,0.12)', general: 'rgba(156,163,175,0.12)',
-  investment: 'rgba(245,158,11,0.12)', tech: 'rgba(129,140,248,0.12)',
-  startup: 'rgba(96,165,250,0.12)', policy: 'rgba(167,139,250,0.12)', esg: 'rgba(134,239,172,0.12)',
+  funding: '#F59E0B', investment: '#F59E0B',
+  ai: '#818cf8', ai_startup: '#818cf8', tech: '#818cf8',
+  edutech: '#38bdf8',
+  youth: '#34d399', policy: '#a78bfa',
+  entrepreneurship: '#60A5FA', startup: '#60A5FA', general: '#9CA3AF',
+  unicorn: '#fb7185', climate: '#86efac', esg: '#86efac',
+  health: '#67e8f9', fintech: '#fb923c',
 }
 const CATEGORY_KO = {
-  funding: '투자/펀딩', ai: 'AI', ai_startup: 'AI', edutech: '에듀테크',
-  youth: '청소년창업', entrepreneurship: '창업', unicorn: '유니콘',
-  climate: '기후테크', health: '헬스케어', fintech: '핀테크', general: '일반',
-  investment: '투자/펀딩', tech: 'AI/기술', startup: '스타트업',
-  policy: '정책/지원', esg: 'ESG',
+  funding: '투자·펀딩', investment: '투자·펀딩',
+  ai: 'AI·기술', ai_startup: 'AI·기술', tech: 'AI·기술',
+  edutech: '에듀테크', youth: '청소년창업',
+  entrepreneurship: '창업', startup: '창업', general: '뉴스',
+  unicorn: '유니콘', climate: '기후테크', esg: 'ESG',
+  health: '헬스케어', fintech: '핀테크', policy: '정책·지원',
 }
 const FILTERS = [
   { label: '전체', value: '전체' },
-  { label: '투자/펀딩', value: '투자/펀딩' },
-  { label: 'AI/기술', value: 'AI/기술' },
+  { label: '투자·펀딩', value: '투자/펀딩' },
+  { label: 'AI·기술', value: 'AI/기술' },
   { label: '창업', value: '창업' },
   { label: '청소년창업', value: '청소년창업' },
   { label: '에듀테크', value: '에듀테크' },
   { label: '헬스케어', value: '헬스케어' },
   { label: '핀테크', value: '핀테크' },
   { label: '기후테크', value: '기후테크' },
-  { label: '정책/지원', value: '정책/지원' },
+  { label: '정책·지원', value: '정책/지원' },
 ]
-const PAGE_SIZE = 60
+const FILTER_TO_CAT = {
+  '투자/펀딩':  ['funding', 'unicorn', 'investment'],
+  'AI/기술':    ['ai', 'ai_startup', 'tech'],
+  '창업':       ['entrepreneurship', 'general', 'startup'],
+  '청소년창업': ['youth'],
+  '에듀테크':   ['edutech'],
+  '헬스케어':   ['health'],
+  '핀테크':     ['fintech'],
+  '기후테크':   ['climate', 'esg'],
+  '정책/지원':  ['policy'],
+}
+const PAGE_SIZE = 30
 
-function cleanTitle(title) {
-  if (!title) return title
-  return title.replace(/^\[[^\]]{1,20}\]\s*/g, '').trim()
+/* ─── HELPERS ────────────────────────────────────────────────────── */
+function cleanTitle(t) {
+  return (t || '').replace(/^\[[^\]]{1,20}\]\s*/g, '').trim()
 }
 
-function NewsRow({ article }) {
+function extractPreview(ai_summary) {
+  if (!ai_summary) return ''
+  const lines = ai_summary.split('\n').map(l => l.trim())
+  for (const line of lines) {
+    if (!line) continue
+    if (line.startsWith('##') || line.startsWith('#')) continue
+    if (line.startsWith('---')) continue
+    if (line.startsWith('*') && line.endsWith('*')) continue
+    if (line.startsWith('> ')) return line.slice(2).replace(/\*\*/g, '').slice(0, 120)
+    if (line.startsWith('• ') || line.startsWith('- ')) continue
+    if (line.length < 25) continue
+    return line.replace(/\*\*/g, '').slice(0, 120)
+  }
+  return ''
+}
+
+/* ─── FEATURED CARD (Top story) ─────────────────────────────────── */
+function FeaturedCard({ article }) {
   const navigate = useNavigate()
-  const date = article.published_at ? format(new Date(article.published_at), 'M월 d일', { locale: ko }) : ''
-  const catKo = CATEGORY_KO[article.ai_category] || '뉴스'
-  const cleanedTitle = cleanTitle(article.title)
-  const accent = CATEGORY_COLORS[article.ai_category] || 'var(--t4)'
+  const [hov, setHov] = useState(false)
+  const accent = CATEGORY_COLORS[article.ai_category] || '#60A5FA'
+  const catKo  = CATEGORY_KO[article.ai_category] || '뉴스'
+  const preview = extractPreview(article.ai_summary)
+  const hasLongform = article.ai_summary && article.ai_summary.length > 400
 
   return (
     <article
-      onClick={() => navigate(`/article/${article.slug}`)}
+      onClick={() => navigate(`/news/${article.slug}`)}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
       style={{
-        display: 'flex', alignItems: 'flex-start', gap: 14,
-        padding: '13px 4px', borderBottom: '1px solid var(--b0)',
-        cursor: 'pointer', transition: 'background 0.1s',
-        margin: '0 -4px', borderRadius: 4,
+        marginBottom: 8,
+        cursor: 'pointer',
+        background: hov ? 'var(--bg2)' : 'var(--bg1)',
+        border: `1px solid ${hov ? `${accent}35` : 'var(--b1)'}`,
+        borderRadius: 16,
+        overflow: 'hidden',
+        transition: 'all 0.2s',
+        display: 'grid',
+        gridTemplateColumns: article.cover_image ? '1fr 1fr' : '1fr',
+        boxShadow: hov ? `0 8px 32px ${accent}18` : 'none',
       }}
-      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
-      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
     >
-      <div style={{ flexShrink: 0, paddingTop: 7 }}>
-        <div style={{ width: 6, height: 6, borderRadius: '50%', background: accent, opacity: 0.85 }} />
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontFamily: 'var(--f-sans)', fontSize: 14.5, fontWeight: 600,
-          lineHeight: 1.55, color: 'var(--t1)', marginBottom: 5,
-          overflow: 'hidden', textOverflow: 'ellipsis',
-          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-        }}>
-          {cleanedTitle}
+      {/* 이미지 */}
+      {article.cover_image && (
+        <div style={{ position: 'relative', overflow: 'hidden', minHeight: 240 }}>
+          <img
+            src={article.cover_image}
+            alt={article.title}
+            style={{
+              width: '100%', height: '100%', objectFit: 'cover',
+              transition: 'transform 0.5s',
+              transform: hov ? 'scale(1.04)' : 'scale(1)',
+            }}
+            onError={e => e.target.parentElement.style.display = 'none'}
+          />
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(to right, transparent 55%, rgba(0,0,0,0.8))',
+          }} />
         </div>
-        {article.ai_summary && (() => {
-          const lines = article.ai_summary.split('\n').filter(l => {
-            const t = l.trim()
-            return t && !t.startsWith('**') && !t.startsWith('*') && !t.startsWith('•') && !t.includes(' · ') && t.length > 20
-          })
-          const preview = lines[0] || ''
-          return preview ? (
-            <div style={{ fontSize: 12, color: 'var(--t3)', lineHeight: 1.65, marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-              {preview}
-            </div>
-          ) : null
-        })()}
+      )}
+
+      {/* 텍스트 */}
+      <div style={{
+        padding: '28px 30px',
+        display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14,
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{
-            fontFamily: 'var(--f-mono)', fontSize: 10, letterSpacing: '0.3px',
-            color: accent, background: CATEGORY_BG[article.ai_category] || 'rgba(156,163,175,0.1)',
-            padding: '1px 6px', border: `1px solid ${accent}55`, borderRadius: 3,
+            fontFamily: 'var(--f-mono)', fontSize: 9, color: accent,
+            background: `${accent}15`, border: `1px solid ${accent}30`,
+            padding: '3px 9px', borderRadius: 4, letterSpacing: '1px',
+            textTransform: 'uppercase', fontWeight: 700,
+          }}>{catKo}</span>
+          {hasLongform && (
+            <span style={{
+              fontFamily: 'var(--f-mono)', fontSize: 9,
+              padding: '3px 8px', borderRadius: 4,
+              background: 'rgba(168,85,247,0.12)',
+              border: '1px solid rgba(168,85,247,0.25)',
+              color: '#A855F7', fontWeight: 700,
+              display: 'flex', alignItems: 'center', gap: 3,
+            }}>
+              <Zap size={8} /> AI 심층분석
+            </span>
+          )}
+          <span style={{
+            marginLeft: 'auto',
+            fontFamily: 'var(--f-mono)', fontSize: 9,
+            padding: '2px 7px', borderRadius: 4,
+            background: 'rgba(251,215,0,0.1)',
+            border: '1px solid rgba(251,215,0,0.3)',
+            color: '#EAB308', fontWeight: 700,
+            display: 'flex', alignItems: 'center', gap: 3,
           }}>
-            {catKo}
+            <Flame size={8} /> 최신
           </span>
-          {article.ai_summary && (
-            <span style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t4)', letterSpacing: '0.05em' }}>AI요약</span>
-          )}
+        </div>
+
+        <h2 style={{
+          fontFamily: 'var(--f-display)',
+          fontSize: 'clamp(17px, 2.5vw, 24px)',
+          fontWeight: 800, color: 'var(--t1)',
+          lineHeight: 1.4, margin: 0,
+          letterSpacing: '-0.02em', wordBreak: 'keep-all',
+        }}>
+          {cleanTitle(article.title)}
+        </h2>
+
+        {preview && (
+          <p style={{
+            fontSize: 13.5, color: 'var(--t3)', lineHeight: 1.8,
+            margin: 0, fontStyle: 'italic',
+            display: '-webkit-box', WebkitLineClamp: 3,
+            WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>
+            {preview}…
+          </p>
+        )}
+
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          flexWrap: 'wrap', marginTop: 4,
+        }}>
           {article.source_name && (
-            <span style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t3)' }}>{article.source_name}</span>
+            <span style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t4)' }}>
+              {article.source_name}
+            </span>
           )}
-          <span style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t3)' }}>{date}</span>
+          {article.published_at && (
+            <span style={{
+              display: 'flex', alignItems: 'center', gap: 3,
+              fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t4)',
+            }}>
+              <Calendar size={9} />
+              {format(new Date(article.published_at), 'M월 d일', { locale: ko })}
+            </span>
+          )}
+          {article.read_time && (
+            <span style={{
+              display: 'flex', alignItems: 'center', gap: 3,
+              fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t4)',
+            }}>
+              <Clock size={9} /> {article.read_time}분
+            </span>
+          )}
+          <span style={{
+            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4,
+            color: hov ? accent : 'var(--t4)',
+            fontSize: 12, fontWeight: 700, transition: 'color 0.15s',
+          }}>
+            읽기 <ArrowUpRight size={13} />
+          </span>
         </div>
       </div>
     </article>
   )
 }
 
-function NewsRowSkeleton() {
+/* ─── NEWS CARD ──────────────────────────────────────────────────── */
+function NewsCard({ article }) {
+  const navigate = useNavigate()
+  const [hov, setHov] = useState(false)
+  const accent   = CATEGORY_COLORS[article.ai_category] || '#9CA3AF'
+  const catKo    = CATEGORY_KO[article.ai_category] || '뉴스'
+  const preview  = extractPreview(article.ai_summary)
+  const date     = article.published_at
+    ? format(new Date(article.published_at), 'M월 d일', { locale: ko }) : ''
+  const hasLongform = article.ai_summary && article.ai_summary.length > 400
+
   return (
-    <div style={{ padding: '13px 0', borderBottom: '1px solid var(--b0)', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-      <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--bg5)', flexShrink: 0, marginTop: 7 }} />
-      <div style={{ flex: 1 }}>
-        <div className="skeleton" style={{ height: 16, width: '85%', marginBottom: 8, borderRadius: 3 }} />
-        <div className="skeleton" style={{ height: 16, width: '60%', marginBottom: 8, borderRadius: 3 }} />
+    <article
+      onClick={() => navigate(`/news/${article.slug}`)}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex', gap: 0,
+        background: hov ? 'var(--bg2)' : 'var(--bg1)',
+        border: `1px solid ${hov ? `${accent}25` : 'var(--b1)'}`,
+        borderRadius: 12,
+        cursor: 'pointer',
+        transition: 'all 0.15s',
+        overflow: 'hidden',
+      }}
+    >
+      {/* 왼쪽 액센트 바 */}
+      <div style={{
+        width: 3,
+        background: hov ? accent : 'transparent',
+        transition: 'background 0.15s', flexShrink: 0,
+      }} />
+
+      {/* 썸네일 (있으면) */}
+      {article.cover_image && (
+        <div style={{ width: 100, flexShrink: 0, overflow: 'hidden' }}>
+          <img
+            src={article.cover_image}
+            alt=""
+            style={{
+              width: '100%', height: '100%', objectFit: 'cover',
+              transition: 'transform 0.4s',
+              transform: hov ? 'scale(1.06)' : 'scale(1)',
+            }}
+            onError={e => e.target.parentElement.style.display = 'none'}
+          />
+        </div>
+      )}
+
+      {/* 본문 */}
+      <div style={{ flex: 1, padding: '13px 15px', minWidth: 0 }}>
+        {/* 배지 row */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          marginBottom: 6, flexWrap: 'wrap',
+        }}>
+          <span style={{
+            fontFamily: 'var(--f-mono)', fontSize: 9, color: accent,
+            background: `${accent}15`, border: `1px solid ${accent}25`,
+            padding: '2px 7px', borderRadius: 3,
+            letterSpacing: '0.5px', fontWeight: 700,
+          }}>{catKo}</span>
+          {hasLongform && (
+            <span style={{
+              fontFamily: 'var(--f-mono)', fontSize: 9,
+              padding: '2px 6px', borderRadius: 3,
+              background: 'rgba(168,85,247,0.1)',
+              border: '1px solid rgba(168,85,247,0.2)',
+              color: '#A855F7', fontWeight: 700,
+              display: 'flex', alignItems: 'center', gap: 2,
+            }}>
+              <Zap size={7} /> 심층
+            </span>
+          )}
+          <span style={{
+            marginLeft: 'auto',
+            fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t4)',
+          }}>{date}</span>
+        </div>
+
+        {/* 제목 */}
+        <h3 style={{
+          fontSize: 14.5, fontWeight: 700,
+          color: 'var(--t1)', lineHeight: 1.5,
+          margin: '0 0 5px',
+          display: '-webkit-box', WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          wordBreak: 'keep-all',
+        }}>
+          {cleanTitle(article.title)}
+        </h3>
+
+        {/* 미리보기 */}
+        {preview && (
+          <p style={{
+            fontSize: 12.5, color: 'var(--t3)', lineHeight: 1.65,
+            margin: '0 0 7px',
+            display: '-webkit-box', WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>
+            {preview}
+          </p>
+        )}
+
+        {/* 하단 메타 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {article.source_name && (
+            <span style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t4)' }}>
+              {article.source_name}
+            </span>
+          )}
+          {article.read_time && (
+            <span style={{
+              display: 'flex', alignItems: 'center', gap: 2,
+              fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t4)',
+            }}>
+              <Clock size={9} /> {article.read_time}분
+            </span>
+          )}
+          {article.view_count > 0 && (
+            <span style={{
+              display: 'flex', alignItems: 'center', gap: 2,
+              fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t4)',
+            }}>
+              <Eye size={9} /> {article.view_count.toLocaleString()}
+            </span>
+          )}
+        </div>
+      </div>
+    </article>
+  )
+}
+
+/* ─── SKELETON ───────────────────────────────────────────────────── */
+function SkCard() {
+  return (
+    <div style={{
+      background: 'var(--bg1)', border: '1px solid var(--b1)',
+      borderRadius: 12, overflow: 'hidden', display: 'flex', gap: 0,
+    }}>
+      <div style={{ width: 3, background: 'var(--bg3)' }} />
+      <div style={{ flex: 1, padding: '13px 15px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <div className="sk" style={{ height: 14, width: 60, borderRadius: 3 }} />
+          <div className="sk" style={{ height: 14, width: 40, borderRadius: 3, marginLeft: 'auto' }} />
+        </div>
+        <div className="sk" style={{ height: 18, width: '90%', borderRadius: 4 }} />
+        <div className="sk" style={{ height: 14, width: '70%', borderRadius: 4 }} />
         <div style={{ display: 'flex', gap: 8 }}>
-          <div className="skeleton" style={{ height: 12, width: 60, borderRadius: 3 }} />
-          <div className="skeleton" style={{ height: 12, width: 40, borderRadius: 3 }} />
+          <div className="sk" style={{ height: 11, width: 50, borderRadius: 3 }} />
+          <div className="sk" style={{ height: 11, width: 40, borderRadius: 3 }} />
         </div>
       </div>
     </div>
   )
 }
 
+/* ─── MAIN PAGE ──────────────────────────────────────────────────── */
 export default function NewsPage() {
   const [activeFilter, setActiveFilter] = useState('전체')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchInput, setSearchInput] = useState('')
-  const [articles, setArticles] = useState([])
-  const [page, setPage] = useState(0)
-  const [hasMore, setHasMore] = useState(true)
-  const [isLoading, setIsLoading] = useState(false)
-  const [total, setTotal] = useState(0)
-  const loaderRef = useRef(null)
-  const searchRef = useRef(null)
-
-  const FILTER_TO_CAT = {
-    '투자/펀딩': ['funding', 'unicorn', 'investment'],
-    'AI/기술': ['ai', 'ai_startup', 'tech'],
-    '창업': ['entrepreneurship', 'general', 'startup'],
-    '청소년창업': ['youth'],
-    '에듀테크': ['edutech'],
-    '헬스케어': ['health'],
-    '핀테크': ['fintech'],
-    '기후테크': ['climate', 'esg'],
-    '정책/지원': ['policy'],
-  }
+  const [searchQuery,  setSearchQuery]  = useState('')
+  const [searchInput,  setSearchInput]  = useState('')
+  const [articles,     setArticles]     = useState([])
+  const [page,         setPage]         = useState(0)
+  const [hasMore,      setHasMore]      = useState(true)
+  const [isLoading,    setIsLoading]    = useState(false)
+  const [total,        setTotal]        = useState(0)
+  const loaderRef  = useRef(null)
+  const searchRef  = useRef(null)
+  const debounceRef = useRef(null)
 
   const fetchNews = useCallback(async (pageNum, filter, search, reset = false) => {
     if (isLoading) return
@@ -157,43 +395,60 @@ export default function NewsPage() {
     try {
       let q = supabase
         .from('articles')
-        .select('id,title,slug,ai_category,source_name,published_at,ai_summary', { count: 'exact' })
+        .select(
+          'id,title,slug,ai_category,source_name,published_at,ai_summary,cover_image,read_time,view_count',
+          { count: 'exact' }
+        )
         .eq('status', 'published')
         .not('source_name', 'is', null)
         .order('published_at', { ascending: false })
         .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1)
 
-      if (filter !== '전체' && FILTER_TO_CAT[filter]) q = q.in('ai_category', FILTER_TO_CAT[filter])
-      if (search.trim()) q = q.ilike('title', `%${search.trim()}%`)
+      if (filter !== '전체' && FILTER_TO_CAT[filter]) {
+        q = q.in('ai_category', FILTER_TO_CAT[filter])
+      }
+      if (search.trim()) {
+        q = q.ilike('title', `%${search.trim()}%`)
+      }
 
       const { data, count, error } = await q
       if (error) throw error
 
       const newData = data || []
-      if (reset) {
+      const dedup = arr => {
         const seen = new Set()
-        setArticles(newData.filter(a => { if (seen.has(a.title)) return false; seen.add(a.title); return true }))
-      } else {
-        setArticles(prev => {
-          const seen = new Set(prev.map(a => a.title))
-          return [...prev, ...newData.filter(a => { if (seen.has(a.title)) return false; seen.add(a.title); return true })]
+        return arr.filter(a => {
+          if (seen.has(a.title)) return false
+          seen.add(a.title); return true
         })
+      }
+
+      if (reset) {
+        setArticles(dedup(newData))
+      } else {
+        setArticles(prev => dedup([...prev, ...newData]))
       }
       if (pageNum === 0) setTotal(count || 0)
       setHasMore(newData.length === PAGE_SIZE)
-    } catch (e) { console.error(e) }
-    finally { setIsLoading(false) }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setIsLoading(false)
+    }
   }, [isLoading])
 
+  // 필터·검색 변경 시 리셋
   useEffect(() => {
     setPage(0); setArticles([])
     fetchNews(0, activeFilter, searchQuery, true)
   }, [activeFilter, searchQuery])
 
+  // 무한 스크롤
   useEffect(() => {
     const obs = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasMore && !isLoading) {
-        const next = page + 1; setPage(next)
+        const next = page + 1
+        setPage(next)
         fetchNews(next, activeFilter, searchQuery, false)
       }
     }, { threshold: 0.1 })
@@ -201,86 +456,166 @@ export default function NewsPage() {
     return () => obs.disconnect()
   }, [hasMore, isLoading, page, activeFilter, searchQuery])
 
-  const handleSearch = e => { e.preventDefault(); setSearchQuery(searchInput) }
-  const clearSearch = () => { setSearchInput(''); setSearchQuery(''); searchRef.current?.focus() }
-  const handleRefresh = () => { setPage(0); setArticles([]); fetchNews(0, activeFilter, searchQuery, true) }
+  // 검색 입력 변경 → 디바운스 300ms
+  const handleInputChange = e => {
+    const val = e.target.value
+    setSearchInput(val)
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setSearchQuery(val)
+    }, 300)
+  }
+
+  const handleSearch   = e => { e.preventDefault(); clearTimeout(debounceRef.current); setSearchQuery(searchInput) }
+  const clearSearch    = () => {
+    clearTimeout(debounceRef.current)
+    setSearchInput(''); setSearchQuery('')
+    searchRef.current?.focus()
+  }
+  const handleRefresh  = () => {
+    setPage(0); setArticles([])
+    fetchNews(0, activeFilter, searchQuery, true)
+  }
+
+  const featuredArticle = articles[0]
+  const restArticles    = articles.slice(1)
 
   return (
     <div style={{ paddingBottom: 100 }}>
+      <Helmet>
+        <title>창업 뉴스 | Insightship — 스타트업·AI 최신 뉴스</title>
+        <meta name="description" content="국내외 스타트업·AI·핀테크·에듀테크 최신 뉴스를 AI 심층분석으로 읽어보세요. 청소년 창업가를 위한 뉴스 큐레이션." />
+        <meta property="og:title" content="창업 뉴스 | Insightship" />
+        <meta property="og:description" content="스타트업·AI·핀테크 최신 뉴스 — AI 심층분석으로 깊이 읽기" />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://www.insightship.pacm.kr/news" />
+        <meta name="twitter:card" content="summary" />
+        <link rel="canonical" href="https://www.insightship.pacm.kr/news" />
+      </Helmet>
 
-      {/* ── 헤더 */}
+      {/* ── 헤더 ──────────────────────────────────────────── */}
       <div style={{ padding: '28px 0 0', borderBottom: '1px solid var(--b1)' }}>
         <div className="container">
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+
+          {/* 타이틀 row */}
+          <div style={{
+            display: 'flex', alignItems: 'flex-end',
+            justifyContent: 'space-between', gap: 12,
+            marginBottom: 18, flexWrap: 'wrap',
+          }}>
             <div>
-              <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: '#60A5FA', letterSpacing: '3px', marginBottom: 6, background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', display: 'inline-block', padding: '3px 10px', borderRadius: 3 }}>
-                STARTUP NEWS
+              <div style={{
+                fontFamily: 'var(--f-mono)', fontSize: 9, color: '#60A5FA',
+                letterSpacing: '3px', marginBottom: 8,
+                background: 'rgba(59,130,246,0.08)',
+                border: '1px solid rgba(59,130,246,0.2)',
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '3px 10px', borderRadius: 4,
+              }}>
+                <TrendingUp size={9} /> STARTUP NEWS
               </div>
-              <h1 style={{ fontFamily: 'var(--f-display)', fontSize: 'clamp(20px,4vw,28px)', fontWeight: 700, marginBottom: 4, color: 'var(--t1)', marginTop: 10 }}>
+              <h1 style={{
+                fontFamily: 'var(--f-display)',
+                fontSize: 'clamp(20px, 4vw, 28px)',
+                fontWeight: 800, margin: '0 0 4px',
+                color: 'var(--t1)', letterSpacing: '-0.02em',
+              }}>
                 창업 뉴스
               </h1>
-              <p style={{ fontSize: 13, color: 'var(--t2)' }}>
-                국내외 스타트업·창업 생태계 최신 뉴스 — AI 요약으로 빠르게 읽기
+              <p style={{ fontSize: 13, color: 'var(--t3)', margin: 0 }}>
+                국내외 스타트업·AI·창업 생태계 최신 소식 — AI 심층분석과 함께 읽기
               </p>
             </div>
             <button
               onClick={handleRefresh}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: '1px solid var(--b2)', color: 'var(--t3)', padding: '8px 12px', cursor: 'pointer', fontFamily: 'var(--f-mono)', fontSize: 11, transition: 'all 0.12s', flexShrink: 0, borderRadius: 6 }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--b3)'; e.currentTarget.style.color = 'var(--t1)' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--b2)'; e.currentTarget.style.color = 'var(--t3)' }}
-            >
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: 'none', border: '1px solid var(--b2)',
+                color: 'var(--t3)', padding: '8px 14px', cursor: 'pointer',
+                fontFamily: 'var(--f-mono)', fontSize: 11, borderRadius: 8,
+                transition: 'all 0.12s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = 'var(--b3)'
+                e.currentTarget.style.color = 'var(--t1)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = 'var(--b2)'
+                e.currentTarget.style.color = 'var(--t3)'
+              }}>
               <RefreshCw size={12} className={isLoading ? 'spin' : ''} />
               새로고침
             </button>
           </div>
 
-          {/* ── 검색 */}
-          <form onSubmit={handleSearch} style={{ marginBottom: 12 }}>
+          {/* 검색 */}
+          <form onSubmit={handleSearch} style={{ marginBottom: 14 }}>
             <div
-              style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--b1)', background: 'var(--bg2)', borderRadius: 8, transition: 'border-color 0.15s', overflow: 'hidden' }}
-              onFocusCapture={e => e.currentTarget.style.borderColor = 'var(--b3)'}
+              style={{
+                display: 'flex', alignItems: 'center',
+                border: '1px solid var(--b1)', background: 'var(--bg2)',
+                borderRadius: 10, overflow: 'hidden', transition: 'border-color 0.15s',
+              }}
+              onFocusCapture={e => e.currentTarget.style.borderColor = '#60A5FA50'}
               onBlurCapture={e => e.currentTarget.style.borderColor = 'var(--b1)'}
             >
-              <Search size={14} color="var(--t3)" style={{ marginLeft: 12, flexShrink: 0 }} />
+              <Search size={14} color="var(--t3)" style={{ marginLeft: 14, flexShrink: 0 }} />
               <input
                 ref={searchRef}
                 value={searchInput}
-                onChange={e => setSearchInput(e.target.value)}
-                placeholder="뉴스 검색..."
-                style={{ flex: 1, padding: '10px 10px', background: 'transparent', border: 'none', outline: 'none', fontSize: 14, color: 'var(--t1)' }}
+                onChange={handleInputChange}
+                placeholder="뉴스 제목 검색..."
+                style={{
+                  flex: 1, padding: '11px 10px',
+                  background: 'transparent', border: 'none', outline: 'none',
+                  fontSize: 14, color: 'var(--t1)',
+                }}
               />
               {searchInput && (
-                <button type="button" onClick={clearSearch} style={{ background: 'none', border: 'none', padding: '0 10px', cursor: 'pointer', color: 'var(--t3)', display: 'flex', alignItems: 'center' }}>
+                <button
+                  type="button" onClick={clearSearch}
+                  style={{
+                    background: 'none', border: 'none', padding: '0 10px',
+                    cursor: 'pointer', color: 'var(--t3)',
+                    display: 'flex', alignItems: 'center',
+                  }}>
                   <X size={14} />
                 </button>
               )}
               <button
                 type="submit"
-                style={{ background: 'var(--t1)', border: 'none', color: 'var(--bg0)', padding: '10px 16px', cursor: 'pointer', fontFamily: 'var(--f-mono)', fontSize: 11, letterSpacing: '0.5px', fontWeight: 700, flexShrink: 0, transition: 'opacity 0.12s' }}
+                style={{
+                  background: '#3B82F6', border: 'none', color: '#fff',
+                  padding: '11px 18px', cursor: 'pointer',
+                  fontFamily: 'var(--f-mono)', fontSize: 11, fontWeight: 700,
+                  flexShrink: 0, transition: 'opacity 0.12s',
+                }}
                 onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-              >
+                onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
                 검색
               </button>
             </div>
           </form>
 
-          {/* ── 필터 탭 */}
-          <div className="news-filter-wrap" style={{ display: 'flex', gap: 2, overflowX: 'auto', scrollbarWidth: 'none' }}>
+          {/* 필터 탭 */}
+          <div style={{
+            display: 'flex', gap: 2, overflowX: 'auto',
+            scrollbarWidth: 'none', paddingBottom: 1,
+          }}>
             {FILTERS.map(f => (
               <button
                 key={f.value}
                 onClick={() => setActiveFilter(f.value)}
                 style={{
-                  padding: '8px 14px', border: 'none', cursor: 'pointer',
+                  padding: '9px 14px', border: 'none', cursor: 'pointer',
                   fontFamily: 'var(--f-mono)', fontSize: 11, letterSpacing: '0.3px',
                   whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.12s',
-                  background: activeFilter === f.value ? 'rgba(59,130,246,0.12)' : 'transparent',
+                  background: activeFilter === f.value ? 'rgba(59,130,246,0.1)' : 'transparent',
                   color: activeFilter === f.value ? '#60A5FA' : 'var(--t3)',
                   fontWeight: activeFilter === f.value ? 700 : 400,
                   borderBottom: activeFilter === f.value ? '2px solid #3B82F6' : '2px solid transparent',
-                }}
-              >
+                  borderRadius: '4px 4px 0 0',
+                }}>
                 {f.label}
               </button>
             ))}
@@ -288,24 +623,41 @@ export default function NewsPage() {
         </div>
       </div>
 
-      {/* ── 카운트 + 검색 상태 */}
-      <div className="container" style={{ paddingTop: 14, paddingBottom: 4, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontFamily: 'var(--f-mono)', fontSize: 11, color: 'var(--t3)' }}>
-          {searchQuery ? `"${searchQuery}" 검색 결과` : activeFilter !== '전체' ? activeFilter : '전체'} · {total.toLocaleString()}건
+      {/* ── 카운트 ── */}
+      <div className="container" style={{
+        paddingTop: 14, paddingBottom: 6,
+        display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <span style={{ fontFamily: 'var(--f-mono)', fontSize: 11, color: 'var(--t4)' }}>
+          {searchQuery
+            ? `"${searchQuery}" 검색 결과`
+            : activeFilter !== '전체' ? activeFilter : '전체 뉴스'
+          } · {' '}
+          <strong style={{ color: 'var(--t3)' }}>{total.toLocaleString()}</strong>건
         </span>
         {searchQuery && (
-          <button onClick={clearSearch} style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t2)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
-            <X size={10} /> 검색 초기화
+          <button
+            onClick={clearSearch}
+            style={{
+              fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t3)',
+              background: 'none', border: '1px solid var(--b1)', cursor: 'pointer',
+              padding: '2px 8px', borderRadius: 4,
+              display: 'flex', alignItems: 'center', gap: 3,
+            }}>
+            <X size={9} /> 초기화
           </button>
         )}
       </div>
 
-      {/* ── 뉴스 목록 */}
+      {/* ── 뉴스 목록 ── */}
       <div className="container">
         {articles.length === 0 && !isLoading ? (
-          <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--t3)' }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
-            <div style={{ fontFamily: 'var(--f-display)', fontSize: 15, color: 'var(--t1)', marginBottom: 6 }}>
+          <div style={{ padding: '70px 0', textAlign: 'center', color: 'var(--t3)' }}>
+            <div style={{ fontSize: 40, marginBottom: 14 }}>🔍</div>
+            <div style={{
+              fontFamily: 'var(--f-display)', fontSize: 16,
+              color: 'var(--t1)', marginBottom: 8, fontWeight: 700,
+            }}>
               {searchQuery ? '검색 결과가 없습니다' : '뉴스가 없습니다'}
             </div>
             <div style={{ fontSize: 13, color: 'var(--t3)' }}>
@@ -314,17 +666,33 @@ export default function NewsPage() {
           </div>
         ) : (
           <>
-            {articles.map((a, i) => <NewsRow key={a.id} article={a} index={i} />)}
-            {isLoading && Array.from({ length: 8 }).map((_, i) => <NewsRowSkeleton key={i} />)}
+            {/* 첫 번째 = 피처드 카드 */}
+            {featuredArticle && <FeaturedCard article={featuredArticle} />}
+
+            {/* 나머지 = 카드 그리드 */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))',
+              gap: 8, marginTop: 8,
+            }}>
+              {restArticles.map(a => <NewsCard key={a.id} article={a} />)}
+              {isLoading && Array.from({ length: 6 }).map((_, i) => <SkCard key={`sk-${i}`} />)}
+            </div>
           </>
         )}
-        <div ref={loaderRef} style={{ height: 40 }} />
+        <div ref={loaderRef} style={{ height: 48 }} />
       </div>
 
       <style>{`
         @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
         .spin { animation: spin 0.8s linear infinite }
-        .news-filter-wrap::-webkit-scrollbar { display: none }
+        @keyframes skPulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+        .sk { background: var(--bg3); animation: skPulse 1.6s ease-in-out infinite; }
+        div[style*="overflow-x: auto"]::-webkit-scrollbar { display: none }
+        @media(max-width: 640px) {
+          article[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+          .container { padding-left: 16px !important; padding-right: 16px !important; }
+        }
       `}</style>
     </div>
   )

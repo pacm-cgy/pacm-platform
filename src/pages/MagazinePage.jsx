@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Helmet } from 'react-helmet-async'
 import { ChevronLeft, ChevronRight, BookOpen } from 'lucide-react'
 
 /**
@@ -468,6 +469,16 @@ export default function MagazinePage() {
 
   return (
     <div style={{ paddingBottom: '80px' }}>
+      <Helmet>
+        <title>창업 매거진 | Insightship — PACM Magazine Vol.1</title>
+        <meta name="description" content="PACM × Insightship 창업 매거진 Vol.1. 창업 기초, 린 스타트업, 투자, 마케팅까지 검증된 창업 이론을 한 권에 담았습니다."/>
+        <meta property="og:title" content="PACM 창업 매거진 | Insightship"/>
+        <meta property="og:description" content="청소년 창업가를 위한 인터랙티브 창업 매거진 — 공개 데이터와 검증된 이론 기반"/>
+        <meta property="og:type" content="website"/>
+        <meta property="og:url" content="https://insightship.vercel.app/magazine"/>
+        <meta name="twitter:card" content="summary"/>
+        <link rel="canonical" href="https://insightship.vercel.app/magazine"/>
+      </Helmet>
       <style>{STYLES}</style>
 
       {/* 헤더 */}

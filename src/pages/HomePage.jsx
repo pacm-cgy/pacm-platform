@@ -434,7 +434,7 @@ function HeroSection({ navigate }) {
           border:'1px solid rgba(59,130,246,0.25)', borderRadius:20, position:'relative', zIndex:1 }}>
           <Sparkles size={13} color="#3B82F6"/>
           <span style={{ fontFamily:'var(--f-mono)', fontSize:10, color:'#3B82F6', letterSpacing:'.1em' }}>
-            INSIGHTSHIP PLATFORM v9 · 2026
+            INSIGHTSHIP PLATFORM v10 · 2026
           </span>
         </div>
         <h1 style={{ fontFamily:'var(--f-display)', fontSize:'clamp(34px,5.5vw,66px)',
@@ -503,12 +503,13 @@ export default function HomePage() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [subDone, setSubDone] = useState(false)
-  const [subCount, setSubCount] = useState(47)
+  const [subCount, setSubCount] = useState(0)
   const [notice, setNotice] = useState(null)
   const [newsItems, setNewsItems] = useState([])
   const [newsLoading, setNewsLoading] = useState(true)
   const [statsVisible, setStatsVisible] = useState(false)
   const statsRef = useRef(null)
+  const [realStats, setRealStats] = useState({ users: 0, articles: 0 })
 
   const { data: articles=[], isLoading:artLoading } = useArticles({ limit:9 })
   const { data: projects=[], isLoading:projLoading } = useProjects()
@@ -521,7 +522,18 @@ export default function HomePage() {
   useEffect(() => {
     supabase.from('newsletter_subscribers')
       .select('id',{count:'exact',head:true})
-      .then(({count}) => { if (count) setSubCount(count) }).catch(()=>{})
+      .then(({count}) => { if (count != null) setSubCount(count) }).catch(()=>{})
+
+    // 실제 DB 통계 조회
+    Promise.all([
+      supabase.from('profiles').select('id',{count:'exact',head:true}),
+      supabase.from('articles').select('id',{count:'exact',head:true}).eq('status','published').is('source_name',null),
+    ]).then(([users, arts]) => {
+      setRealStats({
+        users: users.count || 0,
+        articles: arts.count || 0,
+      })
+    }).catch(()=>{})
 
     supabase.from('articles')
       .select('id,title,slug,category,published_at,cover_image,source_name')
@@ -591,8 +603,8 @@ export default function HomePage() {
         padding:'0 var(--pad-x)', marginBottom:0 }}>
         <div className="home-stats-grid" style={{ padding:'24px 0 32px', borderBottom:'1px solid var(--b1)' }}>
           {[
-            { val:statsVisible?'18,400+':'0', label:'청소년 창업가', icon:Users, color:'#3B82F6' },
-            { val:statsVisible?'1,200+':'0', label:'인사이트 아티클', icon:BookOpen, color:'#A855F7' },
+            { val:statsVisible?(realStats.users>0?realStats.users.toLocaleString()+'+':'수집 중'):'—', label:'가입 창업가', icon:Users, color:'#3B82F6' },
+            { val:statsVisible?(realStats.articles>0?realStats.articles+'+':'수집 중'):'—', label:'인사이트 아티클', icon:BookOpen, color:'#A855F7' },
             { val:statsVisible?'AI 자립형':'—', label:'자체 개발 엔진', icon:BrainCircuit, color:'#22C55E' },
             { val:statsVisible?'₩0':'—', label:'외부 API 비용', icon:Sparkles, color:'#F59E0B' },
           ].map((s,i) => (

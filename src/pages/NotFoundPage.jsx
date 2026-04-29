@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import { Rocket, Home, ArrowLeft, Search } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
@@ -10,6 +11,11 @@ export default function NotFoundPage() {
       alignItems: 'center', justifyContent: 'center', textAlign: 'center',
       padding: '60px 24px',
     }}>
+      <Helmet>
+        <title>404 페이지 없음 | Insightship</title>
+        <meta name="description" content="요청한 페이지를 찾을 수 없습니다."/>
+        <meta name="robots" content="noindex"/>
+      </Helmet>
       {/* Decorative number */}
       <div style={{
         fontFamily: 'var(--f-mono)', fontSize: 'clamp(80px,15vw,140px)',

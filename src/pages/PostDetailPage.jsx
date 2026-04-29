@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { Helmet } from 'react-helmet-async'
 import { ArrowLeft, Heart, Eye, MessageCircle, Trash2, Send, CornerDownRight, Flag } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
@@ -253,6 +254,11 @@ export default function PostDetailPage() {
 
   return (
     <div style={{ paddingBottom:'80px' }}>
+      <Helmet>
+        <title>{post.title ? `${post.title.slice(0,50)} | Insightship 커뮤니티` : '게시글 | Insightship'}</title>
+        <meta name="description" content={post.content?.slice(0,120) || '커뮤니티 게시글'}/>
+        <meta name="robots" content="noindex"/>
+      </Helmet>
       {/* 신고 모달 */}
       {showReport && (
         <div className="modal-overlay" onClick={e => e.target===e.currentTarget && setShowReport(null)}>

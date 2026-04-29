@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Helmet } from 'react-helmet-async'
 import { Mail, BarChart2, Users, Eye, CheckCircle } from 'lucide-react'
 
 const AD_PACKAGES = [
@@ -48,6 +49,16 @@ export default function AdvertisePage() {
 
   return (
     <div style={{ paddingBottom: 80 }}>
+      <Helmet>
+        <title>광고 문의 | Insightship — 청소년 창업 플랫폼 광고</title>
+        <meta name="description" content="청소년 창업가 1,000명이 이용하는 Insightship에 광고를 게재하세요. 인피드 배너, 스폰서 아티클, 뉴스레터 광고 패키지 문의."/>
+        <meta property="og:title" content="광고 문의 | Insightship"/>
+        <meta property="og:description" content="청소년 창업 플랫폼 Insightship 광고 패키지 안내 및 문의"/>
+        <meta property="og:type" content="website"/>
+        <meta property="og:url" content="https://insightship.vercel.app/advertise"/>
+        <meta name="twitter:card" content="summary"/>
+        <link rel="canonical" href="https://insightship.vercel.app/advertise"/>
+      </Helmet>
 
       {/* ── 헤더 */}
       <div style={{ borderBottom: '1px solid var(--b1)', padding: '48px 0 32px', background: 'linear-gradient(180deg,var(--bg1) 0%,var(--bg0) 100%)' }}>

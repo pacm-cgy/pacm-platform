@@ -489,3 +489,201 @@ export function useWeeklyTrends(limit = 4) {
     staleTime: 60 * 60 * 1000,
   })
 }
+
+// ── USER BADGES ───────────────────────────────────────────────────
+export function useUserBadges(userId) {
+  return useQuery({
+    queryKey: ['user_badges', userId],
+    queryFn: async () => {
+      if (!userId) return []
+      const { data, error } = await supabase
+        .from('user_badges')
+        .select('*')
+        .eq('user_id', userId)
+        .order('earned_at', { ascending: false })
+      if (error) return []
+      return data || []
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+// ── FOLLOW FEED ───────────────────────────────────────────────────
+export function useFollowFeed(userId, limit = 20) {
+  return useQuery({
+    queryKey: ['follow_feed', userId, limit],
+    queryFn: async () => {
+      if (!userId) return []
+      // 팔로잉 목록 조회
+      const { data: follows } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', userId)
+        .limit(100)
+      if (!follows?.length) return []
+      const ids = follows.map(f => f.following_id)
+      const { data, error } = await supabase
+        .from('community_posts')
+        .select(`
+          id, title, post_type, like_count, reply_count, created_at,
+          profiles!author_id (id, display_name, avatar_url)
+        `)
+        .eq('is_deleted', false)
+        .in('author_id', ids)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+      if (error) return []
+      return data || []
+    },
+    enabled: !!userId,
+    staleTime: 2 * 60 * 1000,
+  })
+}
+
+// ── HOT POSTS ─────────────────────────────────────────────────────
+export function useHotPosts(limit = 10) {
+  return useQuery({
+    queryKey: ['hot_posts', limit],
+    queryFn: async () => {
+      const since = new Date(Date.now() - 7 * 86400000).toISOString()
+      const { data, error } = await supabase
+        .from('community_posts')
+        .select(`
+          id, title, post_type, view_count, like_count, reply_count, created_at,
+          profiles!author_id (id, display_name, avatar_url)
+        `)
+        .eq('is_deleted', false)
+        .gte('created_at', since)
+        .order('like_count', { ascending: false })
+        .limit(limit * 2)
+      if (error) return []
+      // 클라이언트 사이드 hot score 정렬
+      return (data || [])
+        .map(p => ({
+          ...p,
+          hot_score: (p.view_count || 0) * 0.3 + (p.like_count || 0) * 0.5 + (p.reply_count || 0) * 0.2,
+        }))
+        .sort((a, b) => b.hot_score - a.hot_score)
+        .slice(0, limit)
+    },
+    staleTime: 10 * 60 * 1000,
+    refetchInterval: 15 * 60 * 1000,
+  })
+}
+
+// ── NOTIFICATIONS ─────────────────────────────────────────────────
+export function useNotifications(userId) {
+  return useQuery({
+    queryKey: ['notifications', userId],
+    queryFn: async () => {
+      if (!userId) return []
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(30)
+      if (error) return []
+      return data || []
+    },
+    enabled: !!userId,
+    staleTime: 60 * 1000,
+    refetchInterval: 60 * 1000, // 1분마다 실시간 갱신
+  })
+}
+
+export function useMarkNotifRead() {
+  const qc = useQueryClient()
+  const { user } = useAuthStore()
+  return useMutation({
+    mutationFn: async (notifId) => {
+      if (!user) return
+      const q = notifId
+        ? supabase.from('notifications').update({ is_read: true }).eq('id', notifId)
+        : supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false)
+      await q
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  })
+}
+
+// ── EVENTS ────────────────────────────────────────────────────────
+export function useEvents({ status, limit = 20 } = {}) {
+  return useQuery({
+    queryKey: ['events', { status, limit }],
+    queryFn: async () => {
+      let q = supabase
+        .from('events')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit)
+      if (status) q = q.eq('status', status)
+      const { data, error } = await q
+      if (error) return []
+      return data || []
+    },
+    staleTime: 10 * 60 * 1000,
+  })
+}
+
+// ── IDEAS ─────────────────────────────────────────────────────────
+export function useIdeas({ category, limit = 20, page = 0 } = {}) {
+  return useQuery({
+    queryKey: ['ideas', { category, limit, page }],
+    queryFn: async () => {
+      let q = supabase
+        .from('startup_ideas')
+        .select(`
+          id, title, description, category, stage, tags, seeking_roles,
+          like_count, comment_count, view_count, is_featured, created_at,
+          profiles!author_id (id, display_name, avatar_url, school)
+        `)
+        .eq('is_deleted', false)
+        .order('is_featured', { ascending: false })
+        .order('created_at', { ascending: false })
+        .range(page * limit, (page + 1) * limit - 1)
+      if (category && category !== 'all') q = q.eq('category', category)
+      const { data, error } = await q
+      if (error) return []
+      return data || []
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+// ── EduProgress (학습 진도 저장) ──────────────────────────────────
+export function useEduProgress(userId) {
+  return useQuery({
+    queryKey: ['edu_progress', userId],
+    queryFn: async () => {
+      if (!userId) return []
+      const { data, error } = await supabase
+        .from('edu_progress')
+        .select('*')
+        .eq('user_id', userId)
+      if (error) return []
+      return data || []
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useSaveEduProgress() {
+  const qc = useQueryClient()
+  const { user } = useAuthStore()
+  return useMutation({
+    mutationFn: async ({ courseId, completed }) => {
+      if (!user) return
+      const { error } = await supabase.from('edu_progress').upsert({
+        user_id: user.id,
+        course_id: courseId,
+        completed,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,course_id' })
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['edu_progress'] }),
+  })
+}

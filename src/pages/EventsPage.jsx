@@ -138,7 +138,28 @@ function ApplyModal({ event, onClose, user }) {
           </div>
           <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
             <button onClick={onClose} style={{ padding:'9px 18px', background:'var(--bg4)', border:'1px solid var(--b1)', borderRadius:8, color:'var(--t2)', fontSize:13, cursor:'pointer', fontFamily:'var(--f-sans)' }}>취소</button>
-            <button onClick={()=>{ if(!name.trim()||!email.trim()) return; setDone(true) }}
+            <button onClick={async ()=>{
+                if(!name.trim()||!email.trim()) return
+                try {
+                  await supabase.from('event_applications').insert({
+                    event_id: event.id,
+                    applicant_name: name.trim(),
+                    applicant_email: email.trim().toLowerCase(),
+                    motivation: message.trim() || null,
+                    user_id: user?.id || null,
+                  })
+                } catch(e) {
+                  // 테이블 없을 경우 커뮤니티 댓글로 폴백
+                  try {
+                    await supabase.from('comments').insert({
+                      post_id: event.id,
+                      body: `[이벤트 신청] 이름: ${name.trim()} / 이메일: ${email.trim()} / 동기: ${message.trim() || '(미작성)'}`,
+                      author_id: user?.id || null,
+                    })
+                  } catch {}
+                }
+                setDone(true)
+              }}
               style={{ padding:'9px 18px', background:`linear-gradient(135deg,${color},${color}CC)`, border:'none', borderRadius:8, color:'#fff', fontSize:13, cursor:'pointer', fontFamily:'var(--f-sans)', fontWeight:700, display:'flex', alignItems:'center', gap:6 }}>
               <CheckCircle size={13}/> 신청하기
             </button>

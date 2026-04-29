@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Helmet } from 'react-helmet-async'
 import { useNavigate } from 'react-router-dom'
 import {
   BookOpen, Clock, Tag, Star, Search, ChevronRight,
@@ -284,6 +285,7 @@ export default function EduPage() {
   const [search, setSearch]       = useState('')
   const [selectedCourse, setSelectedCourse] = useState(null)
   const [completed, setCompleted] = useState(new Set())
+  const [dbCourses, setDbCourses] = useState(null)  // null = not yet fetched
 
   useEffect(() => {
     if (user) {
@@ -294,13 +296,29 @@ export default function EduPage() {
     }
   }, [user])
 
+  // DB-first: try loading courses from `edu_courses` table
+  useEffect(() => {
+    supabase
+      .from('edu_courses')
+      .select('*')
+      .eq('is_published', true)
+      .order('sort_order', { ascending: true })
+      .limit(50)
+      .then(({ data, error }) => {
+        if (!error && data && data.length > 0) setDbCourses(data)
+        else setDbCourses([])  // table doesn't exist or empty → use SAMPLE_COURSES
+      })
+      .catch(() => setDbCourses([]))
+  }, [])
+
   const handleComplete = courseId => {
     const newSet = new Set([...completed, courseId])
     setCompleted(newSet)
     if (user) localStorage.setItem(`edu_completed_${user.id}`, JSON.stringify([...newSet]))
   }
 
-  const courses  = SAMPLE_COURSES
+  // Use DB courses if available, else fall back to SAMPLE_COURSES
+  const courses  = (dbCourses && dbCourses.length > 0) ? dbCourses : SAMPLE_COURSES
   const filtered = courses.filter(c => {
     const matchCat    = category === 'all' || c.category === category
     const matchSearch = !search || c.title.toLowerCase().includes(search.toLowerCase()) || c.summary.includes(search)
@@ -314,6 +332,18 @@ export default function EduPage() {
 
   return (
     <div style={{ minHeight:'100vh', paddingBottom:80 }}>
+      <Helmet>
+        <title>학습센터 | Insightship — 청소년 창업 학습</title>
+        <meta name="description" content="창업 기초, AI 스타트업, 투자 이해, 케이스 스터디까지. 청소년 창업가를 위한 무료 강의와 퀴즈로 창업 스킬을 키워보세요."/>
+        <meta property="og:title" content="학습센터 | Insightship"/>
+        <meta property="og:description" content="퀴즈·배지로 창업 스킬을 게임처럼 쌓아보세요 — 무료 청소년 창업 학습 플랫폼"/>
+        <meta property="og:type" content="website"/>
+        <meta property="og:url" content="https://insightship.vercel.app/edu"/>
+        <meta name="twitter:card" content="summary"/>
+        <meta name="twitter:title" content="학습센터 | Insightship"/>
+        <meta name="twitter:description" content="청소년 창업가를 위한 무료 강의와 퀴즈"/>
+        <link rel="canonical" href="https://insightship.vercel.app/edu"/>
+      </Helmet>
       {/* ── HEADER ── */}
       <div style={{ background:'linear-gradient(180deg,rgba(249,115,22,0.07) 0%,transparent 100%)', borderBottom:'1px solid var(--b1)', padding:'32px var(--pad-x) 0' }}>
         <div style={{ maxWidth:'var(--max-w)', margin:'0 auto' }}>

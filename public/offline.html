@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>오프라인 | Insightship</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{min-height:100vh;display:flex;align-items:center;justify-content:center;
+      flex-direction:column;gap:20px;background:#050505;color:#F0F0F0;
+      font-family:'Pretendard',-apple-system,sans-serif;text-align:center;padding:40px}
+    .icon{font-size:64px;margin-bottom:8px}
+    h1{font-size:22px;font-weight:700;letter-spacing:-0.03em}
+    p{font-size:14px;color:#666;max-width:360px;line-height:1.7}
+    button{margin-top:8px;padding:12px 28px;background:#3B82F6;border:none;
+      color:#fff;font-size:14px;font-weight:600;border-radius:8px;cursor:pointer}
+    .mono{font-family:'JetBrains Mono',monospace;font-size:10px;
+      letter-spacing:.15em;color:#3B82F6;margin-bottom:4px}
+  </style>
+</head>
+<body>
+  <div class="icon">📡</div>
+  <div class="mono">OFFLINE MODE</div>
+  <h1>인터넷 연결이 없습니다</h1>
+  <p>네트워크 연결을 확인한 후 다시 시도해주세요.<br>캐시된 페이지는 오프라인에서도 확인할 수 있습니다.</p>
+  <button onclick="window.location.reload()">다시 시도</button>
+</body>
+</html>
