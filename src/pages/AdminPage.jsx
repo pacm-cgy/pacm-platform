@@ -407,18 +407,30 @@ function UsersTab() {
 
   const setMsg = (id, msg) => setActionMsg(p => ({ ...p, [id]: msg }))
 
+  const callAdminAction = async (action, id, data) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch('/api/admin-action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+      body: JSON.stringify({ action, id, data }),
+    })
+    return res.json()
+  }
+
   const banUser = async (user) => {
     const ban = !user.is_banned
     if (!window.confirm(`${user.display_name || user.username}을(를) ${ban ? '정지' : '정지 해제'}하시겠습니까?`)) return
-    const { error } = await supabase.from('profiles').update({ is_banned: ban }).eq('id', user.id)
-    setMsg(user.id, error ? `❌ ${error.message?.slice(0,40)}` : (ban ? '✅ 정지됨' : '✅ 해제됨'))
-    load()
+    setMsg(user.id, '처리 중…')
+    const d = await callAdminAction('ban_user', user.id, { banned: ban })
+    setMsg(user.id, d.ok ? (ban ? '✅ 정지됨' : '✅ 해제됨') : `❌ ${d.error?.slice(0,40)}`)
+    setTimeout(load, 400)
   }
 
   const changeRole = async (user, role) => {
-    const { error } = await supabase.from('profiles').update({ role }).eq('id', user.id)
-    setMsg(user.id, error ? '❌ 오류' : `✅ ${role}로 변경됨`)
-    load()
+    setMsg(user.id, '처리 중…')
+    const d = await callAdminAction('change_role', user.id, { role })
+    setMsg(user.id, d.ok ? `✅ ${role}로 변경됨` : `❌ ${d.error?.slice(0,40)}`)
+    setTimeout(load, 400)
   }
 
   // AI 계정 필터링
@@ -541,23 +553,32 @@ function ReportsTab() {
   const setMsg = (id, msg) => setActionMsg(p => ({ ...p, [id]: msg }))
 
   const handleReport = async (report, action) => {
+    setMsg(report.id, '처리 중…')
     try {
-      if (action === 'delete_content') {
-        // post_comments 또는 comments 둘 다 시도
-        if (report.target_type === 'post') {
-          await supabase.from('community_posts').update({ is_deleted: true }).eq('id', report.target_id)
-        } else {
-          // 댓글: comments 테이블 soft-delete 시도, 없으면 hard-delete
-          const { error: e1 } = await supabase.from('comments').update({ is_deleted: true }).eq('id', report.target_id)
-          if (e1) {
-            await supabase.from('comments').delete().eq('id', report.target_id)
-          }
-        }
+      // service_role 경유 (RLS 우회) — admin-action API 호출
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/admin-action', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token || ''}`,
+        },
+        body: JSON.stringify({
+          action: 'handle_report',
+          id: report.id,
+          data: {
+            action,
+            target_type: report.target_type,
+            target_id:   report.target_id,
+          },
+        }),
+      })
+      const d = await res.json()
+      if (d.ok) {
+        setMsg(report.id, action === 'dismissed' ? '✅ 기각됨' : action === 'delete_content' ? '✅ 콘텐츠 삭제 & 처리됨' : '✅ 처리됨')
+      } else {
+        setMsg(report.id, `❌ ${d.error?.slice(0,60) || '처리 실패'}`)
       }
-      // resolved_at 컬럼이 없을 수 있으므로 status만 업데이트
-      const updateData = { status: action === 'dismissed' ? 'dismissed' : 'resolved' }
-      const { error } = await supabase.from('reports').update(updateData).eq('id', report.id)
-      setMsg(report.id, error ? `❌ ${error.message?.slice(0,50) || '오류'}` : (action === 'dismissed' ? '✅ 기각됨' : '✅ 처리됨'))
     } catch(e) {
       setMsg(report.id, `❌ ${e.message?.slice(0,50)}`)
     }

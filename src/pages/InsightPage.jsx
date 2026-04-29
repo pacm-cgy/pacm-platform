@@ -3,56 +3,69 @@ import { Helmet } from 'react-helmet-async'
 import { useNavigate } from 'react-router-dom'
 import {
   Search, X, Clock, Eye, Zap, TrendingUp,
-  BrainCircuit, Lightbulb, GraduationCap, Newspaper,
-  BookOpen, ArrowUpRight, Grid, List, RefreshCw,
-  Hash, Calendar, Flame
+  BrainCircuit, Lightbulb, GraduationCap, BookOpen,
+  ArrowUpRight, Grid, List, RefreshCw, Hash,
+  Calendar, MessageSquare, Star, Users, Mic,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { supabase } from '../lib/supabase'
 
 /* ─── CONSTANTS ──────────────────────────────────────────────────── */
-const CATEGORY_COLORS = {
-  funding: '#F59E0B', investment: '#F59E0B',
-  ai: '#818cf8', ai_startup: '#818cf8', tech: '#818cf8',
-  edutech: '#38bdf8',
-  youth: '#34d399', policy: '#a78bfa',
-  entrepreneurship: '#60A5FA', startup: '#60A5FA', general: '#9CA3AF',
-  unicorn: '#fb7185', climate: '#86efac', esg: '#86efac',
-  health: '#67e8f9', fintech: '#fb923c',
+
+// AI가 작성한 인사이트 아티클의 카테고리 컬러
+const CAT_COLOR = {
+  insight:   '#A855F7',
+  story:     '#F97316',
+  magazine:  '#F59E0B',
+  trend:     '#10B981',
+  startup:   '#60A5FA',
+  youth:     '#34d399',
+  policy:    '#a78bfa',
+  edutech:   '#38bdf8',
+  health:    '#67e8f9',
+  fintech:   '#fb923c',
+  general:   '#9CA3AF',
 }
-const CATEGORY_KO = {
-  funding: '투자·펀딩', investment: '투자·펀딩',
-  ai: 'AI·기술', ai_startup: 'AI·기술', tech: 'AI·기술',
-  edutech: '에듀테크', youth: '청소년창업',
-  entrepreneurship: '창업', startup: '창업', general: '뉴스',
-  unicorn: '유니콘', climate: '기후테크', esg: 'ESG',
-  health: '헬스케어', fintech: '핀테크', policy: '정책·지원',
+const CAT_KO = {
+  insight:  '인사이트',
+  story:    '창업가 스토리',
+  magazine: '매거진',
+  trend:    '트렌드',
+  startup:  '창업',
+  youth:    '청소년창업',
+  policy:   '정책·지원',
+  edutech:  '에듀테크',
+  health:   '헬스케어',
+  fintech:  '핀테크',
+  general:  '일반',
 }
 
-const FILTERS = [
-  { label: '전체', value: '전체', icon: Zap },
-  { label: '투자·펀딩', value: '투자/펀딩', icon: TrendingUp },
-  { label: 'AI·기술', value: 'AI/기술', icon: BrainCircuit },
-  { label: '창업', value: '창업', icon: Lightbulb },
-  { label: '청소년창업', value: '청소년창업', icon: GraduationCap },
-  { label: '에듀테크', value: '에듀테크', icon: GraduationCap },
-  { label: '헬스케어', value: '헬스케어', icon: Zap },
-  { label: '핀테크', value: '핀테크', icon: Zap },
-  { label: '기후테크', value: '기후테크', icon: Zap },
-  { label: '정책·지원', value: '정책/지원', icon: Newspaper },
-]
-const FILTER_TO_CAT = {
-  '투자/펀딩':  ['funding', 'unicorn', 'investment'],
-  'AI/기술':    ['ai', 'ai_startup', 'tech'],
-  '창업':       ['entrepreneurship', 'general', 'startup'],
-  '청소년창업': ['youth'],
-  '에듀테크':   ['edutech'],
-  '헬스케어':   ['health'],
-  '핀테크':     ['fintech'],
-  '기후테크':   ['climate', 'esg'],
-  '정책/지원':  ['policy'],
+// AI 콘텐츠 태그 키워드 → 콘텐츠 타입 감지
+const CONTENT_TYPE_LABEL = (title, summary) => {
+  const t = (title + ' ' + (summary || '')).toLowerCase()
+  if (/인터뷰 인사이트|interview|인터뷰/.test(title)) return { label: '인터뷰 인사이트', color: '#F97316', icon: Mic }
+  if (/ai 인사이트|ai insight/.test(title.toLowerCase())) return { label: 'AI 분석', color: '#A855F7', icon: BrainCircuit }
+  if (/창업 가이드|스타트업 가이드|로드맵/.test(t)) return { label: '창업 가이드', color: '#60A5FA', icon: Lightbulb }
+  if (/편집장|editor|칼럼|column/.test(t)) return { label: '편집장 칼럼', color: '#F59E0B', icon: Star }
+  if (/트렌드|trend/.test(t)) return { label: '트렌드', color: '#10B981', icon: TrendingUp }
+  if (/청소년|youth|학생/.test(t)) return { label: '청소년 창업', color: '#34d399', icon: GraduationCap }
+  return { label: '인사이트', color: '#A855F7', icon: BookOpen }
 }
+
+// 필터 정의 (AI 콘텐츠 카테고리 기반)
+const FILTERS = [
+  { label: '전체',         value: 'all',      icon: Zap,          cats: null },
+  { label: '인터뷰 인사이트', value: 'interview', icon: Mic,          cats: null, titleMatch: '인터뷰 인사이트' },
+  { label: 'AI 분석',      value: 'ai',       icon: BrainCircuit, cats: ['insight'] },
+  { label: '창업 가이드',   value: 'guide',    icon: Lightbulb,    cats: null, titleMatch: '창업 가이드' },
+  { label: '편집장 칼럼',   value: 'column',   icon: Star,         cats: ['magazine', 'story'] },
+  { label: '트렌드',        value: 'trend',    icon: TrendingUp,   cats: ['trend'] },
+  { label: '청소년창업',    value: 'youth',    icon: GraduationCap,cats: ['youth'] },
+  { label: '에듀테크',      value: 'edutech',  icon: GraduationCap,cats: ['edutech'] },
+  { label: '정책·지원',     value: 'policy',   icon: Hash,         cats: ['policy'] },
+]
+
 const PAGE_SIZE = 24
 
 /* ─── HELPERS ────────────────────────────────────────────────────── */
@@ -68,10 +81,10 @@ function extractPreview(ai_summary) {
     if (line.startsWith('##') || line.startsWith('#')) continue
     if (line.startsWith('---')) continue
     if (line.startsWith('*') && line.endsWith('*')) continue
-    if (line.startsWith('> ')) return line.slice(2).replace(/\*\*/g, '').slice(0, 130)
+    if (line.startsWith('> ')) return line.slice(2).replace(/\*\*/g, '').slice(0, 140)
     if (line.startsWith('• ') || line.startsWith('- ')) continue
     if (line.length < 25) continue
-    return line.replace(/\*\*/g, '').slice(0, 130)
+    return line.replace(/\*\*/g, '').slice(0, 140)
   }
   return ''
 }
@@ -117,20 +130,22 @@ function SkCard({ view }) {
 function FeaturedCard({ article }) {
   const navigate = useNavigate()
   const [hov, setHov] = useState(false)
-  const accent = CATEGORY_COLORS[article.ai_category] || '#60A5FA'
-  const catKo  = CATEGORY_KO[article.ai_category] || '뉴스'
-  const preview = extractPreview(article.ai_summary)
-  const hasLongform = article.ai_summary && article.ai_summary.length > 400
+  const cat   = article.category || 'insight'
+  const accent = CAT_COLOR[cat] || '#A855F7'
+  const catKo  = CAT_KO[cat] || '인사이트'
+  const preview = extractPreview(article.body || article.excerpt || article.ai_summary)
+  const contentType = CONTENT_TYPE_LABEL(article.title, article.body || article.excerpt)
+  const TypeIcon = contentType.icon
 
   return (
     <article
-      onClick={() => navigate(`/news/${article.slug}`)}
+      onClick={() => navigate(`/article/${article.slug}`)}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
         cursor: 'pointer',
         background: hov ? 'var(--bg2)' : 'var(--bg1)',
-        border: `1px solid ${hov ? `${accent}30` : 'var(--b1)'}`,
+        border: `1px solid ${hov ? `${accent}40` : 'var(--b1)'}`,
         borderRadius: 16,
         overflow: 'hidden',
         transition: 'all 0.2s',
@@ -162,36 +177,31 @@ function FeaturedCard({ article }) {
         padding: '28px 30px',
         display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{
+            fontFamily: 'var(--f-mono)', fontSize: 9, color: contentType.color,
+            background: `${contentType.color}18`, border: `1px solid ${contentType.color}35`,
+            padding: '3px 9px', borderRadius: 4, letterSpacing: '1px',
+            fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4,
+          }}>
+            <TypeIcon size={8} /> {contentType.label}
+          </span>
           <span style={{
             fontFamily: 'var(--f-mono)', fontSize: 9, color: accent,
-            background: `${accent}15`, border: `1px solid ${accent}30`,
-            padding: '3px 9px', borderRadius: 4, letterSpacing: '1px',
-            textTransform: 'uppercase', fontWeight: 700,
-          }}>{catKo}</span>
-          {hasLongform && (
-            <span style={{
-              fontFamily: 'var(--f-mono)', fontSize: 9,
-              padding: '3px 8px', borderRadius: 4,
-              background: 'rgba(168,85,247,0.12)',
-              border: '1px solid rgba(168,85,247,0.25)',
-              color: '#A855F7', fontWeight: 700,
-              display: 'flex', alignItems: 'center', gap: 3,
-            }}>
-              <Zap size={8} /> AI 심층분석
-            </span>
-          )}
+            background: `${accent}12`, border: `1px solid ${accent}25`,
+            padding: '3px 8px', borderRadius: 4, fontWeight: 700,
+          }}>
+            {catKo}
+          </span>
           <span style={{
             marginLeft: 'auto',
             fontFamily: 'var(--f-mono)', fontSize: 9,
             padding: '2px 7px', borderRadius: 4,
             background: 'rgba(251,215,0,0.1)',
             border: '1px solid rgba(251,215,0,0.3)',
-            color: '#EAB308',
-            display: 'flex', alignItems: 'center', gap: 3,
-            fontWeight: 700,
+            color: '#EAB308', fontWeight: 700,
           }}>
-            <Flame size={8} /> FEATURED
+            FEATURED
           </span>
         </div>
 
@@ -219,11 +229,6 @@ function FeaturedCard({ article }) {
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
-          {article.source_name && (
-            <span style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t4)' }}>
-              {article.source_name}
-            </span>
-          )}
           {article.published_at && (
             <span style={{
               display: 'flex', alignItems: 'center', gap: 3,
@@ -238,7 +243,7 @@ function FeaturedCard({ article }) {
               display: 'flex', alignItems: 'center', gap: 3,
               fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t4)',
             }}>
-              <Clock size={9} /> {article.read_time}분
+              <Clock size={9} /> {article.read_time}분 읽기
             </span>
           )}
           <span style={{
@@ -258,21 +263,23 @@ function FeaturedCard({ article }) {
 function GridCard({ article }) {
   const navigate = useNavigate()
   const [hov, setHov] = useState(false)
-  const accent = CATEGORY_COLORS[article.ai_category] || '#9CA3AF'
-  const catKo  = CATEGORY_KO[article.ai_category] || '뉴스'
-  const preview = extractPreview(article.ai_summary)
-  const hasLongform = article.ai_summary && article.ai_summary.length > 400
+  const cat   = article.category || 'insight'
+  const accent = CAT_COLOR[cat] || '#A855F7'
+  const catKo  = CAT_KO[cat] || '인사이트'
+  const preview = extractPreview(article.body || article.excerpt || article.ai_summary)
+  const contentType = CONTENT_TYPE_LABEL(article.title, article.body || article.excerpt)
+  const TypeIcon = contentType.icon
   const date = article.published_at
     ? format(new Date(article.published_at), 'M.d', { locale: ko }) : ''
 
   return (
     <article
-      onClick={() => navigate(`/news/${article.slug}`)}
+      onClick={() => navigate(`/article/${article.slug}`)}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
         background: hov ? 'var(--bg2)' : 'var(--bg1)',
-        border: `1px solid ${hov ? `${accent}25` : 'var(--b1)'}`,
+        border: `1px solid ${hov ? `${accent}30` : 'var(--b1)'}`,
         borderRadius: 14,
         overflow: 'hidden',
         cursor: 'pointer',
@@ -282,7 +289,7 @@ function GridCard({ article }) {
         display: 'flex', flexDirection: 'column',
       }}
     >
-      {/* 이미지 or 색상 플레이스홀더 */}
+      {/* 이미지 or 컬러 플레이스홀더 */}
       <div style={{ position: 'relative', height: 170, overflow: 'hidden', flexShrink: 0 }}>
         {article.cover_image ? (
           <img
@@ -294,43 +301,34 @@ function GridCard({ article }) {
               transform: hov ? 'scale(1.06)' : 'scale(1)',
             }}
             onError={e => {
-              e.target.parentElement.style.background = `linear-gradient(135deg, ${accent}18, var(--bg3))`
+              e.target.parentElement.style.background = `linear-gradient(135deg, ${accent}20, var(--bg3))`
               e.target.style.display = 'none'
             }}
           />
         ) : (
           <div style={{
             width: '100%', height: '100%',
-            background: `linear-gradient(135deg, ${accent}18, var(--bg3))`,
+            background: `linear-gradient(135deg, ${contentType.color}18, var(--bg3))`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <BookOpen size={36} color={`${accent}30`} />
+            <TypeIcon size={40} color={`${contentType.color}40`} />
           </div>
         )}
         <div style={{
           position: 'absolute', inset: 0,
           background: 'linear-gradient(to top, rgba(0,0,0,0.45) 0%, transparent 60%)',
         }} />
-        {/* 카테고리 배지 */}
+        {/* 배지 */}
         <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: 5 }}>
           <span style={{
-            fontFamily: 'var(--f-mono)', fontSize: 8.5, fontWeight: 700,
+            fontFamily: 'var(--f-mono)', fontSize: 8, fontWeight: 700,
             padding: '2px 7px', borderRadius: 4,
-            background: accent, color: '#000',
+            background: contentType.color, color: '#000',
             letterSpacing: '0.5px',
-          }}>{catKo}</span>
-          {hasLongform && (
-            <span style={{
-              fontFamily: 'var(--f-mono)', fontSize: 8,
-              padding: '2px 6px', borderRadius: 4,
-              background: 'rgba(168,85,247,0.85)',
-              color: '#fff', fontWeight: 700,
-              display: 'flex', alignItems: 'center', gap: 2,
-              backdropFilter: 'blur(4px)',
-            }}>
-              <Zap size={7} /> AI
-            </span>
-          )}
+            display: 'flex', alignItems: 'center', gap: 3,
+          }}>
+            <TypeIcon size={7} /> {contentType.label}
+          </span>
         </div>
         {/* 읽기 시간 */}
         {article.read_time && (
@@ -377,11 +375,12 @@ function GridCard({ article }) {
           marginTop: 'auto', paddingTop: 8,
           borderTop: '1px solid var(--b0)',
         }}>
-          {article.source_name && (
-            <span style={{ fontFamily: 'var(--f-mono)', fontSize: 9.5, color: 'var(--t4)' }}>
-              {article.source_name}
-            </span>
-          )}
+          <span style={{
+            fontFamily: 'var(--f-mono)', fontSize: 9.5, color: accent,
+            background: `${accent}12`, borderRadius: 3, padding: '1px 5px',
+          }}>
+            {catKo}
+          </span>
           {article.view_count > 0 && (
             <span style={{
               display: 'flex', alignItems: 'center', gap: 2,
@@ -406,22 +405,23 @@ function GridCard({ article }) {
 function ListCard({ article }) {
   const navigate = useNavigate()
   const [hov, setHov] = useState(false)
-  const accent = CATEGORY_COLORS[article.ai_category] || '#9CA3AF'
-  const catKo  = CATEGORY_KO[article.ai_category] || '뉴스'
-  const preview = extractPreview(article.ai_summary)
-  const hasLongform = article.ai_summary && article.ai_summary.length > 400
+  const cat   = article.category || 'insight'
+  const accent = CAT_COLOR[cat] || '#A855F7'
+  const preview = extractPreview(article.body || article.excerpt || article.ai_summary)
+  const contentType = CONTENT_TYPE_LABEL(article.title, article.body || article.excerpt)
+  const TypeIcon = contentType.icon
   const date = article.published_at
     ? format(new Date(article.published_at), 'M월 d일', { locale: ko }) : ''
 
   return (
     <article
-      onClick={() => navigate(`/news/${article.slug}`)}
+      onClick={() => navigate(`/article/${article.slug}`)}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
         display: 'flex', gap: 0,
         background: hov ? 'var(--bg2)' : 'var(--bg1)',
-        border: `1px solid ${hov ? `${accent}25` : 'var(--b1)'}`,
+        border: `1px solid ${hov ? `${contentType.color}30` : 'var(--b1)'}`,
         borderRadius: 12,
         cursor: 'pointer',
         transition: 'all 0.15s',
@@ -430,7 +430,7 @@ function ListCard({ article }) {
     >
       {/* 액센트 바 */}
       <div style={{
-        width: 3, background: hov ? accent : 'transparent',
+        width: 3, background: hov ? contentType.color : 'transparent',
         transition: 'background 0.15s', flexShrink: 0,
       }} />
 
@@ -458,22 +458,20 @@ function ListCard({ article }) {
           marginBottom: 6, flexWrap: 'wrap',
         }}>
           <span style={{
-            fontFamily: 'var(--f-mono)', fontSize: 9, color: accent,
-            background: `${accent}15`, border: `1px solid ${accent}25`,
+            fontFamily: 'var(--f-mono)', fontSize: 9, color: contentType.color,
+            background: `${contentType.color}15`, border: `1px solid ${contentType.color}25`,
             padding: '2px 7px', borderRadius: 3, letterSpacing: '0.5px', fontWeight: 700,
-          }}>{catKo}</span>
-          {hasLongform && (
-            <span style={{
-              fontFamily: 'var(--f-mono)', fontSize: 9,
-              padding: '2px 6px', borderRadius: 3,
-              background: 'rgba(168,85,247,0.1)',
-              border: '1px solid rgba(168,85,247,0.2)',
-              color: '#A855F7', fontWeight: 700,
-              display: 'flex', alignItems: 'center', gap: 2,
-            }}>
-              <Zap size={7} /> 심층
-            </span>
-          )}
+            display: 'flex', alignItems: 'center', gap: 3,
+          }}>
+            <TypeIcon size={7} /> {contentType.label}
+          </span>
+          <span style={{
+            fontFamily: 'var(--f-mono)', fontSize: 9, color: accent,
+            background: `${accent}10`, border: `1px solid ${accent}20`,
+            padding: '2px 6px', borderRadius: 3, fontWeight: 600,
+          }}>
+            {CAT_KO[cat] || '인사이트'}
+          </span>
           <span style={{
             marginLeft: 'auto',
             fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t4)',
@@ -506,11 +504,6 @@ function ListCard({ article }) {
 
         {/* 하단 메타 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          {article.source_name && (
-            <span style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t4)' }}>
-              {article.source_name}
-            </span>
-          )}
           {article.read_time && (
             <span style={{
               display: 'flex', alignItems: 'center', gap: 2,
@@ -536,7 +529,7 @@ function ListCard({ article }) {
 /* ─── MAIN PAGE ──────────────────────────────────────────────────── */
 export default function InsightPage() {
   const navigate = useNavigate()
-  const [activeFilter, setActiveFilter] = useState('전체')
+  const [activeFilter, setActiveFilter] = useState('all')
   const [searchQuery,  setSearchQuery]  = useState('')
   const [searchInput,  setSearchInput]  = useState('')
   const [articles,     setArticles]     = useState([])
@@ -545,27 +538,34 @@ export default function InsightPage() {
   const [isLoading,    setIsLoading]    = useState(false)
   const [total,        setTotal]        = useState(0)
   const [view,         setView]         = useState('grid')
-  const loaderRef  = useRef(null)
-  const searchRef  = useRef(null)
+  const loaderRef   = useRef(null)
+  const searchRef   = useRef(null)
   const debounceRef = useRef(null)
 
   const fetchArticles = useCallback(async (pageNum, filter, search, reset = false) => {
     if (isLoading) return
     setIsLoading(true)
     try {
+      // ★ 핵심: source_name IS NULL → AI가 직접 작성한 인사이트 아티클만 표시
+      //         뉴스(source_name NOT NULL)는 완전히 제외
       let q = supabase
         .from('articles')
-        .select('id,title,slug,ai_category,source_name,published_at,ai_summary,cover_image,read_time,view_count', { count: 'exact' })
+        .select('id,title,slug,category,excerpt,body,published_at,cover_image,read_time,view_count,tags,ai_summary', { count: 'exact' })
         .eq('status', 'published')
-        .not('source_name', 'is', null)
+        .is('source_name', null)           // ← 뉴스 완전 분리 핵심
         .order('published_at', { ascending: false })
         .range(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE - 1)
 
-      if (filter !== '전체' && FILTER_TO_CAT[filter]) {
-        q = q.in('ai_category', FILTER_TO_CAT[filter])
+      // 필터 적용
+      const filterDef = FILTERS.find(f => f.value === filter)
+      if (filterDef && filterDef.cats) {
+        q = q.in('category', filterDef.cats)
+      } else if (filterDef && filterDef.titleMatch) {
+        q = q.ilike('title', `%${filterDef.titleMatch}%`)
       }
+
       if (search.trim()) {
-        q = q.ilike('title', `%${search.trim()}%`)
+        q = q.or(`title.ilike.%${search.trim()}%,excerpt.ilike.%${search.trim()}%`)
       }
 
       const { data, count, error } = await q
@@ -574,7 +574,7 @@ export default function InsightPage() {
       const newData = data || []
       const dedup = arr => {
         const seen = new Set()
-        return arr.filter(a => { if (seen.has(a.title)) return false; seen.add(a.title); return true })
+        return arr.filter(a => { if (seen.has(a.slug)) return false; seen.add(a.slug); return true })
       }
 
       if (reset) {
@@ -585,7 +585,7 @@ export default function InsightPage() {
       if (pageNum === 0) setTotal(count || 0)
       setHasMore(newData.length === PAGE_SIZE)
     } catch (e) {
-      console.error(e)
+      console.error('InsightPage fetch error:', e)
     } finally {
       setIsLoading(false)
     }
@@ -618,10 +618,10 @@ export default function InsightPage() {
   return (
     <div style={{ paddingBottom: 100 }}>
       <Helmet>
-        <title>인사이트 | Insightship — 청소년 창업 인사이트</title>
-        <meta name="description" content="스타트업·AI·핀테크·에듀테크 최신 뉴스를 AI 심층분석으로 읽어보세요. 청소년 창업가를 위한 뉴스 큐레이션." />
+        <title>인사이트 | Insightship — 창업가 스토리 & 경제인 인터뷰</title>
+        <meta name="description" content="유명 창업가·경제인 인터뷰, AI 심층분석, 창업 가이드를 한 곳에서. 청소년 창업가를 위한 인사이트 콘텐츠." />
         <meta property="og:title" content="인사이트 | Insightship" />
-        <meta property="og:description" content="청소년 창업가를 위한 최신 스타트업·AI·에듀테크 인사이트" />
+        <meta property="og:description" content="창업가·경제인 인터뷰, AI 인사이트, 창업 가이드 — 청소년 창업가를 위한 심층 콘텐츠" />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://www.insightship.pacm.kr/insight" />
         <meta name="twitter:card" content="summary" />
@@ -639,14 +639,14 @@ export default function InsightPage() {
           }}>
             <div>
               <div style={{
-                fontFamily: 'var(--f-mono)', fontSize: 9, color: '#a78bfa',
+                fontFamily: 'var(--f-mono)', fontSize: 9, color: '#A855F7',
                 letterSpacing: '3px', marginBottom: 8,
-                background: 'rgba(167,139,250,0.08)',
-                border: '1px solid rgba(167,139,250,0.2)',
+                background: 'rgba(168,85,247,0.08)',
+                border: '1px solid rgba(168,85,247,0.2)',
                 display: 'inline-flex', alignItems: 'center', gap: 5,
                 padding: '3px 10px', borderRadius: 4,
               }}>
-                <Lightbulb size={9} /> INSIGHT · AI LONGFORM
+                <Mic size={9} /> INSIGHT · 인터뷰 & AI 분석
               </div>
               <h1 style={{
                 fontFamily: 'var(--f-display)',
@@ -657,7 +657,7 @@ export default function InsightPage() {
                 인사이트
               </h1>
               <p style={{ fontSize: 13, color: 'var(--t3)', margin: 0 }}>
-                AI 심층분석으로 읽는 스타트업·창업·경제 이야기
+                창업가·경제인 인터뷰 & AI 심층분석 — 뉴스가 아닌 깊이 있는 이야기
               </p>
             </div>
 
@@ -709,7 +709,7 @@ export default function InsightPage() {
                 border: '1px solid var(--b1)', background: 'var(--bg2)',
                 borderRadius: 10, overflow: 'hidden', transition: 'border-color 0.15s',
               }}
-              onFocusCapture={e => e.currentTarget.style.borderColor = '#a78bfa50'}
+              onFocusCapture={e => e.currentTarget.style.borderColor = '#A855F750'}
               onBlurCapture={e => e.currentTarget.style.borderColor = 'var(--b1)'}
             >
               <Search size={14} color="var(--t3)" style={{ marginLeft: 14, flexShrink: 0 }} />
@@ -722,7 +722,7 @@ export default function InsightPage() {
                   clearTimeout(debounceRef.current)
                   debounceRef.current = setTimeout(() => setSearchQuery(val), 300)
                 }}
-                placeholder="인사이트 검색..."
+                placeholder="인사이트 검색 (인터뷰, 창업 가이드, AI 분석…)"
                 style={{
                   flex: 1, padding: '11px 10px',
                   background: 'transparent', border: 'none', outline: 'none',
@@ -760,23 +760,28 @@ export default function InsightPage() {
             display: 'flex', gap: 2, overflowX: 'auto',
             scrollbarWidth: 'none', paddingBottom: 1,
           }}>
-            {FILTERS.map(f => (
-              <button
-                key={f.value}
-                onClick={() => setActiveFilter(f.value)}
-                style={{
-                  padding: '9px 14px', border: 'none', cursor: 'pointer',
-                  fontFamily: 'var(--f-mono)', fontSize: 11, letterSpacing: '0.3px',
-                  whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.12s',
-                  background: activeFilter === f.value ? 'rgba(124,58,237,0.1)' : 'transparent',
-                  color: activeFilter === f.value ? '#a78bfa' : 'var(--t3)',
-                  fontWeight: activeFilter === f.value ? 700 : 400,
-                  borderBottom: activeFilter === f.value ? '2px solid #7C3AED' : '2px solid transparent',
-                  borderRadius: '4px 4px 0 0',
-                }}>
-                {f.label}
-              </button>
-            ))}
+            {FILTERS.map(f => {
+              const Icon = f.icon
+              return (
+                <button
+                  key={f.value}
+                  onClick={() => setActiveFilter(f.value)}
+                  style={{
+                    padding: '9px 14px', border: 'none', cursor: 'pointer',
+                    fontFamily: 'var(--f-mono)', fontSize: 11, letterSpacing: '0.3px',
+                    whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.12s',
+                    background: activeFilter === f.value ? 'rgba(168,85,247,0.1)' : 'transparent',
+                    color: activeFilter === f.value ? '#A855F7' : 'var(--t3)',
+                    fontWeight: activeFilter === f.value ? 700 : 400,
+                    borderBottom: activeFilter === f.value ? '2px solid #A855F7' : '2px solid transparent',
+                    borderRadius: '4px 4px 0 0',
+                    display: 'flex', alignItems: 'center', gap: 5,
+                  }}>
+                  <Icon size={11} />
+                  {f.label}
+                </button>
+              )
+            })}
           </div>
         </div>
       </div>
@@ -784,7 +789,7 @@ export default function InsightPage() {
       {/* ── 카운트 ── */}
       <div className="container" style={{ paddingTop: 14, paddingBottom: 6, display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontFamily: 'var(--f-mono)', fontSize: 11, color: 'var(--t4)' }}>
-          {searchQuery ? `"${searchQuery}" 검색 결과` : activeFilter !== '전체' ? activeFilter : '전체 인사이트'} · {' '}
+          {searchQuery ? `"${searchQuery}" 검색 결과` : FILTERS.find(f=>f.value===activeFilter)?.label || '전체 인사이트'} ·{' '}
           <strong style={{ color: 'var(--t3)' }}>{total.toLocaleString()}</strong>건
         </span>
         {searchQuery && (
@@ -799,21 +804,33 @@ export default function InsightPage() {
             <X size={9} /> 초기화
           </button>
         )}
+        {/* 뉴스와 분리됨 안내 */}
+        <span style={{
+          marginLeft: 'auto',
+          fontFamily: 'var(--f-mono)', fontSize: 9, color: '#A855F7',
+          background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.2)',
+          padding: '2px 8px', borderRadius: 4,
+          display: 'flex', alignItems: 'center', gap: 4,
+        }}>
+          <Mic size={9} /> AI 작성 콘텐츠만 표시
+        </span>
       </div>
 
       {/* ── 본문 ── */}
       <div className="container">
         {articles.length === 0 && !isLoading ? (
           <div style={{ padding: '70px 0', textAlign: 'center', color: 'var(--t3)' }}>
-            <div style={{ fontSize: 40, marginBottom: 14 }}>🔍</div>
+            <div style={{ fontSize: 40, marginBottom: 14 }}>✍️</div>
             <div style={{
               fontFamily: 'var(--f-display)', fontSize: 16, color: 'var(--t1)',
               marginBottom: 8, fontWeight: 700,
             }}>
-              {searchQuery ? '검색 결과가 없습니다' : '인사이트가 없습니다'}
+              {searchQuery ? '검색 결과가 없습니다' : '아직 인사이트 글이 없습니다'}
             </div>
-            <div style={{ fontSize: 13, color: 'var(--t3)' }}>
-              {searchQuery ? '다른 키워드로 검색해 보세요' : '잠시 후 다시 시도해 주세요'}
+            <div style={{ fontSize: 13, color: 'var(--t3)', lineHeight: 1.6 }}>
+              {searchQuery
+                ? '다른 키워드로 검색해 보세요'
+                : '관리자 패널 → 시스템 탭에서 "AI 콘텐츠" CRON을 실행하면 인터뷰 인사이트와 창업 가이드 글이 자동 생성됩니다.'}
             </div>
           </div>
         ) : (

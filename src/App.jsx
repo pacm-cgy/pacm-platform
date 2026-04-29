@@ -72,6 +72,7 @@ const LoginPage      = lazy(() => import('./pages/LoginPage'))
 const MentorPage     = lazy(() => import('./pages/MentorPage'))
 const IdeasPage      = lazy(() => import('./pages/IdeasPage'))
 const EventsPage     = lazy(() => import('./pages/EventsPage'))
+const SearchPage     = lazy(() => import('./pages/SearchPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -148,6 +149,7 @@ export default function App() {
                       <Route path="/admin"             element={<AdminPage />} />
                       <Route path="/terms"             element={<TermsPage />} />
                       <Route path="/privacy"           element={<PrivacyPage />} />
+                      <Route path="/search"           element={<SearchPage />} />
                       <Route path="/login"             element={<LoginPage />} />
                       <Route path="/signup"            element={<LoginPage />} />
                       <Route path="/404"               element={<NotFoundPage />} />

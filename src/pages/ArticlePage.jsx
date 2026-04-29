@@ -1,11 +1,11 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { Heart, Bookmark, Share2, ArrowLeft, Clock, Eye, ExternalLink } from 'lucide-react'
+import { Heart, Bookmark, Share2, ArrowLeft, Clock, Eye, ExternalLink, ArrowUpRight } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { useArticle } from '../hooks/useArticle'
-import { useLikeArticle, useToggleBookmark, useIsBookmarked } from '../hooks/useData'
+import { useLikeArticle, useToggleBookmark, useIsBookmarked, useRelatedArticles } from '../hooks/useData'
 import { useAuthStore } from '../store'
 
 const CATEGORY_LABELS = {
@@ -219,6 +219,58 @@ function BookmarkButton({ articleId }) {
       <Bookmark size={14} fill={isBookmarked?'currentColor':'none'} />
       {isBookmarked ? '저장됨' : '북마크'}
     </button>
+  )
+}
+
+function RelatedArticles({ articleId, category, tags, navigate }) {
+  const { data: related = [] } = useRelatedArticles(articleId, category, tags, 4)
+  if (!related.length) return null
+  const CAT_COLORS = {
+    insight:'#A855F7', story:'#c4b5fd', trend:'#fb923c',
+    magazine:'#38bdf8', community:'#34d399', news:'#9ca3af',
+  }
+  const CAT_KO = {
+    insight:'인사이트', story:'스토리', trend:'트렌드',
+    magazine:'매거진', community:'커뮤니티', news:'뉴스',
+  }
+  return (
+    <div style={{ marginTop:40, paddingTop:28, borderTop:'1px solid var(--b1)' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:16 }}>
+        <ArrowUpRight size={14} color="var(--t4)"/>
+        <span style={{ fontFamily:'var(--f-mono)', fontSize:10, color:'var(--t3)', letterSpacing:'2px' }}>
+          관련 아티클
+        </span>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))', gap:10 }}>
+        {related.map(a => {
+          const color = CAT_COLORS[a.category] || '#9CA3AF'
+          return (
+            <div key={a.id}
+              onClick={() => navigate(`/article/${a.slug}`)}
+              style={{ background:'var(--bg2)', border:'1px solid var(--b1)', borderRadius:10, padding:'12px 14px', cursor:'pointer', transition:'border-color 0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = color}
+              onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--b1)'}
+            >
+              {a.cover_image && (
+                <img src={a.cover_image} alt="" style={{ width:'100%', height:100, objectFit:'cover', borderRadius:6, marginBottom:8 }}
+                  onError={e => { e.target.style.display='none' }}/>
+              )}
+              <div style={{ fontSize:9, fontFamily:'var(--f-mono)', background:`${color}15`, color, border:`1px solid ${color}30`, borderRadius:4, padding:'2px 6px', display:'inline-block', marginBottom:6 }}>
+                {CAT_KO[a.category] || a.category}
+              </div>
+              <div style={{ fontSize:13, fontWeight:600, color:'var(--t1)', lineHeight:1.4, marginBottom:4 }}>
+                {a.title?.slice(0,60)}{a.title?.length > 60 ? '…' : ''}
+              </div>
+              {a.read_time && (
+                <div style={{ fontSize:10, color:'var(--t4)', display:'flex', alignItems:'center', gap:4, marginTop:4 }}>
+                  <Clock size={10}/> {a.read_time}분
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -481,6 +533,10 @@ export default function ArticlePage() {
             <Share2 size={14}/> 공유
           </button>
         </div>
+
+        {/* 관련 아티클 추천 */}
+        <RelatedArticles articleId={article.id} category={article.category} tags={article.tags} navigate={navigate}/>
+
       </div>
     </>
   )

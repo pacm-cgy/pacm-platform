@@ -164,7 +164,7 @@ export default function Header() {
 
   const doSearch = e => {
     e.preventDefault()
-    if (query.trim()) { navigate(`/news?q=${encodeURIComponent(query.trim())}`); setSearchOn(false); setQuery('') }
+    if (query.trim()) { navigate(`/search?q=${encodeURIComponent(query.trim())}`); setSearchOn(false); setQuery('') }
   }
 
   const doLogout = async () => {
