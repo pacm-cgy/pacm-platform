@@ -214,15 +214,62 @@ async function saveFeedback(type, prompt, result) {
   } catch {}
 }
 
+// ── 관리자 JWT 인증 확인 ─────────────────────────────────────────
+async function isAdminJWT(token) {
+  if (!token || !SB_URL || !SB_KEY) return false
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/profiles?select=role&limit=1`, {
+      headers: {
+        apikey: SB_KEY,
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    if (!r.ok) return false
+    const rows = await r.json().catch(() => [])
+    return Array.isArray(rows) && rows[0]?.role === 'admin'
+  } catch { return false }
+}
+
 // ── 메인 핸들러 ───────────────────────────────────────────────────
 export default async function handler(req) {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders() })
   }
 
-  const auth   = req.headers.get('authorization')
-  const isCron = req.headers.get('x-vercel-cron') === '1'
-  if (!isCron && auth !== 'Bearer ' + CRON_SECRET) {
+  const authHeader = req.headers.get('authorization') || ''
+  const isCron     = req.headers.get('x-vercel-cron') === '1'
+  const isCronKey  = authHeader === 'Bearer ' + CRON_SECRET
+
+  // GET 방식 지원 (AIAssistant 컴포넌트 호환)
+  if (req.method === 'GET') {
+    const url     = new URL(req.url)
+    const prompt  = url.searchParams.get('prompt') || ''
+    const context = url.searchParams.get('context') || ''
+    const type    = url.searchParams.get('type') || 'general'
+    if (!prompt) {
+      return new Response(JSON.stringify({ error: 'prompt required' }), { status: 400, headers: corsHeaders() })
+    }
+    // JWT 또는 cron 인증
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+    const adminOk = isCron || isCronKey || await isAdminJWT(bearerToken)
+    if (!adminOk) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders() })
+    }
+    const [ragContext, newsContext] = await Promise.all([
+      getRAGContext(prompt, type), getNewsContext(type),
+    ])
+    const fullPrompt = [context ? `[운영자 작업 컨텍스트]\n${context}` : '', `[요청]\n${prompt}`].filter(Boolean).join('\n\n')
+    const result = buildInternalResult(type, fullPrompt, ragContext, newsContext)
+    saveFeedback(type, prompt, result)
+    return new Response(JSON.stringify({
+      result, type, model: 'insightship-ai-v1', rag_used: ragContext.length > 0, timestamp: new Date().toISOString(),
+    }), { status: 200, headers: corsHeaders() })
+  }
+
+  // POST 방식
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+  const adminOk = isCron || isCronKey || await isAdminJWT(bearerToken)
+  if (!adminOk) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders() })
   }
 

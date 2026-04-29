@@ -32,6 +32,19 @@ const json = (d, s = 200) =>
     status: s, headers: { 'Content-Type': 'application/json', ...CORS },
   })
 
+// 관리자 JWT 인증 확인
+async function checkAdminJWT(token) {
+  if (!token || !SB_URL || !SB_KEY) return false
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/profiles?select=role&limit=1`, {
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` },
+    })
+    if (!r.ok) return false
+    const rows = await r.json().catch(() => [])
+    return Array.isArray(rows) && rows[0]?.role === 'admin'
+  } catch { return false }
+}
+
 // ── AI 직원 username 목록 (100명) ─────────────────────────────────
 const AI_USERNAMES = [
   // 운영팀
@@ -162,10 +175,12 @@ export default async function handler(req) {
   }
 
   if (req.method === 'POST') {
-    const isAuthed =
-      req.headers.get('authorization') === `Bearer ${CRON_SECRET}` ||
-      req.headers.get('x-cron-secret')  === CRON_SECRET
-    if (!isAuthed)    return json({ error: 'Unauthorized' }, 401)
+    const authHeader  = req.headers.get('authorization') || ''
+    const isCronKey   = authHeader === `Bearer ${CRON_SECRET}` || req.headers.get('x-cron-secret') === CRON_SECRET
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+    const isAdminAuth = bearerToken && bearerToken !== CRON_SECRET
+      ? await checkAdminJWT(bearerToken) : false
+    if (!isCronKey && !isAdminAuth) return json({ error: 'Unauthorized' }, 401)
     if (!SB_URL || !SB_KEY) return json({ error: 'Missing env' }, 500)
 
     const results  = await runBatch(AI_USERNAMES, lockAccount, 10)

@@ -39,6 +39,19 @@ const H = () => ({
   'Content-Type': 'application/json',
 })
 
+// 관리자 JWT 인증 확인
+async function checkAdminJWT(token) {
+  if (!token || !SB_URL || !SB_KEY) return false
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/profiles?select=role&limit=1`, {
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` },
+    })
+    if (!r.ok) return false
+    const rows = await r.json().catch(() => [])
+    return Array.isArray(rows) && rows[0]?.role === 'admin'
+  } catch { return false }
+}
+
 // ══════════════════════════════════════════════════════════════════════
 // 시간대별 활동 레벨 (한국 시간 기준)
 // ══════════════════════════════════════════════════════════════════════
@@ -966,12 +979,15 @@ export default async function handler(req) {
   }
 
   if (req.method === 'POST') {
-    const isCron = req.headers.get('x-vercel-cron') === '1'
-    const isAuthed =
-      req.headers.get('authorization') === `Bearer ${CRON_SECRET}` ||
-      req.headers.get('x-cron-secret') === CRON_SECRET
+    const authHeader  = req.headers.get('authorization') || ''
+    const isCron      = req.headers.get('x-vercel-cron') === '1'
+    const isCronKey   = authHeader === `Bearer ${CRON_SECRET}` || req.headers.get('x-cron-secret') === CRON_SECRET
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+    const isAdminAuth = bearerToken && bearerToken !== CRON_SECRET
+      ? await checkAdminJWT(bearerToken) : false
+    const isAuthed = isCron || isCronKey || isAdminAuth
 
-    if (!isCron && !isAuthed) return json({ error: 'Unauthorized' }, 401)
+    if (!isAuthed) return json({ error: 'Unauthorized' }, 401)
     if (!SB_URL || !SB_KEY) return json({ error: 'Missing Supabase env' }, 500)
 
     const body      = await req.json().catch(() => ({}))

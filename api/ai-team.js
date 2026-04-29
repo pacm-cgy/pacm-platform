@@ -897,6 +897,19 @@ const json = (d, s = 200) =>
     headers: { 'Content-Type': 'application/json', ...CORS },
   })
 
+// 관리자 JWT 인증 확인
+async function checkAdminJWT(token, sbUrl, sbKey) {
+  if (!token || !sbUrl || !sbKey) return false
+  try {
+    const r = await fetch(`${sbUrl}/rest/v1/profiles?select=role&limit=1`, {
+      headers: { apikey: sbKey, Authorization: `Bearer ${token}` },
+    })
+    if (!r.ok) return false
+    const rows = await r.json().catch(() => [])
+    return Array.isArray(rows) && rows[0]?.role === 'admin'
+  } catch { return false }
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS })
 
@@ -928,9 +941,13 @@ export default async function handler(req) {
   }
 
   if (req.method === 'POST') {
-    const isAuthed =
-      req.headers.get('authorization') === `Bearer ${CRON_SECRET}` ||
-      req.headers.get('x-cron-secret') === CRON_SECRET
+    const authHeader  = req.headers.get('authorization') || ''
+    const isCron      = req.headers.get('x-vercel-cron') === '1'
+    const isCronKey   = authHeader === `Bearer ${CRON_SECRET}` || req.headers.get('x-cron-secret') === CRON_SECRET
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+    const isAdminJWT  = bearerToken && bearerToken !== CRON_SECRET
+      ? await checkAdminJWT(bearerToken, SB_URL, SB_KEY) : false
+    const isAuthed = isCron || isCronKey || isAdminJWT
     if (!isAuthed) return json({ error: 'Unauthorized' }, 401)
     if (!SB_URL || !SB_KEY) return json({ error: 'Missing Supabase env' }, 500)
 
