@@ -100,8 +100,42 @@ ALTER TABLE profiles
   ADD COLUMN IF NOT EXISTS admin_locked boolean NOT NULL DEFAULT false;
 `
 
-// ── Supabase RPC exec_sql 호출 ────────────────────────────────────────
+// ── admin JWT 확인 ────────────────────────────────────────────────────
+async function checkAdminJWT(token) {
+  if (!token || !SB_URL || !SB_KEY) return false
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/profiles?select=role&limit=1`, {
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` },
+    })
+    if (!r.ok) return false
+    const rows = await r.json().catch(() => [])
+    return Array.isArray(rows) && rows[0]?.role === 'admin'
+  } catch { return false }
+}
+
+// ── Supabase Management API로 SQL 실행 ───────────────────────────────
+function getRef(url) {
+  return url?.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1]
+}
+
+async function execSQLViaManagement(sql) {
+  const ref = getRef(SB_URL)
+  if (!ref) return { ok: false, status: 0, note: 'no project ref' }
+  const r = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
+    method:  'POST',
+    headers: { Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ query: sql }),
+  })
+  const text = await r.text().catch(() => '')
+  return { ok: r.ok, status: r.status, resp: text.slice(0, 300) }
+}
+
+// ── Supabase RPC exec_sql 호출 (fallback) ────────────────────────────
 async function execSQL(sql) {
+  // 1차: Management API
+  const mgmt = await execSQLViaManagement(sql)
+  if (mgmt.ok) return mgmt
+  // 2차: RPC exec_sql (있는 경우)
   const r = await fetch(`${SB_URL}/rest/v1/rpc/exec_sql`, {
     method:  'POST',
     headers: { ...H(), Prefer: 'return=minimal' },
@@ -128,9 +162,14 @@ export default async function handler(req) {
   }
 
   if (req.method === 'POST') {
-    const isAuthed =
-      req.headers.get('authorization') === `Bearer ${CRON_SECRET}` ||
-      req.headers.get('x-cron-secret')  === CRON_SECRET
+    const authHeader  = req.headers.get('authorization') || ''
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+    const isCron =
+      authHeader === `Bearer ${CRON_SECRET}` ||
+      req.headers.get('x-cron-secret') === CRON_SECRET
+    const isAdminJWT = (!isCron && bearerToken)
+      ? await checkAdminJWT(bearerToken) : false
+    const isAuthed = isCron || isAdminJWT
     if (!isAuthed) return json({ error: 'Unauthorized' }, 401)
     if (!SB_URL || !SB_KEY) return json({ error: 'Missing env' }, 500)
 

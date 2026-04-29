@@ -39,6 +39,13 @@ CREATE TABLE IF NOT EXISTS public.newsletter_logs (id uuid PRIMARY KEY DEFAULT g
 ALTER TABLE IF EXISTS public.newsletter_logs ENABLE ROW LEVEL SECURITY;
 CREATE TABLE IF NOT EXISTS public.ai_notices (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), title text NOT NULL, post_id uuid REFERENCES public.community_posts(id) ON DELETE SET NULL, notice_date date NOT NULL DEFAULT current_date, day_of_week smallint, engine text, created_at timestamptz NOT NULL DEFAULT now());
 ALTER TABLE IF EXISTS public.ai_notices ENABLE ROW LEVEL SECURITY;
+CREATE TABLE IF NOT EXISTS public.staff_chat_messages (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), room text NOT NULL DEFAULT 'general', sender_key text NOT NULL, sender_name text NOT NULL, sender_emoji text, sender_color text, sender_team text, message text NOT NULL, msg_type text NOT NULL DEFAULT 'chat', reply_to uuid REFERENCES public.staff_chat_messages(id) ON DELETE SET NULL, is_deleted boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX IF NOT EXISTS idx_scm_room_time ON public.staff_chat_messages(room, created_at DESC);
+ALTER TABLE public.staff_chat_messages ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS scm_service_all ON public.staff_chat_messages;
+CREATE POLICY scm_service_all ON public.staff_chat_messages FOR ALL TO service_role USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS scm_admin_all ON public.staff_chat_messages;
+CREATE POLICY scm_admin_all ON public.staff_chat_messages FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
   `.trim()
 
   // Management API 호출
