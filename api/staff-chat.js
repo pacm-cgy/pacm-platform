@@ -20,6 +20,12 @@ export const config = { runtime: 'edge' }
 const SB_URL       = process.env.SUPABASE_URL
 const SB_KEY       = process.env.SUPABASE_SERVICE_ROLE_KEY
 const CRON_SECRET  = process.env.CRON_SECRET
+// 프로덕션 앱 URL — self-call 용 (VERCEL_URL은 커스텀 도메인을 반영 안 함)
+const APP_URL      =
+  process.env.APP_URL ||
+  process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` ||
+  process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}` ||
+  'https://www.insightship.pacm.kr'
 
 const H = () => ({
   apikey:         SB_KEY,
@@ -195,55 +201,38 @@ async function setupTable() {
       }
     } catch (_) { /* fallthrough */ }
 
-    // 3차: /api/setup-db 내부 호출 (CRON_SECRET 사용 — 같은 Vercel 환경)
-    // setup-db.js에 staff_chat_messages DDL이 포함되어 있음
-    if (CRON_SECRET) {
+    // 3차: /api/setup-db self-call (CRON_SECRET + APP_URL)
+    // setup-db.js는 staff_chat_messages DDL을 Management API로 실행
+    if (CRON_SECRET && APP_URL) {
       try {
-        // Vercel edge 환경에서 자기 자신의 다른 API를 호출
-        // SB_URL 도메인에서 배포 도메인을 추론하거나 상대 경로 사용 불가 → 절대경로 필요
-        // 대신 db-setup-staff를 CRON_SECRET으로 내부 호출
-        const r = await fetch(`${SB_URL.replace('supabase.co', 'supabase.co')}/rest/v1/rpc/exec_sql`, {
+        const setupR = await fetch(`${APP_URL}/api/setup-db`, {
           method:  'POST',
-          headers: { ...H(), Prefer: 'return=minimal' },
-          body:    JSON.stringify({ sql: TABLE_DDL }),
+          headers: {
+            Authorization:  `Bearer ${CRON_SECRET}`,
+            'Content-Type': 'application/json',
+          },
         })
-        // 이미 2차에서 시도했으므로 skip — CRON_SECRET 기반 내부 HTTP 호출로 전환
-        // Edge Runtime에서는 self-referential HTTP 가능: fetch('/api/setup-db') (상대 경로 불가)
-        // → 실제 hostname 필요: VERCEL_URL env var 사용
-        const vercelUrl = process.env.VERCEL_URL || process.env.NEXT_PUBLIC_VERCEL_URL
-        if (vercelUrl) {
-          const setupR = await fetch(`https://${vercelUrl}/api/setup-db`, {
-            method:  'POST',
-            headers: {
-              Authorization: `Bearer ${CRON_SECRET}`,
-              'Content-Type': 'application/json',
-            },
-          })
-          if (setupR.ok) {
-            _tableReady = true
-            return true
-          }
+        if (setupR.ok) {
+          _tableReady = true
+          return true
         }
       } catch (_) { /* fallthrough */ }
     }
 
-    // 4차: db-setup-staff 내부 호출 (CRON_SECRET + VERCEL_URL)
-    if (CRON_SECRET) {
+    // 4차: /api/db-setup-staff self-call (CRON_SECRET + APP_URL)
+    if (CRON_SECRET && APP_URL) {
       try {
-        const vercelUrl = process.env.VERCEL_URL || process.env.NEXT_PUBLIC_VERCEL_URL
-        if (vercelUrl) {
-          const r = await fetch(`https://${vercelUrl}/api/db-setup-staff`, {
-            method:  'POST',
-            headers: {
-              Authorization:  `Bearer ${CRON_SECRET}`,
-              'Content-Type': 'application/json',
-            },
-          })
-          const d = await r.json().catch(() => ({}))
-          if (r.ok || d.ok) {
-            _tableReady = true
-            return true
-          }
+        const r = await fetch(`${APP_URL}/api/db-setup-staff`, {
+          method:  'POST',
+          headers: {
+            Authorization:  `Bearer ${CRON_SECRET}`,
+            'Content-Type': 'application/json',
+          },
+        })
+        const d = await r.json().catch(() => ({}))
+        if (r.ok || d.ok) {
+          _tableReady = true
+          return true
         }
       } catch (_) { /* fallthrough */ }
     }
