@@ -29,6 +29,8 @@ import { Suspense, lazy, useEffect } from 'react'
 import { HelmetProvider } from 'react-helmet-async'
 import Header from './components/layout/Header'
 import Footer from './components/layout/Footer'
+import StaffChatPopup from './components/StaffChatPopup'
+import FeedbackPopup from './components/FeedbackPopup'
 import { useAuthStore } from './store'
 import './styles/global.css'
 
@@ -141,6 +143,9 @@ export default function App() {
                   </Suspense>
                 </div>
                 <Footer />
+                {/* 전역 팝업: admin에게만 직원 채팅방, 모든 유저에게 피드백 유도 */}
+                <StaffChatPopup />
+                <FeedbackPopup />
               </div>
             </AppInit>
           </ErrorBoundary>

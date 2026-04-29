@@ -45,6 +45,28 @@ function rateLimit(key, max) {
   }
 }
 
+// ── AI 직원 username 보호 패턴 (일반 유저 탈취 방지) ─────────────────
+// 이 패턴과 일치하는 username으로 회원가입/프로필 수정 시도 차단
+const AI_USERNAME_PATTERNS = [
+  /^ai_/i,
+  /^insightship_/i,
+  /^platform_/i,
+  /^system_/i,
+  /^admin_bot/i,
+]
+
+// 회원가입/프로필 수정 API에서 AI username 탈취 시도 감지
+function isAIUsernameHijack(req, body) {
+  try {
+    const path = new URL(req.url).pathname
+    // 프로필 수정 또는 회원가입 경로만 검사
+    if (!path.includes('/auth/') && !path.includes('/profiles') && !path.includes('/signup')) return false
+    if (!body) return false
+    const username = body?.username || body?.data?.username || ''
+    return AI_USERNAME_PATTERNS.some(p => p.test(username))
+  } catch { return false }
+}
+
 // ── 의심 패턴 차단 ───────────────────────────────────────────────────
 const BLOCK_PATTERNS = [
   /\.\.[\/\\]/,                          // path traversal
@@ -85,15 +107,34 @@ export default function middleware(req) {
     return new Response('Forbidden', { status: 403 })
   }
 
+  // ── 2-b. AI username 탈취 시도 차단 ─────────────────────────────
+  // GET/HEAD 요청은 패스, POST/PATCH/PUT 프로필 수정 요청만 검사
+  if (['POST','PATCH','PUT'].includes(req.method)) {
+    try {
+      const ct = req.headers.get('content-type') || ''
+      if (ct.includes('application/json')) {
+        // Edge 미들웨어에서는 body를 직접 읽을 수 없으므로 URL 파라미터 검사
+        const usernameParam = url.searchParams.get('username') || ''
+        if (usernameParam && AI_USERNAME_PATTERNS.some(p => p.test(usernameParam))) {
+          return new Response(
+            JSON.stringify({ error: 'Reserved username pattern', code: 'AI_USERNAME_PROTECTED' }),
+            { status: 403, headers: { 'Content-Type': 'application/json' } }
+          )
+        }
+      }
+    } catch (_) {}
+  }
+
   // ── 3. Rate Limiting ─────────────────────────────────────────────
   // 민감 API (cron 트리거 가능 경로)
   const STRICT_PATHS = [
     '/api/run-summarize', '/api/generate-report', '/api/send-newsletter',
     '/api/setup-db', '/api/db-setup', '/api/reset-summaries',
     '/api/reprocess-all-news', '/api/admin-action', '/api/admin-ai',
+    '/api/staff-auth', '/api/sync-ai-accounts',
   ]
   // 인증 경로
-  const AUTH_PATHS = ['/api/ai-mentor', '/api/ai-team', '/api/office']
+  const AUTH_PATHS = ['/api/ai-mentor', '/api/ai-team', '/api/office', '/api/staff-chat']
 
   let rlResult
   if (STRICT_PATHS.some(p => path.startsWith(p))) {
