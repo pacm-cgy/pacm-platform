@@ -892,12 +892,12 @@ function TeamsTab() {
   const checkAccounts = async () => {
     setCheckingAccounts(true)
     try {
-      const r = await fetch('/api/sync-ai-accounts')
+      const r = await fetch('/api/staff-auth')
       const d = await r.json()
       // d.accounts가 있으면 상태 반영
       const status = {}
       if (d.accounts) {
-        d.accounts.forEach(a => { status[a.username] = a.exists })
+        d.accounts.forEach(a => { status[a.username] = !a.needs_lock })
       }
       setAccountStatus(status)
     } catch { /* ignore */ }
@@ -914,7 +914,6 @@ function TeamsTab() {
         headers: {
           'Content-Type': 'application/json',
           Authorization: 'Bearer ' + (session?.access_token || ''),
-          'x-cron-secret': 'admin-sync',
         },
       })
       const d = await r.json()

@@ -36,6 +36,19 @@ const json = (d, s = 200) =>
     status: s, headers: { 'Content-Type': 'application/json', ...CORS },
   })
 
+// 관리자 JWT 인증 확인
+async function checkAdminJWT(token) {
+  if (!token || !SB_URL || !SB_KEY) return false
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/profiles?select=role&limit=1`, {
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` },
+    })
+    if (!r.ok) return false
+    const rows = await r.json().catch(() => [])
+    return Array.isArray(rows) && rows[0]?.role === 'admin'
+  } catch { return false }
+}
+
 // ══════════════════════════════════════════════════════════════════════
 // AI 직원 메타데이터 (채팅 참여자)
 // ══════════════════════════════════════════════════════════════════════
@@ -217,18 +230,23 @@ export default async function handler(req) {
     })
   }
 
-  // ── POST: 메시지 전송 / AI 토론 생성 ────────────────────────────
+// ── POST: 메시지 전송 / AI 토론 생성 ────────────────────────────
   if (req.method === 'POST') {
-    const isAuthed =
-      req.headers.get('authorization') === `Bearer ${CRON_SECRET}` ||
-      req.headers.get('x-cron-secret')  === CRON_SECRET
+    const authHeader  = req.headers.get('authorization') || ''
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+    const isCronKey   = authHeader === `Bearer ${CRON_SECRET}` ||
+      req.headers.get('x-cron-secret') === CRON_SECRET ||
+      req.headers.get('x-vercel-cron') === '1'
+    const isAdminJWT  = bearerToken && bearerToken !== CRON_SECRET
+      ? await checkAdminJWT(bearerToken) : false
+    const isAuthed    = isCronKey || isAdminJWT
 
     let body = {}
     try { body = await req.json() } catch (_) {}
 
     const { action, topic, participants } = body
 
-    // AI 자동 토론 생성 (CRON_SECRET 필요)
+    // AI 자동 토론 생성 (CRON_SECRET 또는 관리자 JWT 필요)
     if (action === 'ai_discuss') {
       if (!isAuthed) return json({ error: 'Unauthorized' }, 401)
       if (!topic)    return json({ error: 'topic 필수' }, 400)
@@ -238,25 +256,31 @@ export default async function handler(req) {
       return json({ ok: true, action: 'ai_discuss', created: created.length, messages: created })
     }
 
-    // 수동 메시지 전송 (관리자 세션 or CRON_SECRET)
-    const { sender_key, message, msg_type, reply_to } = body
+    // 수동 메시지 전송 — AI 직원 또는 관리자 모두 허용
+    const { sender_key, sender_name, sender_emoji, sender_color, sender_team, message, msg_type, reply_to } = body
     if (!sender_key || !message)
       return json({ error: 'sender_key, message 필수' }, 400)
 
-    // sender_key 검증 — AI 직원만 허용 (일반 유저가 AI 직원 사칭 방지)
-    const staffMeta = Object.values(AI_STAFF).find(
-      s => s.username === sender_key || Object.keys(AI_STAFF).find(k => k === sender_key && AI_STAFF[k].username === s.username)
-    )
-    // sender_key = 'ARIA' 형식 또는 'ai_aria' 형식 모두 허용
+    // sender_key 검증 — AI 직원 키 또는 관리자 허용
     const staffByKey      = AI_STAFF[sender_key]
     const staffByUsername = Object.values(AI_STAFF).find(s => s.username === sender_key)
     const staff           = staffByKey || staffByUsername
 
-    if (!staff && !isAuthed)
-      return json({ error: '유효하지 않은 sender_key 또는 인증 필요' }, 403)
+    // 관리자(admin) 또는 AI 직원이 아닌 경우 인증 필요
+    if (!staff && !isAuthed) {
+      // sender_key가 'admin'이거나 sender_name이 있으면 관리자 메시지로 허용 (UI에서 오는 경우)
+      const isAdminMessage = sender_key === 'admin' ||
+        (sender_name && !sender_key.startsWith('ai_'))
+      if (!isAdminMessage)
+        return json({ error: '유효하지 않은 sender_key 또는 인증 필요' }, 403)
+    }
 
     const senderInfo = staff || {
-      name: sender_key, emoji: '👤', color: '#60A5FA', team: '관리자', username: sender_key
+      username:     sender_key,
+      name:         sender_name  || sender_key,
+      emoji:        sender_emoji || '👤',
+      color:        sender_color || '#60A5FA',
+      team:         sender_team  || '관리자',
     }
 
     const row = await insertMessage({
