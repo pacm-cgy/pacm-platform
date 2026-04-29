@@ -120,6 +120,7 @@ export default function StaffChatPopup() {
   const [aiTyping,    setAiTyping]    = useState(false)    // AI 직원 타이핑 표시
   const [autoMsg,     setAutoMsg]     = useState(null)     // 자동 반응 결과 표시
   const [tableSetup,  setTableSetup]  = useState(false)    // 테이블 초기화 중 표시
+  const [tableNotReady, setTableNotReady] = useState(false) // 테이블 없음 — 안내 표시
 
   const bottomRef     = useRef(null)
   const pollRef       = useRef(null)
@@ -161,9 +162,13 @@ export default function StaffChatPopup() {
           headers: { 'Content-Type': 'application/json', ...authH },
         })
         const d = await r.json().catch(() => ({}))
-        if (d.ok || d.results?.table_exists) {
-          // 테이블 생성 완료 → 즉시 재조회
+        if (d.ok || d.table_exists) {
+          // 테이블 생성 완료 → 안내 해제 후 즉시 재조회
+          setTableNotReady(false)
           fetchMessagesRef.current?.(true)
+        } else if (d.manual_sql) {
+          // 자동 생성 실패 → 수동 SQL 안내
+          console.warn('[StaffChat] table auto-create failed, manual SQL needed:', d.manual_sql)
         }
       }
     } catch (_) {}
@@ -183,10 +188,12 @@ export default function StaffChatPopup() {
 
       // table_ready=false → 테이블 없음: 기존 메시지 유지 + 자동 생성 트리거 (1회)
       if (d.table_ready === false) {
+        setTableNotReady(true)
         if (!tableInitRef.current) ensureTable()
         if (!silent) setLoading(false)
         return
       }
+      setTableNotReady(false)
 
       if (Array.isArray(d.messages)) {
         setMessages(prev => {
@@ -453,6 +460,42 @@ export default function StaffChatPopup() {
                   </button>
                 ))}
               </div>
+
+              {/* ── 테이블 없음 안내 배너 ──────────────────────── */}
+              {tableNotReady && !tableSetup && (
+                <div style={{
+                  background: 'rgba(244,63,94,0.08)', borderBottom: '1px solid rgba(244,63,94,0.2)',
+                  padding: '8px 14px', fontSize: 10, color: '#F87171',
+                  fontFamily: 'var(--f-mono)', flexShrink: 0,
+                  display: 'flex', flexDirection: 'column', gap: 6,
+                }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <span>⚠️</span>
+                    <span style={{ fontWeight:600 }}>DB 테이블 없음 — 채팅 데이터를 저장할 수 없습니다</span>
+                  </div>
+                  <div style={{ display:'flex', gap:6 }}>
+                    <button
+                      onClick={() => { tableInitRef.current = false; ensureTable() }}
+                      style={{
+                        background:'rgba(244,63,94,0.15)', border:'1px solid rgba(244,63,94,0.3)',
+                        borderRadius:4, color:'#F87171', cursor:'pointer', fontSize:9, padding:'3px 8px',
+                        fontFamily:'var(--f-mono)'
+                      }}
+                    >
+                      ⚙️ 재시도
+                    </button>
+                    <a href="/admin?tab=cron"
+                      style={{
+                        background:'rgba(96,165,250,0.1)', border:'1px solid rgba(96,165,250,0.2)',
+                        borderRadius:4, color:'#60A5FA', cursor:'pointer', fontSize:9, padding:'3px 8px',
+                        fontFamily:'var(--f-mono)', textDecoration:'none', display:'inline-block'
+                      }}
+                    >
+                      🔧 Admin → 시스템 탭에서 DB 초기화
+                    </a>
+                  </div>
+                </div>
+              )}
 
               {/* ── 테이블 초기화 중 배너 ─────────────────────── */}
               {tableSetup && (
