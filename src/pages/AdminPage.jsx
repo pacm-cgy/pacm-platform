@@ -541,20 +541,26 @@ function ReportsTab() {
   const setMsg = (id, msg) => setActionMsg(p => ({ ...p, [id]: msg }))
 
   const handleReport = async (report, action) => {
-    if (action === 'delete_content') {
-      const table = report.target_type === 'post' ? 'community_posts' : 'comments'
-      const col = report.target_type === 'post' ? 'is_deleted' : null
-      if (col) {
-        await supabase.from(table).update({ [col]: true }).eq('id', report.target_id)
-      } else {
-        await supabase.from(table).delete().eq('id', report.target_id)
+    try {
+      if (action === 'delete_content') {
+        // post_comments 또는 comments 둘 다 시도
+        if (report.target_type === 'post') {
+          await supabase.from('community_posts').update({ is_deleted: true }).eq('id', report.target_id)
+        } else {
+          // 댓글: comments 테이블 soft-delete 시도, 없으면 hard-delete
+          const { error: e1 } = await supabase.from('comments').update({ is_deleted: true }).eq('id', report.target_id)
+          if (e1) {
+            await supabase.from('comments').delete().eq('id', report.target_id)
+          }
+        }
       }
+      // resolved_at 컬럼이 없을 수 있으므로 status만 업데이트
+      const updateData = { status: action === 'dismissed' ? 'dismissed' : 'resolved' }
+      const { error } = await supabase.from('reports').update(updateData).eq('id', report.id)
+      setMsg(report.id, error ? `❌ ${error.message?.slice(0,50) || '오류'}` : (action === 'dismissed' ? '✅ 기각됨' : '✅ 처리됨'))
+    } catch(e) {
+      setMsg(report.id, `❌ ${e.message?.slice(0,50)}`)
     }
-    const { error } = await supabase.from('reports').update({
-      status: action === 'dismissed' ? 'dismissed' : 'resolved',
-      resolved_at: new Date().toISOString(),
-    }).eq('id', report.id)
-    setMsg(report.id, error ? '❌ 오류' : (action === 'dismissed' ? '✅ 기각됨' : '✅ 처리됨'))
     setTimeout(load, 800)
   }
 
@@ -1367,6 +1373,9 @@ function OpsTab() {
 function SystemTab({ stats, onRefresh }) {
   const [runningCron, setRunningCron] = useState('')
   const [cronResult, setCronResult] = useState('')
+  const [nlTestEmail, setNlTestEmail] = useState('')
+  const [nlSending, setNlSending] = useState(false)
+  const [nlResult, setNlResult] = useState('')
 
   const runCron = async (path, label) => {
     setRunningCron(label)
@@ -1374,13 +1383,32 @@ function SystemTab({ stats, onRefresh }) {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const r = await fetch(path, {
+        method: 'POST',
         headers: { 'x-vercel-cron':'1', Authorization:'Bearer '+(session?.access_token||'') },
-        method: path.includes('sync') ? 'POST' : 'POST',
       })
       const d = await r.json()
-      setCronResult(`✅ ${label} 완료:\n${JSON.stringify(d, null, 2).slice(0, 600)}`)
+      setCronResult(`✅ ${label} 완료:\n${JSON.stringify(d, null, 2).slice(0, 800)}`)
     } catch (e) { setCronResult('❌ 오류: ' + e.message) }
     finally { setRunningCron(''); onRefresh() }
+  }
+
+  const sendNewsletterTest = async () => {
+    if (!nlTestEmail.trim()) return
+    setNlSending(true); setNlResult('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const r = await fetch(`/api/send-newsletter?test=true&email=${encodeURIComponent(nlTestEmail.trim())}`, {
+        method: 'POST',
+        headers: { Authorization:'Bearer '+(session?.access_token||'') },
+      })
+      const d = await r.json()
+      if (d.ok || d.sent !== undefined) {
+        setNlResult(`✅ 테스트 뉴스레터 발송 완료 (${nlTestEmail}) — 발송:${d.sent||1}, 실패:${d.failed||0}`)
+      } else {
+        setNlResult(`❌ ${d.error || JSON.stringify(d).slice(0,100)}`)
+      }
+    } catch(e) { setNlResult('❌ ' + e.message) }
+    setNlSending(false)
   }
 
   const CRONS = [
@@ -1400,6 +1428,25 @@ function SystemTab({ stats, onRefresh }) {
 
   return (
     <div>
+      {/* 뉴스레터 테스트 발송 패널 */}
+      <Panel style={{ marginBottom:20 }}>
+        <SectionHeader icon={Send} label="뉴스레터 테스트 발송" color="#F472B6"/>
+        <div style={{ fontSize:12, color:'var(--t3)', marginBottom:10 }}>
+          특정 이메일로 테스트 뉴스레터를 발송합니다. 실제 구독자 목록에는 영향 없음.
+        </div>
+        <div style={{ display:'flex', gap:8 }}>
+          <input value={nlTestEmail} onChange={e=>setNlTestEmail(e.target.value)}
+            placeholder="test@example.com" className="input" style={{ flex:1, fontSize:13 }}
+            onKeyDown={e=>e.key==='Enter'&&sendNewsletterTest()}/>
+          <button onClick={sendNewsletterTest} disabled={nlSending||!nlTestEmail.trim()}
+            className="btn btn-primary btn-sm" style={{ gap:5, whiteSpace:'nowrap' }}>
+            {nlSending ? <Loader size={12} style={{ animation:'spin 1s linear infinite' }}/> : <Send size={12}/>}
+            {nlSending ? '발송 중…' : '테스트 발송'}
+          </button>
+        </div>
+        {nlResult && <Msg msg={nlResult}/>}
+      </Panel>
+
       <SectionHeader icon={Terminal} label="CRON JOBS — 수동 실행" color="#60A5FA"/>
       <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:20 }}>
         {CRONS.map(({ label, path, color }) => (
@@ -1525,9 +1572,9 @@ function StaffChatTab() {
   }
 
   return (
-    <div style={{ display:'grid', gridTemplateColumns:'1fr 340px', gap:16, height:'calc(100vh - 280px)', minHeight:480 }}>
+    <div style={{ display:'grid', gridTemplateColumns:'1fr 340px', gap:16, minHeight:600 }}>
       {/* 왼쪽: 채팅 메인 */}
-      <Panel style={{ display:'flex', flexDirection:'column', padding:0, overflow:'hidden' }}>
+      <Panel style={{ display:'flex', flexDirection:'column', padding:0, overflow:'hidden', minHeight:560 }}>
         {/* 헤더 */}
         <div style={{ background:'linear-gradient(135deg,#1e3a5f,#1a1a2e)', padding:'12px 16px',
           borderBottom:'1px solid rgba(96,165,250,0.2)', display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>

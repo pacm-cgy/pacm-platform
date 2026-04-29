@@ -4,7 +4,7 @@ import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { Briefcase, Mail, Building2, CheckCircle, ChevronRight, Users, Zap, Star } from 'lucide-react'
 import { useProjects, useApplyProject } from '../hooks/useData'
-import { supabase } from '../lib/supabase'
+
 
 function ProjectCard({ project, onApply }) {
   const deadline = project.deadline ? format(new Date(project.deadline), 'M월 d일', { locale: ko }) : '상시'
@@ -85,11 +85,17 @@ function PartnerForm() {
     e.preventDefault()
     if (!form.company_name || !form.contact_name || !form.email || !form.message) { setErr('필수 항목을 모두 입력해주세요'); return }
     setLoading(true)
+    setErr('')
     try {
-      const { error } = await supabase.from('partner_inquiries').insert([form])
-      if (error) throw error
+      const res = await fetch('/api/partner-inquiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '서버 오류')
       setDone(true)
-    } catch { setErr('제출 중 오류가 발생했습니다. 이메일로 문의해주세요.') }
+    } catch (e) { setErr(e.message || '제출 중 오류가 발생했습니다. 이메일로 문의해주세요.') }
     finally { setLoading(false) }
   }
 

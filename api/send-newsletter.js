@@ -459,10 +459,24 @@ export default async function handler(req) {
     })
   }
 
-  const isCron = req.headers.get('x-vercel-cron') === '1'
-  const isAuth = req.headers.get('authorization') === `Bearer ${CRON_SECRET}`
+  const isCron      = req.headers.get('x-vercel-cron') === '1'
+  const authHeader  = req.headers.get('authorization') || ''
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+  const isCronKey   = authHeader === `Bearer ${CRON_SECRET}`
     || req.headers.get('x-cron-secret') === CRON_SECRET
-  if (!isCron && !isAuth) return json({ error: 'Unauthorized' }, 401)
+  const isAdminJWT  = bearerToken && bearerToken !== CRON_SECRET
+    ? await (async () => {
+        try {
+          const r = await fetch(`${SB_URL}/rest/v1/profiles?select=role&limit=1`, {
+            headers: { apikey: SB_KEY, Authorization: `Bearer ${bearerToken}` },
+          })
+          if (!r.ok) return false
+          const rows = await r.json().catch(() => [])
+          return Array.isArray(rows) && rows[0]?.role === 'admin'
+        } catch { return false }
+      })()
+    : false
+  if (!isCron && !isCronKey && !isAdminJWT) return json({ error: 'Unauthorized' }, 401)
   if (!SB_URL || !SB_KEY) return json({ error: 'Missing Supabase env' }, 500)
 
   let isTest = false, testEmail = ''
