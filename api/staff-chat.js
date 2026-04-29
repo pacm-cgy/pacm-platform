@@ -107,41 +107,46 @@ async function getMessages(room, limit = 60) {
     `${SB_URL}/rest/v1/staff_chat_messages?room=eq.${room}&is_deleted=eq.false&order=created_at.desc&limit=${limit}&select=id,room,sender_key,sender_name,sender_emoji,sender_color,sender_team,message,msg_type,reply_to,created_at`,
     { headers: H() }
   )
+  // 테이블이 없으면 자동 생성 후 빈 배열 반환 (다음 요청부터 정상 동작)
+  if (r.status === 404 || r.status === 400) {
+    const errBody = await r.text().catch(() => '')
+    const isMissing = errBody.includes('PGRST205') || errBody.includes('relation') ||
+      errBody.includes('does not exist') || errBody.includes('schema cache')
+    if (isMissing) {
+      await setupTable()
+    }
+    return []
+  }
   const rows = await r.json().catch(() => [])
   return Array.isArray(rows) ? rows.reverse() : []
 }
 
-async function insertMessage(data) {
-  const r = await fetch(`${SB_URL}/rest/v1/staff_chat_messages`, {
-    method:  'POST',
-    headers: { ...H(), Prefer: 'return=representation' },
-    body:    JSON.stringify({ ...data, is_deleted: false, created_at: new Date().toISOString() }),
-  })
-  const rows = await r.json().catch(() => [])
-  return rows?.[0] || null
-}
+// 테이블 생성 완료 여부 캐시 (Edge 워커 생명주기 내)
+let _tableReady = false
 
 async function setupTable() {
-  // staff_chat_messages 테이블이 없으면 Supabase SQL로 생성 시도
-  // (이미 존재하면 무시)
+  if (_tableReady) return true
+  // staff_chat_messages 테이블 생성 — RLS 없이 service_role로 직접 INSERT 가능
   const ddl = `
     CREATE TABLE IF NOT EXISTS staff_chat_messages (
-      id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      room        text NOT NULL DEFAULT 'general',
-      sender_key  text NOT NULL,
-      sender_name text NOT NULL,
+      id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+      room         text        NOT NULL DEFAULT 'general',
+      sender_key   text        NOT NULL,
+      sender_name  text        NOT NULL,
       sender_emoji text,
       sender_color text,
-      sender_team text,
-      message     text NOT NULL,
-      msg_type    text NOT NULL DEFAULT 'chat',
-      reply_to    uuid REFERENCES staff_chat_messages(id) ON DELETE SET NULL,
-      is_deleted  boolean NOT NULL DEFAULT false,
-      created_at  timestamptz NOT NULL DEFAULT now()
+      sender_team  text,
+      message      text        NOT NULL,
+      msg_type     text        NOT NULL DEFAULT 'chat',
+      reply_to     uuid        REFERENCES staff_chat_messages(id) ON DELETE SET NULL,
+      is_deleted   boolean     NOT NULL DEFAULT false,
+      created_at   timestamptz NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS idx_scm_room_time ON staff_chat_messages(room, created_at DESC);
     ALTER TABLE staff_chat_messages ENABLE ROW LEVEL SECURITY;
-    -- 관리자(admin role)만 읽기/쓰기 가능
+    DROP POLICY IF EXISTS scm_service_all ON staff_chat_messages;
+    CREATE POLICY scm_service_all ON staff_chat_messages
+      FOR ALL TO service_role USING (true) WITH CHECK (true);
     DROP POLICY IF EXISTS scm_admin_all ON staff_chat_messages;
     CREATE POLICY scm_admin_all ON staff_chat_messages
       FOR ALL USING (
@@ -152,12 +157,47 @@ async function setupTable() {
       );
   `
   try {
-    await fetch(`${SB_URL}/rest/v1/rpc/exec_sql`, {
+    const r = await fetch(`${SB_URL}/rest/v1/rpc/exec_sql`, {
       method:  'POST',
       headers: { ...H(), Prefer: 'return=minimal' },
       body:    JSON.stringify({ sql: ddl }),
     })
-  } catch (_) { /* 이미 있으면 무시 */ }
+    if (r.ok || r.status === 204) { _tableReady = true; return true }
+    // exec_sql RPC 없는 경우 — 그냥 통과 (service_role은 RLS 우회)
+    _tableReady = true
+    return true
+  } catch (_) { return false }
+}
+
+async function insertMessage(data) {
+  // service_role 키는 RLS 우회 — 테이블만 존재하면 항상 INSERT 가능
+  const r = await fetch(`${SB_URL}/rest/v1/staff_chat_messages`, {
+    method:  'POST',
+    headers: { ...H(), Prefer: 'return=representation' },
+    body:    JSON.stringify({ ...data, is_deleted: false, created_at: new Date().toISOString() }),
+  })
+
+  // 테이블이 없으면(404/400) 자동 생성 후 재시도
+  if (r.status === 404 || r.status === 400) {
+    const errBody = await r.text().catch(() => '')
+    const isMissing = errBody.includes('PGRST205') || errBody.includes('relation') ||
+      errBody.includes('does not exist') || errBody.includes('schema cache')
+    if (isMissing) {
+      await setupTable()
+      // 재시도
+      const r2 = await fetch(`${SB_URL}/rest/v1/staff_chat_messages`, {
+        method:  'POST',
+        headers: { ...H(), Prefer: 'return=representation' },
+        body:    JSON.stringify({ ...data, is_deleted: false, created_at: new Date().toISOString() }),
+      })
+      const rows2 = await r2.json().catch(() => [])
+      return rows2?.[0] || null
+    }
+    return null
+  }
+
+  const rows = await r.json().catch(() => [])
+  return rows?.[0] || null
 }
 
 // ══════════════════════════════════════════════════════════════════════
