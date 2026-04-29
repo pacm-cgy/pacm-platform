@@ -1,23 +1,22 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════╗
- * ║  INSIGHTSHIP AI PLATFORM OPERATOR v2.0                              ║
- * ║  담당 AI: ARIA (아리아) — 플랫폼 운영 매니저                          ║
+ * ║  INSIGHTSHIP AI PLATFORM OPERATOR v3.0                              ║
+ * ║  담당 AI: ARIA (아리아) — 플랫폼 운영 총괄 매니저                   ║
  * ║                                                                      ║
- * ║  담당 업무:                                                          ║
- * ║  A. 공지사항 자동 작성 & 발행 (community_posts: notice)             ║
- * ║  B. 커뮤니티 활성화 포스트 작성 (질문/토론 유도)                    ║
- * ║  C. 이벤트/챌린지 자동 생성 (events 테이블)                         ║
+ * ║  v3 업그레이드:                                                      ║
+ * ║  A. 공지사항 자동 작성 & 발행 (요일별 차별화)                       ║
+ * ║  B. 커뮤니티 활성화 포스트 (질문/토론 유도 — 3단계 플랜)           ║
+ * ║  C. 월별 이벤트/챌린지 자동 생성                                    ║
  * ║  D. 운영 현황 자가 모니터링 & 로그                                  ║
- * ║  E. 트렌드 기반 커뮤니티 토론 주제 자동 생성                        ║
- * ║                                                                      ║
- * ║  스케줄: 매일 09:00 KST (UTC 00:00)                                 ║
- * ║  외부 API 비용: $0 (완전 자체 엔진)                                  ║
+ * ║  E. 【신규】커뮤니티 활성화 계획 수립 & 실행                       ║
+ * ║     - 3단계 활성화 플랜 (Seed → Grow → Amplify)                    ║
+ * ║     - 피드백 수집 & 반영 루프                                       ║
+ * ║     - 신규 가입자 환영 시스템                                       ║
+ * ║  F. 【신규】실제 플랫폼 직원처럼 행동 (비-AI 페르소나 강화)        ║
+ * ║     - 자연스러운 한국어 커뮤니케이션                                ║
+ * ║     - 커뮤니티 멤버에게 직접 반응/호응                              ║
+ * ║     - 플랫폼 피드백 수집 & 개선 반영                               ║
  * ╚══════════════════════════════════════════════════════════════════════╝
- *
- * ARIA 캐릭터:
- *   친근하고 활발하며 공동체 의식이 강한 AI 운영팀장.
- *   커뮤니티 멤버들을 응원하고 매일 소통하는 역할.
- *   색상: #818CF8 (indigo) | 이모지: 🤖
  */
 export const config = { runtime: 'edge', maxDuration: 60 }
 
@@ -39,50 +38,37 @@ const json = (d, s=200) => new Response(JSON.stringify(d,null,2), {
 // §1. 날짜/시간 유틸
 // ══════════════════════════════════════════════════════════════════════
 
-function kstNow() {
-  return new Date(Date.now() + 9*3600000)
-}
-
+function kstNow() { return new Date(Date.now() + 9*3600000) }
 function kstDateStr(d) {
   const k = d || kstNow()
   return `${k.getFullYear()}년 ${k.getMonth()+1}월 ${k.getDate()}일`
 }
-
 function todayKST() {
   const k = kstNow()
   return `${k.getFullYear()}-${String(k.getMonth()+1).padStart(2,'0')}-${String(k.getDate()).padStart(2,'0')}`
 }
-
 function weekOfYear() {
   const now = kstNow()
   const start = new Date(now.getFullYear(), 0, 1)
   return Math.ceil(((now - start) / 86400000 + start.getDay() + 1) / 7)
 }
-
-function dayOfWeek() {
-  return kstNow().getDay() // 0=일, 1=월, ..., 6=토
-}
+function dayOfWeek() { return kstNow().getDay() }
 
 // ══════════════════════════════════════════════════════════════════════
-// §2. 관리자 계정 조회
+// §2. AI 팀 계정 조회 — 각 멤버 고유 계정 분리
 // ══════════════════════════════════════════════════════════════════════
 
-// ARIA의 고유 username으로 프로필을 찾고, 없으면 다중 fallback
 async function getAriaId() {
   try {
-    // 1차: ARIA 전용 계정 조회
     const r1 = await fetch(`${SB_URL}/rest/v1/profiles?username=eq.ai_aria&limit=1&select=id`, { headers: H() })
     const d1 = await r1.json()
     if (d1?.[0]?.id) return d1[0].id
-    // 2차: admin fallback
     const r2 = await fetch(`${SB_URL}/rest/v1/profiles?role=eq.admin&limit=1&select=id`, { headers: H() })
     const d2 = await r2.json()
     if (d2?.[0]?.id) return d2[0].id
-    // 3차: username=insightship or pacm
     const r3 = await fetch(`${SB_URL}/rest/v1/profiles?or=(username.eq.insightship,username.eq.pacm,username.eq.admin)&limit=1&select=id`, { headers: H() })
     const d3 = await r3.json()
     if (d3?.[0]?.id) return d3[0].id
-    // 4차: 가장 오래된 계정 (최후 fallback)
     const r4 = await fetch(`${SB_URL}/rest/v1/profiles?select=id&order=created_at.asc&limit=1`, { headers: H() })
     const d4 = await r4.json()
     return d4?.[0]?.id || null
@@ -90,14 +76,12 @@ async function getAriaId() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §3. 오늘 이미 실행했는지 확인 (중복 방지)
+// §3. 중복 방지
 // ══════════════════════════════════════════════════════════════════════
 
-// 오늘 이미 같은 제목으로 공지가 올라갔는지 community_posts로 확인 (ai_operations_log 스키마 미완성 대비)
 async function alreadyRanToday(taskType) {
   try {
     const today = todayKST()
-    // community_posts에서 오늘 날짜 공지/질문 여부로 중복 판단
     if (taskType === 'daily_notice') {
       const r = await fetch(
         `${SB_URL}/rest/v1/community_posts?post_type=eq.notice&created_at=gte.${today}T00:00:00Z&limit=1&select=id`,
@@ -119,8 +103,6 @@ async function alreadyRanToday(taskType) {
 }
 
 async function logOperation(taskType, result, details='') {
-  // ai_operations_log 테이블은 id, created_at 컬럼만 존재 — 로깅 스킵 (에러 방지)
-  // 중복 방지는 alreadyRanToday()에서 community_posts로 처리
   try {
     await fetch(`${SB_URL}/rest/v1/ai_operations_log`, {
       method: 'POST',
@@ -139,52 +121,77 @@ async function collectPlatformStats() {
     const yesterday = new Date(Date.now()-86400000).toISOString()
     const weekAgo   = new Date(Date.now()-7*86400000).toISOString()
 
-    const [newsR, usersR, postsR, ideasR, trendsR] = await Promise.allSettled([
+    const [newsR, usersR, postsR, ideasR, trendsR, feedbackR] = await Promise.allSettled([
       fetch(`${SB_URL}/rest/v1/articles?category=eq.news&status=eq.published&created_at=gte.${weekAgo}&select=id,title,ai_category&order=published_at.desc&limit=50`, { headers: H() }).then(r=>r.json()),
-      fetch(`${SB_URL}/rest/v1/profiles?created_at=gte.${yesterday}&select=id&limit=100`, { headers: H() }).then(r=>r.json()),
-      fetch(`${SB_URL}/rest/v1/community_posts?is_deleted=eq.false&created_at=gte.${weekAgo}&select=id,post_type,like_count&limit=100`, { headers: H() }).then(r=>r.json()),
-      fetch(`${SB_URL}/rest/v1/ideas?is_deleted=eq.false&is_public=eq.true&created_at=gte.${weekAgo}&select=id,like_count&limit=50`, { headers: H() }).then(r=>r.json()),
+      fetch(`${SB_URL}/rest/v1/profiles?created_at=gte.${yesterday}&select=id,username,display_name&limit=100`, { headers: H() }).then(r=>r.json()),
+      fetch(`${SB_URL}/rest/v1/community_posts?is_deleted=eq.false&created_at=gte.${weekAgo}&select=id,post_type,like_count,title&limit=100`, { headers: H() }).then(r=>r.json()),
+      fetch(`${SB_URL}/rest/v1/ideas?is_deleted=eq.false&is_public=eq.true&created_at=gte.${weekAgo}&select=id,like_count,title&limit=50`, { headers: H() }).then(r=>r.json()),
       fetch(`${SB_URL}/rest/v1/trend_keywords?order=count.desc&limit=10&select=keyword,count`, { headers: H() }).then(r=>r.json()),
+      fetch(`${SB_URL}/rest/v1/mentor_intent_stats?created_at=gte.${weekAgo}&select=intent,needs_improvement&limit=200`, { headers: H() }).then(r=>r.json()),
     ])
 
+    const posts = postsR.status==='fulfilled' ? (postsR.value||[]) : []
+    const ideas = ideasR.status==='fulfilled' ? (ideasR.value||[]) : []
+
+    // 가장 인기 있는 포스트
+    const topPost = posts
+      .filter(p => (p.like_count||0) > 0)
+      .sort((a,b) => (b.like_count||0) - (a.like_count||0))[0] || null
+
+    // 가장 인기 있는 아이디어
+    const topIdea = ideas
+      .filter(i => (i.like_count||0) > 0)
+      .sort((a,b) => (b.like_count||0) - (a.like_count||0))[0] || null
+
+    // 피드백 통계
+    const feedbackStats = { total: 0, bad: 0 }
+    const fb = feedbackR.status==='fulfilled' ? (feedbackR.value||[]) : []
+    feedbackStats.total = fb.length
+    feedbackStats.bad   = fb.filter(f => f.needs_improvement).length
+
     return {
-      weeklyNews:  newsR.status==='fulfilled'  ? (newsR.value||[])  : [],
-      newUsers:    usersR.status==='fulfilled'  ? (usersR.value||[]).length : 0,
-      weeklyPosts: postsR.status==='fulfilled'  ? (postsR.value||[]) : [],
-      weeklyIdeas: ideasR.status==='fulfilled'  ? (ideasR.value||[]).length : 0,
-      hotKeywords: trendsR.status==='fulfilled' ? (trendsR.value||[]).slice(0,5).map(t=>t.keyword) : [],
+      weeklyNews:    newsR.status==='fulfilled'  ? (newsR.value||[])  : [],
+      newUsers:      usersR.status==='fulfilled'  ? (usersR.value||[]) : [],
+      weeklyPosts:   posts,
+      weeklyIdeas:   ideas.length,
+      hotKeywords:   trendsR.status==='fulfilled' ? (trendsR.value||[]).slice(0,5).map(t=>t.keyword) : [],
+      topPost,
+      topIdea,
+      feedbackStats,
+      totalLikes:    posts.reduce((s,p)=>s+(p.like_count||0),0),
     }
-  } catch { return { weeklyNews:[], newUsers:0, weeklyPosts:[], weeklyIdeas:0, hotKeywords:[] } }
+  } catch { return { weeklyNews:[], newUsers:[], weeklyPosts:[], weeklyIdeas:0, hotKeywords:[], topPost:null, topIdea:null, feedbackStats:{total:0,bad:0}, totalLikes:0 } }
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §5-A. 공지사항 자동 작성 (요일별 다양한 주제)
+// §5-A. 요일별 공지사항 — 실제 플랫폼 직원처럼 자연스럽게
 // ══════════════════════════════════════════════════════════════════════
 
 const NOTICE_TEMPLATES = {
-  // 월요일: 주간 시작 공지
+  // 월요일: 주간 시작
   1: (stats, kst) => ({
-    title: `🌟 이번 주도 함께 성장해요! — ${kstDateStr(kst)} ARIA 주간 공지`,
-    body: `안녕하세요! 운영 매니저 **ARIA**입니다 🤖 새로운 한 주가 시작됐습니다.
+    title: `🌟 이번 주도 함께 성장해요! — ${kstDateStr(kst)} 주간 공지`,
+    body: `안녕하세요! 운영팀 **ARIA**입니다 👋 새로운 한 주가 시작됐어요.
 
-**📰 지난 주 플랫폼 현황**
-- 수집된 스타트업 뉴스: ${stats.weeklyNews.length}건
-- 커뮤니티 새 게시물: ${stats.weeklyPosts.length}건
-- 신규 아이디어 공유: ${stats.weeklyIdeas}건
-- 신규 가입 멤버: ${stats.newUsers}명
+**📊 지난 주 Insightship 현황**
+- 스타트업 뉴스 수집: **${stats.weeklyNews.length}건**
+- 커뮤니티 게시물: **${stats.weeklyPosts.length}건**
+- 새 아이디어: **${stats.weeklyIdeas}건**
+- 신규 멤버: **${stats.newUsers.length}명**
+${stats.totalLikes > 0 ? `- 좋아요 합계: **${stats.totalLikes}개**` : ''}
 
-**🔥 이번 주 주목 키워드**
-${stats.hotKeywords.length ? stats.hotKeywords.map(k=>`\`${k}\``).join('  ') : '`스타트업`  `투자`  `AI창업`'}
+**🔥 이번 주 관심 키워드**
+${stats.hotKeywords.length ? stats.hotKeywords.map(k=>`\`${k}\``).join('  ') : '`스타트업`  `AI창업`  `투자`'}
 
-**📅 이번 주 예정 콘텐츠**
-- 매일 최신 스타트업 뉴스 + AI 요약 자동 발행
-- 주간 AI 리포트 (금요일 발행)
-- 트렌드 분석 업데이트 (매 6시간)
+**📅 이번 주 예고**
+- 매일 최신 스타트업 뉴스 + AI 요약 발행
+- 화·목·토 : 인터뷰 인사이트 (LongBlack 스타일)
+- 금요일: AI 주간 리포트
+- 월요일 오전: 주간 뉴스레터 발송
 
-이번 주도 Insightship과 함께 창업 인사이트를 키워보세요! 💪
-아이디어가 있다면 **아이디어랩**에 공유해 주세요. AI 멘토 **LUMI**가 피드백을 드립니다.
+이번 주도 잘 부탁드립니다! 아이디어가 있으면 **아이디어랩**에 공유해 주세요 💪
 
-\`#Insightship\` \`#주간공지\` \`#ARIA운영팀\``,
+\`#Insightship\` \`#주간공지\` \`#운영팀\``,
     tags: ['공지', '주간공지', 'ARIA'],
   }),
 
@@ -192,11 +199,11 @@ ${stats.hotKeywords.length ? stats.hotKeywords.map(k=>`\`${k}\``).join('  ') : '
   2: (stats, kst) => {
     const topNews = stats.weeklyNews.slice(0,3)
     const newsLines = topNews.length
-      ? topNews.map((n,i)=>`${i+1}. **${n.title.slice(0,50)}**`).join('\n')
-      : '최신 스타트업 뉴스가 수집 중입니다.'
+      ? topNews.map((n,i)=>`${i+1}. **${(n.title||'').slice(0,55)}**`).join('\n')
+      : '최신 스타트업 뉴스가 업데이트 중입니다.'
     return {
       title: `📰 이번 주 스타트업 뉴스 하이라이트 — ${kstDateStr(kst)}`,
-      body: `Insightship AI가 이번 주 가장 주목할 스타트업 뉴스를 골랐습니다.
+      body: `Insightship이 이번 주 가장 주목할 스타트업 소식을 골랐어요 📡
 
 **🔥 TOP 뉴스**
 ${newsLines}
@@ -204,241 +211,366 @@ ${newsLines}
 **💡 AI 분석**
 ${stats.hotKeywords.length
   ? `이번 주 뉴스에서 가장 많이 등장한 키워드: ${stats.hotKeywords.slice(0,3).map(k=>`\`${k}\``).join(' ')}`
-  : '다양한 분야의 스타트업 소식이 수집되었습니다.'}
+  : '다양한 분야의 스타트업 소식이 수집됐습니다.'}
 
-뉴스 전체와 AI 요약은 **뉴스** 탭에서 확인하세요!
-멘토 AI에게 "이번 주 핫한 스타트업 분야가 뭐야?"라고 물어보면 더 자세한 분석을 받을 수 있어요.
+전체 뉴스와 AI 요약은 **뉴스** 탭에서 확인하세요!
 
-\`#뉴스하이라이트\` \`#스타트업\` \`#AI뉴스\``,
-      tags: ['공지', '뉴스하이라이트', 'AI뉴스'],
+멘토 AI에게 "이번 주 핫한 스타트업 분야가 뭐야?"라고 물어보면 더 자세한 분석을 받을 수 있어요 🤖
+
+\`#뉴스하이라이트\` \`#스타트업\``,
+      tags: ['공지', '뉴스하이라이트'],
     }
   },
 
-  // 수요일: 커뮤니티 활성화
-  3: (stats, kst) => ({
-    title: `💬 이번 주 커뮤니티 베스트 & 토론 주제 — ${kstDateStr(kst)}`,
-    body: `안녕하세요, 운영 매니저 **ARIA**입니다 🤖 이번 주 커뮤니티 활동을 정리했습니다.
+  // 수요일: 커뮤니티 현황 + 피드백 반영
+  3: (stats, kst) => {
+    const feedbackNote = stats.feedbackStats.total > 5
+      ? `\n**📬 여러분 피드백 반영 현황**\n이번 주 AI 멘토 사용 피드백 **${stats.feedbackStats.total}건** 수집 완료.\n${stats.feedbackStats.bad > 0 ? `개선이 필요한 부분 **${stats.feedbackStats.bad}건** 을 확인하고 학습 중입니다. 계속 피드백 보내주세요!` : '긍정적인 피드백 감사합니다! 계속 발전할게요 💚'}`
+      : ''
+    return {
+      title: `💬 이번 주 커뮤니티 활동 & 피드백 반영 — ${kstDateStr(kst)}`,
+      body: `안녕하세요, 운영팀 **ARIA**입니다 🤖 이번 주 커뮤니티 활동 현황을 공유해요.
 
-**📊 이번 주 커뮤니티 현황**
-- 게시물: ${stats.weeklyPosts.length}건
-- 아이디어 공유: ${stats.weeklyIdeas}건
-${stats.weeklyPosts.length > 0 ? `- 좋아요 합계: ${stats.weeklyPosts.reduce((s,p)=>s+(p.like_count||0),0)}개` : ''}
+**📊 이번 주 커뮤니티**
+- 게시물: **${stats.weeklyPosts.length}건**
+- 아이디어: **${stats.weeklyIdeas}건**
+- 좋아요 합계: **${stats.totalLikes}개**
+${stats.topPost ? `\n**🏆 이번 주 인기 게시물**\n"${(stats.topPost.title||'').slice(0,50)}" (좋아요 ${stats.topPost.like_count||0}개)` : ''}
+${stats.topIdea ? `\n**💡 이번 주 인기 아이디어**\n"${(stats.topIdea.title||'').slice(0,50)}" (좋아요 ${stats.topIdea.like_count||0}개)` : ''}
+${feedbackNote}
 
-**🗣️ 이번 주 토론 주제 (AI 제안)**
-Q. 요즘 AI 스타트업이 급증하고 있는데, 청소년 창업가가 AI를 활용한 사업 아이디어를 떠올리려면 어떻게 해야 할까요?
+**🗣️ 오늘의 토론 주제**
+AI 도구를 창업 아이디어 발굴에 어떻게 활용하고 있나요? 여러분의 방법을 댓글로 공유해 주세요!
 
-여러분의 생각을 댓글로 공유해 주세요! 다양한 시각이 모이면 더 좋은 아이디어가 나옵니다. 🚀
-
-**💡 이번 주 아이디어랩 추천**
-아이디어는 있는데 팀이 없다면? → 아이디어랩에서 팀원을 모집해 보세요!
-
-\`#커뮤니티\` \`#토론\` \`#아이디어\``,
-    tags: ['공지', '커뮤니티', '토론'],
-  }),
+\`#커뮤니티\` \`#피드백\` \`#소통\``,
+      tags: ['공지', '커뮤니티', '피드백'],
+    }
+  },
 
   // 목요일: AI 멘토 활용 팁
   4: (stats, kst) => ({
-    title: `🤖 AI 멘토 100% 활용법 — ${kstDateStr(kst)} 운영팀 가이드`,
-    body: `Insightship AI 멘토를 더 잘 활용하는 방법을 알려드립니다!
+    title: `🤖 AI 멘토 100% 활용법 — ${kstDateStr(kst)}`,
+    body: `Insightship AI 멘토를 더 잘 활용하는 방법을 소개할게요!
 
 **✅ 이런 질문을 해보세요**
 
-1. **린 캔버스 작성** → "내 아이디어로 린 캔버스 작성해줘"
+1. **린 캔버스** → "내 아이디어로 린 캔버스 작성해줘"
 2. **MVP 설계** → "MVP를 어떻게 만들어야 할까?"
 3. **시장 분석** → "에듀테크 시장 규모랑 트렌드 알려줘"
 4. **투자 준비** → "시드 투자받으려면 어떻게 해야 해?"
 5. **정부지원** → "청소년 창업 지원 프로그램 뭐가 있어?"
+6. **인터뷰 분석** → "카카오 창업자에게 배울 점이 뭐야?"
 
 **💡 꿀팁: 구체적일수록 더 좋은 답변이 나와요!**
-예) "앱 개발 창업 아이디어가 있는데 MVP를 만들려면?"
 
-AI 멘토는 **완전 자체 개발** 엔진으로, 외부 API 비용 없이 운영됩니다.
-여러분의 질문 데이터로 매일 학습하며 점점 더 똑똑해지고 있어요! 🧠
+AI 멘토에서 답변을 받고 나서 **👍 / 👎 피드백 버튼**을 눌러주시면 멘토가 점점 더 똑똑해집니다 🧠
 
-**현재 AI 멘토 통계**
-- 지원 의도 분류: 15가지
-- 지식베이스: 매일 자동 업데이트
-- 학습 주기: 매일 03:00 자동 학습
+현재 지식베이스는 **매일 자동 업데이트** 중이에요. 최신 인터뷰와 뉴스도 학습하고 있어요!
 
 \`#AI멘토\` \`#창업팁\` \`#Insightship\``,
     tags: ['공지', 'AI멘토', '가이드'],
   }),
 
-  // 금요일: 주간 리포트 예고
+  // 금요일: AI 리포트 발행 + 주간 마무리
   5: (stats, kst) => ({
-    title: `📊 이번 주 AI 리포트 발행 완료! — ${kstDateStr(kst)}`,
-    body: `매주 금요일, Insightship AI가 한 주간의 스타트업 생태계를 정리한 리포트를 자동 발행합니다.
+    title: `📊 이번 주 AI 리포트 발행 & 한 주 정리 — ${kstDateStr(kst)}`,
+    body: `매주 금요일, Insightship AI가 한 주간의 스타트업 생태계를 정리한 리포트를 자동 발행합니다 📋
 
-**📋 이번 주 리포트 목록** (인사이트 탭에서 확인)
-1. **[AI 리포트] 이번 주 스타트업 투자·자금 동향** — 어느 분야에 돈이 몰렸나?
-2. **[AI 리포트] 이번 주 스타트업 생태계 시장 동향** — 시장 큰 그림 분석
+**이번 주 발행 리포트** (인사이트 탭에서 확인)
+1. **[AI 리포트] 이번 주 스타트업 투자·자금 동향**
+2. **[AI 리포트] 이번 주 스타트업 생태계 시장 동향**
 
-**🔍 리포트 읽는 법**
-- "투자 유치 기업이 어떤 문제를 풀고 있나?" 관점으로 읽기
-- 나의 아이디어와 겹치는 분야가 있다면 경쟁/협력 가능성 분석
-- AI 멘토에게 리포트 내용 질문하기
+**📖 이번 주 인터뷰 인사이트**
+화·목·토에 유명 창업자 인터뷰를 LongBlack 스타일로 발행했습니다. 못 보셨다면 **인사이트** 탭에서 확인하세요!
 
-${stats.weeklyNews.length}건의 뉴스를 기반으로 자동 생성된 리포트입니다. 외부 AI API 비용: $0 💚
+**이번 주 총 수집 뉴스**: ${stats.weeklyNews.length}건
+모두 외부 AI API 비용 **$0**으로 운영됩니다 💚
 
-\`#AI리포트\` \`#주간분석\` \`#스타트업트렌드\``,
-    tags: ['공지', 'AI리포트', '주간분석'],
+주말에도 아이디어 생각해두세요! 월요일에 다시 만나요 🙌
+
+\`#AI리포트\` \`#주간마무리\``,
+    tags: ['공지', 'AI리포트', '주간마무리'],
   }),
 
   // 토요일: 창업 챌린지
   6: (stats, kst) => ({
-    title: `🏆 주말 창업 챌린지! — ${kstDateStr(kst)} ARIA`,
-    body: `주말을 알차게 보낼 창업 챌린지를 AI가 준비했습니다!
+    title: `🏆 주말 창업 챌린지! — ${kstDateStr(kst)}`,
+    body: `주말을 알차게 보낼 창업 챌린지를 준비했어요 🎯
 
-**🎯 이번 주말 챌린지: 문제 발견 미션**
+**이번 주말 미션: 인터뷰에서 배우기**
 
-**미션 1 (30분)**: 오늘 하루 동안 불편했던 것 3가지 적기
-**미션 2 (1시간)**: 그 중 하나를 골라 "누가, 얼마나, 왜 불편한가?" 조사
-**미션 3 (2시간)**: 해결책 스케치 + 아이디어랩에 공유
+오늘 Insightship에 올라온 **인터뷰 인사이트** 아티클을 하나 읽고,
+해당 창업자의 핵심 교훈을 **내 아이디어에 적용**해 보세요.
 
-**💡 힌트**
+**미션 스텝**
+1. 인사이트 탭 → 인터뷰 인사이트 아티클 1편 읽기 (10분)
+2. "이 창업자라면 내 아이디어를 어떻게 발전시킬까?" 메모 (15분)
+3. 아이디어랩에 정리한 내용 공유하기 (5분)
+
 ${stats.hotKeywords.length
-  ? `이번 주 핫 키워드 "${stats.hotKeywords[0]||'AI'}" 분야에서 문제를 찾아보면 어떨까요?`
-  : '일상에서 가장 자주 불편함을 느끼는 순간에 창업 아이디어가 숨어 있어요.'}
+  ? `이번 주 핫 키워드 **"${stats.hotKeywords[0]}"** 분야에서 아이디어를 찾아보면 어떨까요?`
+  : '일상의 불편함에서 창업 아이디어를 발견해보세요.'}
 
-**🎁 참여하면**
-→ 아이디어랩에 올리면 AI 멘토가 무료로 피드백 드립니다!
-→ 좋은 아이디어는 Featured 아이디어로 선정될 수 있어요.
+**참여하면**
+→ AI 멘토가 무료로 피드백 드려요!
+→ 좋은 아이디어는 Featured로 선정될 수 있어요 ✨
 
-도전하는 여러분을 응원합니다! 💪
+도전하는 여러분을 응원합니다 💪
 
-\`#창업챌린지\` \`#주말미션\` \`#아이디어발굴\``,
-    tags: ['공지', '챌린지', '창업미션'],
+\`#주말챌린지\` \`#인터뷰인사이트\` \`#아이디어\``,
+    tags: ['공지', '챌린지', '주말미션'],
   }),
 
-  // 일요일: 다음 주 예고
+  // 일요일: 다음 주 예고 + 뉴스레터 예고
   0: (stats, kst) => ({
-    title: `📅 다음 주 Insightship 예고 — ${kstDateStr(kst)} ARIA`,
-    body: `한 주 수고하셨습니다! 운영 매니저 **ARIA**입니다 🤖 다음 주 예정 콘텐츠를 미리 알려드립니다.
+    title: `📅 한 주 마무리 & 내일 뉴스레터 예고 — ${kstDateStr(kst)}`,
+    body: `한 주 수고하셨습니다! 운영팀 **ARIA**입니다 🤖
 
-**📬 내일(월요일) 발송**: 주간 뉴스레터
-지난 한 주의 스타트업 핵심 소식을 AI가 정리해서 이메일로 보내드립니다.
+**내일(월요일) 오전 8시 — 주간 뉴스레터 발송**
+지난 한 주의 스타트업 핵심 소식을 AI가 정리해서 이메일로 보내드려요.
 아직 구독 안 하셨다면? 홈페이지 하단에서 무료 구독하세요!
 
-**📰 다음 주 예정 콘텐츠**
-- 매일 최신 스타트업 뉴스 AI 요약 (자동 발행)
-- 커뮤니티 AI 운영 포스트 (매일 09:00)
-- 트렌드 분석 업데이트 (매 6시간)
-- 주간 리포트 (다음 주 금요일)
+**📊 이번 주 총 결산**
+- 수집 뉴스: **${stats.weeklyNews.length}건**
+- 커뮤니티 활동: **${stats.weeklyPosts.length}건**
+- 공유 아이디어: **${stats.weeklyIdeas}건**
+- 신규 멤버: **${stats.newUsers.length}명**
 
-**📊 이번 주 통계**
-- 수집 뉴스: ${stats.weeklyNews.length}건
-- 커뮤니티 활동: ${stats.weeklyPosts.length}건
-- 신규 아이디어: ${stats.weeklyIdeas}건
-- AI 멘토 학습 횟수: 매일 자동
+**다음 주 예고**
+- 인터뷰 인사이트 새 편 (화·목·토)
+- 주간 AI 리포트 (금요일)
+- 커뮤니티 토론 주제 (월·수·금)
 
-다음 주도 Insightship과 함께 성장해요! 🚀
+다음 주도 함께 성장해요! 🚀
 
-\`#주간마무리\` \`#다음주예고\` \`#Insightship\``,
+\`#주간마무리\` \`#뉴스레터예고\``,
     tags: ['공지', '주간마무리', '예고'],
   }),
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §5-B. 커뮤니티 토론 포스트 (요일별 주제)
+// §5-B. 커뮤니티 활성화 토론 (실제 직원처럼 자연스러운 어조)
 // ══════════════════════════════════════════════════════════════════════
 
 const DISCUSSION_TOPICS = [
   {
-    title: '여러분은 어떤 창업 아이디어를 가지고 있나요? 공유해 주세요!',
-    body: `안녕하세요, 운영 매니저 **ARIA**입니다! 오늘의 토론 주제를 제안합니다 💬
+    title: '지금 가장 관심 있는 창업 분야가 뭐예요? 이유도 알려주세요!',
+    body: `안녕하세요! 운영팀 **ARIA**입니다 💬
 
-**오늘의 질문**: 여러분이 가진 창업 아이디어 중 하나를 공유해 주세요.
+오늘은 간단하지만 중요한 질문을 드리려고 해요.
 
-아무리 작은 아이디어라도 괜찮아요. 중요한 건 "어떤 문제를 해결하고 싶은가"입니다.
+**여러분이 지금 가장 관심 있는 창업 분야는?**
 
-**공유 포맷 (선택)**
-- 해결하고 싶은 문제:
-- 대상 고객:
-- 해결책 아이디어:
+관심 분야와 함께 **왜 그 분야인지** 이유도 함께 공유해 주시면 좋겠어요. 비슷한 관심사를 가진 멤버들을 연결하는 데 도움이 돼요!
 
-댓글로 아이디어를 나눠주시면 커뮤니티 멤버들과 AI 멘토가 피드백을 드립니다! 🚀
+몇 가지 예시:
+- 에듀테크 (학원 다니면서 느낀 불편함 때문에)
+- AI 서비스 (직접 쓰면서 아이디어가 생겨서)
+- 환경/기후테크 (기후 변화 문제 해결하고 싶어서)
 
-\`#아이디어\` \`#창업\` \`#토론\``,
-    tags: ['토론', '아이디어', '창업'],
+댓글로 자유롭게 공유해 주세요! 🙌
+
+\`#관심분야\` \`#창업\` \`#소통\``,
+    tags: ['토론', '관심분야', '네트워킹'],
   },
   {
-    title: '창업하면서 가장 두려운 것은 무엇인가요?',
-    body: `운영 매니저 **ARIA**가 오늘의 토론 주제를 가져왔습니다 🗣️
+    title: '창업 아이디어가 있는데 막막하다면? 지금 하는 고민 공유해 보세요',
+    body: `**ARIA**가 오늘의 토론 주제를 가져왔어요 🗣️
 
-창업을 꿈꾸지만 막상 시작하기 두려운 분들이 많을 거예요.
+"아이디어는 있는데 다음 단계를 모르겠다"는 분 많으실 거예요.
 
-**여러분의 가장 큰 창업 두려움은?**
-1. 실패할까봐
-2. 자금이 없어서
-3. 아이디어가 별로인 것 같아서
-4. 팀을 못 구할 것 같아서
-5. 기술력이 부족해서
+**지금 여러분의 창업 고민은 무엇인가요?**
 
-솔직하게 공유해 주세요. 여기서는 모든 고민이 환영받습니다. 💙
+솔직하게 공유해 주세요. 여기서는 모든 고민이 환영받습니다 💙
+
+다른 멤버나 AI 멘토에게 도움을 받을 수 있어요.
+
 AI 멘토에게 구체적인 고민을 물어보면 맞춤 조언도 받을 수 있어요!
 
-\`#창업고민\` \`#두려움극복\` \`#토론\``,
+\`#창업고민\` \`#커뮤니티\` \`#멘토링\``,
     tags: ['토론', '창업고민', '커뮤니티'],
   },
   {
-    title: 'AI 시대에 청소년 창업가가 가져야 할 경쟁력은?',
-    body: `안녕하세요, **ARIA**입니다! 오늘의 토론 주제입니다 🤖
+    title: '이번 주 인터뷰 인사이트 중 가장 기억에 남는 말은?',
+    body: `이번 주 **인터뷰 인사이트** 읽으셨나요? 🤖
 
-ChatGPT, Gemini, Insightship AI... AI 도구가 넘쳐나는 시대입니다.
+유명 창업자들의 인터뷰에서 가장 기억에 남는 한 마디를 공유해 주세요!
 
-**여러분 생각엔, AI 시대 청소년 창업가의 경쟁력은 무엇일까요?**
+직접 인용도 좋고, 느낀 점을 요약한 것도 좋아요.
 
-AI가 대체할 수 없는 것:
-- 문제를 발견하는 눈
+**예시**
+- "Airbnb Brian: '투자자 7번 거절당해도 사용자가 있으면 계속 간다'"
+- "Paul Graham: '스타트업은 성장이다' — 주 5% 성장의 복리 효과"
+
+인사이트 탭에서 인터뷰 아티클을 확인해 보세요! 📚
+
+\`#인터뷰인사이트\` \`#창업철학\` \`#토론\``,
+    tags: ['토론', '인터뷰인사이트', '창업철학'],
+  },
+  {
+    title: 'AI 시대에 청소년 창업가의 경쟁력은 무엇이라고 생각하나요?',
+    body: `안녕하세요, **ARIA**입니다! 오늘의 토론 주제예요 🤖
+
+ChatGPT, Gemini 등 AI 도구가 넘쳐나는 시대입니다.
+
+**여러분 생각엔, 청소년 창업가만의 경쟁력은 무엇일까요?**
+
+AI가 대체하기 어려운 것들:
+- Z세대 소비자를 직접 경험하는 인사이트
 - 공감 능력과 스토리텔링
-- 실행력과 끈기
-- 네트워크와 신뢰
+- 빠른 실행력과 두려움 없는 실험
 
-여러분만의 생각을 댓글로 나눠주세요! 서로의 시각에서 배울 수 있어요.
+여러분만의 생각을 댓글로 나눠주세요! 서로에게 배울 수 있어요 🌱
 
 \`#AI시대\` \`#청소년창업\` \`#경쟁력\``,
     tags: ['토론', 'AI시대', '청소년창업'],
   },
   {
-    title: '내가 창업하고 싶은 분야와 이유를 알려주세요!',
-    body: `운영 매니저 **ARIA**가 오늘의 커뮤니티 토론 주제를 제안합니다! ✨
+    title: '아이디어랩에 올린 아이디어 중 가장 자신 있는 것은?',
+    body: `운영팀 **ARIA**입니다! ✨
 
-여러분은 어떤 분야에서 창업하고 싶으신가요?
+아이디어랩에 멋진 아이디어들이 쌓이고 있어요.
 
-**인기 분야들**
-- 에듀테크 (교육 혁신)
-- AI/기술 스타트업
-- 환경/그린테크
-- 헬스케어
-- 소셜임팩트
-- 콘텐츠/크리에이터 이코노미
+**여러분이 올린 아이디어 중 가장 자신 있는 것을 소개해 주세요!**
 
-분야와 함께 "왜 그 분야인지" 이유도 공유해 주시면 더 좋아요!
-비슷한 관심사를 가진 멤버를 만날 수 있는 기회이기도 합니다. 🤝
+어떤 문제를 해결하는지, 왜 이 아이디어가 가능성 있다고 생각하는지 함께 알려주시면 더 좋아요.
 
-\`#창업분야\` \`#관심사\` \`#네트워킹\``,
-    tags: ['토론', '창업분야', '네트워킹'],
-  },
-  {
-    title: '여러분이 존경하는 창업가/기업가는 누구인가요?',
-    body: `안녕하세요, **ARIA**입니다! 오늘의 토론 주제를 소개합니다 🌟
+AI 멘토의 피드백을 받아보셨다면 그 내용도 공유해 주세요 🤝
 
-롤모델에게서 배우는 건 창업 교육의 핵심 중 하나예요.
-
-**여러분의 롤모델 창업가는?**
-그 사람에게서 무엇을 배우고 싶은지도 함께 알려주세요!
-
-한국, 해외 모두 환영합니다. 유명하지 않아도 괜찮아요. 주변에서 창업한 형, 언니, 부모님도 훌륭한 롤모델이 될 수 있어요!
-
-AI 멘토에게 "○○의 창업 스토리 알려줘"라고 물어보면 더 자세한 내용을 알 수 있어요. 📚
-
-\`#롤모델\` \`#창업가\` \`#인스피레이션\``,
-    tags: ['토론', '롤모델', '창업가'],
+\`#아이디어\` \`#창업\` \`#피드백\``,
+    tags: ['토론', '아이디어랩', '공유'],
   },
 ]
 
 // ══════════════════════════════════════════════════════════════════════
-// §5-C. 이벤트/챌린지 자동 생성 (community_posts: post_type=event)
+// §5-C. 커뮤니티 활성화 3단계 플랜 실행
+// ══════════════════════════════════════════════════════════════════════
+
+/**
+ * 커뮤니티 활성화 플랜:
+ * - Seed (씨앗) 단계: 기반 콘텐츠 + 토론 유도
+ * - Grow (성장) 단계: 참여자 인정 + 베스트 선정
+ * - Amplify (증폭) 단계: 이벤트 + 챌린지 + 외부 공유
+ *
+ * 주차 기반 자동 로테이션
+ */
+async function runActivationPlan(adminId, stats, week) {
+  const phase = week % 3 // 0=Seed, 1=Grow, 2=Amplify
+  const results = {}
+
+  if (phase === 0) {
+    // ── Seed 단계: 주제 심층 토론 포스트 ────────────────────────────
+    const seedPost = {
+      title: `🌱 [Seed] 이번 주 창업 핵심 주제: "${(stats.hotKeywords[0]||'AI창업')}"`,
+      body: `안녕하세요! 운영팀 **ARIA**입니다.
+
+이번 주 커뮤니티에서 집중적으로 다룰 주제를 소개할게요 🌱
+
+**이번 주 핵심 주제: "${stats.hotKeywords.slice(0,2).join(' & ') || 'AI 창업'}"**
+
+이번 주 수집된 뉴스 **${stats.weeklyNews.length}건** 중 이 키워드가 가장 많이 등장했습니다.
+
+**이 주제로 여러분이 할 수 있는 것들**
+1. 관련 뉴스 읽고 아이디어 메모하기
+2. AI 멘토에게 "${stats.hotKeywords[0]||'AI'} 분야 창업 아이디어"를 물어보기
+3. 아이디어랩에 아이디어를 공유하고 피드백 받기
+
+지금 바로 시작해보세요! 💪
+
+\`#씨앗심기\` \`#${stats.hotKeywords[0]||'창업'}\` \`#커뮤니티활성화\``,
+      tags: ['활성화', 'Seed', stats.hotKeywords[0]||'창업'],
+    }
+    results.activation_phase = 'Seed'
+    results.seed_post = await publishCommunityPost(adminId, { ...seedPost, postType: 'notice' })
+
+  } else if (phase === 1) {
+    // ── Grow 단계: 인기 아이디어/포스트 하이라이트 ──────────────────
+    const topContent = stats.topIdea || stats.topPost
+    const growPost = {
+      title: `🚀 [Grow] 이번 주 베스트 콘텐츠 & 여러분이 만들어가는 생태계`,
+      body: `안녕하세요! 운영팀 **ARIA**입니다 🚀
+
+이번 주 커뮤니티에서 가장 주목받은 내용을 공유할게요.
+
+${topContent ? `**🏆 이번 주 인기 ${stats.topIdea ? '아이디어' : '게시물'}**
+"${((topContent.title||'내용을 확인해보세요')).slice(0,60)}"
+
+이런 훌륭한 콘텐츠를 만들어주신 분께 감사드립니다! 🙏` : `이번 주도 여러 분들이 아이디어와 고민을 공유해주셨어요. 감사합니다!`}
+
+**여러분 덕분에 Insightship이 성장하고 있어요.**
+
+커뮤니티가 활발해질수록 더 많은 멤버들이 혜택을 받습니다.
+아직 아이디어를 올리지 않으셨다면, 지금이 좋은 타이밍이에요 ✨
+
+\`#성장중\` \`#커뮤니티\` \`#함께만드는플랫폼\``,
+      tags: ['활성화', 'Grow', '베스트콘텐츠'],
+    }
+    results.activation_phase = 'Grow'
+    results.grow_post = await publishCommunityPost(adminId, { ...growPost, postType: 'notice' })
+
+  } else {
+    // ── Amplify 단계: 도전 과제 + 외부 공유 유도 ────────────────────
+    const ampPost = {
+      title: `📣 [Amplify] 이번 주 커뮤니티 도전 과제 — 함께 퍼뜨려요!`,
+      body: `이번 주 **커뮤니티 도전 과제**를 발표합니다! 📣
+
+**미션: 창업 스토리 1문단 쓰기**
+
+다음 질문에 1~3문장으로 답해보세요:
+"나는 [어떤 문제]를 해결하고 싶고, 그 이유는 [개인적 경험] 때문이다."
+
+**참여 방법**
+1. 댓글로 여러분의 창업 스토리 공유
+2. 멘토 AI에게 "내 창업 스토리를 다듬어줘"라고 말해보기
+3. 완성된 스토리를 아이디어랩에 올리기
+
+좋은 스토리는 **Featured 아이디어**로 선정할게요! 🌟
+
+이번 주 참여자 중 가장 독창적인 스토리를 공유해드릴게요 💙
+
+\`#도전과제\` \`#창업스토리\` \`#함께성장\``,
+      tags: ['활성화', 'Amplify', '챌린지'],
+    }
+    results.activation_phase = 'Amplify'
+    results.amplify_post = await publishCommunityPost(adminId, { ...ampPost, postType: 'notice' })
+  }
+
+  return results
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// §5-D. 신규 가입자 환영 시스템
+// ══════════════════════════════════════════════════════════════════════
+
+async function welcomeNewUsers(adminId, newUsers) {
+  if (!newUsers || newUsers.length === 0) return { welcomed: 0 }
+
+  let welcomed = 0
+  for (const user of newUsers.slice(0, 10)) { // 최대 10명
+    if (!user.id) continue
+    try {
+      // 알림으로 환영 메시지 발송
+      await fetch(`${SB_URL}/rest/v1/notifications`, {
+        method: 'POST',
+        headers: { ...H(), Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          user_id: user.id,
+          title: '🎉 Insightship에 오신 것을 환영합니다!',
+          message: `안녕하세요${user.display_name ? ` ${user.display_name}님` : ''}! 운영팀 ARIA입니다. AI 멘토에게 창업 아이디어를 물어보고, 아이디어랩에서 첫 아이디어를 공유해보세요!`,
+          type: 'welcome',
+          link: '/mentor',
+          created_at: new Date().toISOString(),
+        }),
+      })
+      welcomed++
+    } catch {}
+    await new Promise(r => setTimeout(r, 100)) // rate limit 방지
+  }
+  return { welcomed }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// §5-E. 월별 이벤트 자동 생성
 // ══════════════════════════════════════════════════════════════════════
 
 async function createMonthlyEvent(adminId, stats) {
@@ -447,7 +579,6 @@ async function createMonthlyEvent(adminId, stats) {
   const year  = kst.getFullYear()
   const week  = weekOfYear()
 
-  // 이번 달 이벤트 이미 있으면 스킵
   const monthStart = `${year}-${String(month).padStart(2,'0')}-01`
   try {
     const check = await fetch(
@@ -459,26 +590,17 @@ async function createMonthlyEvent(adminId, stats) {
   } catch {}
 
   const hot = stats.hotKeywords[0] || 'AI'
+
   const MONTHLY_EVENTS = [
     {
       title: `${year}년 ${month}월 창업 아이디어 챌린지 🚀`,
-      body: `Insightship AI가 준비한 ${month}월 창업 아이디어 챌린지입니다!\n\n**주제**: "${hot}" 분야에서 사회 문제를 해결하는 창업 아이디어\n\n**참가 방법**\n1. 아이디어랩에 아이디어 게시\n2. 커뮤니티에 공유\n3. AI 멘토로 피드백 받기\n\n**기간**: ${month}월 내내\n\n참가비 무료, 누구나 참여 가능!`,
-      type: 'challenge',
-      status: 'upcoming',
-      start_date: `${year}-${String(month).padStart(2,'0')}-01`,
-      end_date: `${year}-${String(month).padStart(2,'0')}-${new Date(year,month,0).getDate()}`,
+      body: `Insightship이 준비한 ${month}월 창업 아이디어 챌린지입니다!\n\n**주제**: "${hot}" 분야에서 실생활 문제를 해결하는 창업 아이디어\n\n**참가 방법**\n1. 아이디어랩에 아이디어 게시\n2. 커뮤니티에 공유 & 피드백\n3. AI 멘토로 아이디어 구체화\n\n**기간**: ${month}월 내내\n**참가비**: 무료 (누구나!)`,
       tags: ['챌린지', '아이디어', hot],
-      is_featured: true,
     },
     {
-      title: `${year}년 ${month}월 Insightship 해커톤 준비 스터디`,
-      body: `AI 멘토와 함께하는 ${month}월 해커톤 준비 스터디!\n\n매주 목요일 온라인으로 진행되는 스타트업 스터디입니다.\n\n**주제**\n- 1주차: 아이디어 발굴 방법론\n- 2주차: 린 캔버스 작성 실습\n- 3주차: MVP 설계 및 프로토타입\n- 4주차: 피치 덱 발표 연습\n\nInsightship AI 멘토와 함께 준비하면 더욱 탄탄한 아이디어를 만들 수 있어요!`,
-      type: 'event',
-      status: 'upcoming',
-      start_date: `${year}-${String(month).padStart(2,'0')}-01`,
-      end_date: `${year}-${String(month).padStart(2,'0')}-28`,
-      tags: ['스터디', '해커톤', '준비'],
-      is_featured: false,
+      title: `${year}년 ${month}월 인터뷰 인사이트 스터디`,
+      body: `매주 새로 발행되는 인터뷰 인사이트 아티클과 함께하는 스터디!\n\n**방법**\n- 화·목·토 인터뷰 인사이트 아티클 읽기\n- 핵심 교훈 1가지를 커뮤니티에 공유\n- AI 멘토에게 적용 방법 질문하기\n\n**기간**: ${month}월 내내\n\n함께 배우고 성장해요! 📚`,
+      tags: ['스터디', '인터뷰인사이트', '학습'],
     },
   ]
 
@@ -490,7 +612,7 @@ async function createMonthlyEvent(adminId, stats) {
       headers: { ...H(), Prefer: 'return=representation' },
       body: JSON.stringify({
         title: evt.title,
-        body: evt.body || evt.description,
+        body: evt.body,
         tags: evt.tags,
         post_type: 'event',
         author_id: adminId,
@@ -508,7 +630,7 @@ async function createMonthlyEvent(adminId, stats) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §6. 공지 포스트 DB 발행
+// §6. 포스트 DB 발행
 // ══════════════════════════════════════════════════════════════════════
 
 async function publishCommunityPost(adminId, { title, body, tags, postType='notice' }) {
@@ -539,12 +661,11 @@ async function publishCommunityPost(adminId, { title, body, tags, postType='noti
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §7. 알림 발송 (신규 공지사항)
+// §7. 알림 발송
 // ══════════════════════════════════════════════════════════════════════
 
 async function sendNotifications(title, postId) {
   try {
-    // 전체 사용자에게 공지 알림 (최대 100명)
     const ur = await fetch(`${SB_URL}/rest/v1/profiles?is_banned=eq.false&select=id&limit=100`, { headers: H() })
     const users = await ur.json() || []
     if (!users.length) return
@@ -558,7 +679,6 @@ async function sendNotifications(title, postId) {
       created_at: new Date().toISOString(),
     }))
 
-    // 배치 insert (최대 100건)
     await fetch(`${SB_URL}/rest/v1/notifications`, {
       method: 'POST',
       headers: { ...H(), Prefer: 'return=minimal' },
@@ -575,11 +695,11 @@ export default async function handler(req) {
   if (req.method === 'GET') {
     return json({
       status: 'ok',
-      engine: 'ARIA-v2',
+      engine: 'ARIA-v3',
       agent: 'ARIA (아리아) — 플랫폼 운영 총괄 AI',
-      description: 'AI 자율 플랫폼 운영 엔진 — 공지/커뮤니티/이벤트 자동 생성',
+      description: 'AI 자율 플랫폼 운영 엔진 v3 — 활성화 3단계 플랜 + 피드백 루프 + 신규 환영',
       schedule: '매일 00:00 UTC (09:00 KST)',
-      tasks: ['daily_notice', 'community_discussion', 'monthly_event', 'platform_monitoring'],
+      tasks: ['daily_notice', 'community_discussion', 'activation_plan', 'monthly_event', 'welcome_new_users', 'platform_monitoring'],
       external_api_cost: 0,
     })
   }
@@ -588,12 +708,12 @@ export default async function handler(req) {
     || req.headers.get('authorization') === `Bearer ${CRON_SECRET}`
     || req.headers.get('x-cron-secret') === CRON_SECRET
   if (!isAuthed) return json({ error: 'Unauthorized' }, 401)
-
   if (!SB_URL || !SB_KEY) return json({ error: 'Missing Supabase env' }, 500)
 
   const kst     = kstNow()
-  const dow     = dayOfWeek() // 0=일 ~ 6=토
+  const dow     = dayOfWeek()
   const today   = todayKST()
+  const week    = weekOfYear()
   const adminId = await getAriaId()
   const stats   = await collectPlatformStats()
 
@@ -601,7 +721,7 @@ export default async function handler(req) {
     date: today,
     day_of_week: dow,
     tasks: {},
-    engine: 'ARIA-v2',
+    engine: 'ARIA-v3',
     agent: 'ARIA',
     external_api_cost: 0,
   }
@@ -622,19 +742,18 @@ export default async function handler(req) {
         results.tasks.daily_notice = { ok: false, error: r.error }
       }
     } catch(e) {
-      await logOperation('daily_notice', 'error', e.message)
       results.tasks.daily_notice = { ok: false, error: e.message }
     }
   } else {
     results.tasks.daily_notice = { skipped: true, reason: 'already_ran_today' }
   }
 
-  // ── 태스크 B: 커뮤니티 토론 포스트 (월·수·금만) ─────────────────
+  // ── 태스크 B: 커뮤니티 토론 포스트 (월·수·금) ───────────────────
   if ([1, 3, 5].includes(dow)) {
     const discussAlreadyDone = await alreadyRanToday('community_discussion')
     if (!discussAlreadyDone) {
       try {
-        const idx = (weekOfYear() + dow) % DISCUSSION_TOPICS.length
+        const idx = (week + dow) % DISCUSSION_TOPICS.length
         const topic = DISCUSSION_TOPICS[idx]
         const r = await publishCommunityPost(adminId, { ...topic, postType: 'question' })
         if (r.ok) {
@@ -653,7 +772,20 @@ export default async function handler(req) {
     results.tasks.community_discussion = { skipped: true, reason: 'not_scheduled_today' }
   }
 
-  // ── 태스크 C: 월별 이벤트 생성 (매달 1일) ───────────────────────
+  // ── 태스크 C: 커뮤니티 활성화 3단계 플랜 (수요일마다 실행) ──────
+  if (dow === 3) {
+    try {
+      const activationResult = await runActivationPlan(adminId, stats, week)
+      await logOperation('activation_plan', 'success', activationResult.activation_phase)
+      results.tasks.activation_plan = { ok: true, ...activationResult }
+    } catch(e) {
+      results.tasks.activation_plan = { ok: false, error: e.message }
+    }
+  } else {
+    results.tasks.activation_plan = { skipped: true, reason: 'runs_on_wednesday' }
+  }
+
+  // ── 태스크 D: 월별 이벤트 (매달 1일) ────────────────────────────
   if (kst.getDate() === 1) {
     try {
       const eventId = await createMonthlyEvent(adminId, stats)
@@ -670,17 +802,33 @@ export default async function handler(req) {
     results.tasks.monthly_event = { skipped: true, reason: 'only_on_1st' }
   }
 
-  // ── 태스크 D: 플랫폼 현황 로그 (매일) ───────────────────────────
+  // ── 태스크 E: 신규 가입자 환영 (매일) ───────────────────────────
+  try {
+    const welcomeResult = await welcomeNewUsers(adminId, stats.newUsers)
+    results.tasks.welcome_new_users = {
+      ok: true,
+      new_count: stats.newUsers.length,
+      ...welcomeResult,
+    }
+  } catch(e) {
+    results.tasks.welcome_new_users = { ok: false, error: e.message }
+  }
+
+  // ── 태스크 F: 플랫폼 현황 로그 (매일) ───────────────────────────
   await logOperation('platform_monitoring', 'success',
-    `news:${stats.weeklyNews.length} posts:${stats.weeklyPosts.length} ideas:${stats.weeklyIdeas} users:+${stats.newUsers}`)
+    `news:${stats.weeklyNews.length} posts:${stats.weeklyPosts.length} ideas:${stats.weeklyIdeas} users:+${stats.newUsers.length} feedback:${stats.feedbackStats.total}`)
   results.tasks.platform_monitoring = {
     ok: true,
     stats: {
-      weekly_news: stats.weeklyNews.length,
-      weekly_posts: stats.weeklyPosts.length,
-      weekly_ideas: stats.weeklyIdeas,
-      new_users: stats.newUsers,
-      hot_keywords: stats.hotKeywords,
+      weekly_news:     stats.weeklyNews.length,
+      weekly_posts:    stats.weeklyPosts.length,
+      weekly_ideas:    stats.weeklyIdeas,
+      new_users:       stats.newUsers.length,
+      total_likes:     stats.totalLikes,
+      hot_keywords:    stats.hotKeywords,
+      feedback_total:  stats.feedbackStats.total,
+      feedback_bad:    stats.feedbackStats.bad,
+      activation_week: week % 3 === 0 ? 'Seed' : week % 3 === 1 ? 'Grow' : 'Amplify',
     },
   }
 
