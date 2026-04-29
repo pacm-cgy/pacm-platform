@@ -40,11 +40,30 @@ function parseBold(text) {
 }
 
 // ── LongBlack 스타일 롱폼 렌더러 ──────────────────────────────────────
+// v11~v15 포맷 감지: 헤더 첫 줄이 **제목** 또는 ## 이모지 섹션인지 확인
+function isV13Format(text) {
+  if (!text) return false
+  const firstMeaningful = text.split('\n').map(l => l.trim()).find(l => l.length > 0)
+  // v11~v15 공통: 첫 줄이 **제목** 또는 ## 이모지 섹션
+  return (firstMeaningful?.startsWith('**') && firstMeaningful?.endsWith('**')) ||
+    firstMeaningful?.startsWith('## ') ||
+    text.includes('insightship-longform-v15') ||
+    text.includes('insightship-longform-v14') ||
+    text.includes('insightship-longform-v13') ||
+    text.includes('insightship-longform-v12') ||
+    text.includes('insightship-longform-v11')
+}
+
 function renderLongformSummary(text) {
   if (!text) return null
   const lines = text.split('\n')
   const elements = []
   let i = 0
+  // v13 reprocess 포맷: 첫 번째 **제목** 줄은 이미 기사 제목과 동일하므로 숨김
+  const skipFirstBoldTitle = isV13Format(text) &&
+    lines.map(l => l.trim()).find(l => l.length > 0)?.startsWith('**') &&
+    lines.map(l => l.trim()).find(l => l.length > 0)?.endsWith('**')
+  let firstBoldSkipped = false
 
   while (i < lines.length) {
     const t = lines[i].trim()
@@ -55,7 +74,7 @@ function renderLongformSummary(text) {
     // --- 구분선 → 섹션 스페이서
     if (t === '---') {
       elements.push(
-        <div key={`hr-${i}`} style={{ margin:'40px 0 32px', display:'flex', alignItems:'center', gap:'12px' }}>
+        <div key={`hr-${i}`} style={{ margin:'36px 0 28px', display:'flex', alignItems:'center', gap:'12px' }}>
           <div style={{ flex:1, height:'1px', background:'var(--b1)' }}/>
           <div style={{ width:'4px', height:'4px', background:'var(--t3)', borderRadius:'50%', opacity:0.4 }}/>
           <div style={{ flex:1, height:'1px', background:'var(--b1)' }}/>
@@ -64,15 +83,16 @@ function renderLongformSummary(text) {
       i++; continue
     }
 
-    // ## 섹션 헤더 (이모지 포함)
+    // ## 섹션 헤더 (이모지 포함) — v11~v13 공통
     if (t.startsWith('## ')) {
       const heading = t.slice(3).trim()
       elements.push(
         <div key={`h2-${i}`} style={{
           display:'flex', alignItems:'center', gap:'10px',
-          margin:'0 0 20px',
-          fontFamily:'var(--f-serif)', fontSize:'clamp(16px,3vw,20px)',
+          margin:'0 0 18px',
+          fontFamily:'var(--f-serif)', fontSize:'clamp(15px,2.8vw,19px)',
           fontWeight:700, color:'var(--t1)', lineHeight:1.35,
+          paddingBottom:'8px', borderBottom:'1px solid var(--b1)',
         }}>
           {heading}
         </div>
@@ -99,12 +119,12 @@ function renderLongformSummary(text) {
       i++; continue
     }
 
-    // → 액션 포인트 라인
+    // → 데이터 포인트 라인
     if (t.startsWith('→ ')) {
       elements.push(
         <div key={`arrow-${i}`} style={{
-          display:'flex', gap:'12px', margin:'0 0 16px',
-          padding:'14px 18px',
+          display:'flex', gap:'12px', margin:'0 0 14px',
+          padding:'12px 16px',
           background:'rgba(99,102,241,0.08)',
           border:'1px solid rgba(99,102,241,0.2)',
           borderRadius:'4px',
@@ -116,22 +136,94 @@ function renderLongformSummary(text) {
       i++; continue
     }
 
-    // • 불릿 리스트
+    // • 불릿 (생각해볼 질문 등)
     if (t.startsWith('• ')) {
+      const content = t.slice(2).trim()
+      // **Q.** 패턴 → 질문 카드 스타일
+      const isQuestion = content.startsWith('**Q.**')
       elements.push(
         <div key={`bullet-${i}`} style={{
-          display:'flex', gap:'10px', margin:'0 0 10px', paddingLeft:'4px',
+          display:'flex', gap:'10px', margin:'0 0 12px',
+          paddingLeft: isQuestion ? '0' : '4px',
+          ...(isQuestion ? {
+            padding:'12px 16px',
+            background:'rgba(139,92,246,0.07)',
+            border:'1px solid rgba(139,92,246,0.18)',
+            borderRadius:'6px',
+          } : {}),
         }}>
-          <span style={{ color:'var(--amber, #D4AF37)', flexShrink:0, marginTop:'7px', fontSize:'6px' }}>◆</span>
-          <span style={{ color:'var(--t2)', lineHeight:1.85, fontSize:'14.5px' }}>{parseBold(t.slice(2).trim())}</span>
+          {!isQuestion && <span style={{ color:'var(--amber, #D4AF37)', flexShrink:0, marginTop:'7px', fontSize:'6px' }}>◆</span>}
+          <span style={{ color: isQuestion ? 'var(--t1)' : 'var(--t2)', lineHeight:1.85, fontSize:'14.5px' }}>
+            {parseBold(content)}
+          </span>
         </div>
       )
       i++; continue
     }
 
-    // **볼드 전체 줄** → 서브 헤더 역할
+    // 🏷️ **투자 단계**: … / 🔧 **기술 키워드**: … / 📍 **지역**: … → 메타 칩
+    if (t.startsWith('🏷️') || t.startsWith('🔧') || t.startsWith('📍')) {
+      elements.push(
+        <div key={`meta-chip-${i}`} style={{
+          display:'inline-flex', alignItems:'center', gap:'8px',
+          margin:'0 8px 12px 0',
+          padding:'6px 12px',
+          background:'rgba(99,102,241,0.07)',
+          border:'1px solid rgba(99,102,241,0.18)',
+          borderRadius:'6px',
+          fontSize:'12px', color:'var(--t2)',
+        }}>
+          {parseBold(t)}
+        </div>
+      )
+      i++; continue
+    }
+
+    // 🔢 **핵심 수치**: … → 수치 하이라이트 칩
+    if (t.startsWith('🔢')) {
+      elements.push(
+        <div key={`num-${i}`} style={{
+          display:'inline-flex', alignItems:'center', gap:'8px',
+          margin:'0 0 20px',
+          padding:'8px 14px',
+          background:'rgba(251,191,36,0.1)',
+          border:'1px solid rgba(251,191,36,0.25)',
+          borderRadius:'6px',
+          fontSize:'13px', color:'var(--t1)',
+        }}>
+          {parseBold(t)}
+        </div>
+      )
+      i++; continue
+    }
+
+    // **볼드 전체 줄** 처리
     if (t.startsWith('**') && t.endsWith('**') && t.length > 4 && !t.slice(2,-2).includes('**')) {
       const label = t.slice(2, -2)
+      // v13 reprocess 포맷: 첫 번째 **제목** 줄 → 기사 제목과 중복이므로 숨김
+      if (skipFirstBoldTitle && !firstBoldSkipped) {
+        firstBoldSkipped = true
+        i++; continue
+      }
+      // 이벤트·도메인 분류 줄 (예: "💰 투자 유치 · 투자·금융") → 배지
+      if (/[··]/.test(label) && label.length < 50) {
+        elements.push(
+          <div key={`badge-${i}`} style={{
+            display:'inline-flex', alignItems:'center', gap:'6px',
+            margin:'0 0 20px',
+            padding:'5px 12px',
+            background:'rgba(99,102,241,0.1)',
+            border:'1px solid rgba(99,102,241,0.2)',
+            borderRadius:'20px',
+            fontSize:'12px', color:'#a5b4fc',
+            fontFamily:'var(--f-mono)', letterSpacing:'0.04em',
+          }}>
+            {label}
+          </div>
+        )
+        i++; continue
+      }
+      // 그 외 볼드 전체 줄 → 서브 헤더
       elements.push(
         <div key={`bold-${i}`} style={{
           fontFamily:'var(--f-mono)', fontSize:'10px',
@@ -146,7 +238,7 @@ function renderLongformSummary(text) {
       i++; continue
     }
 
-    // *이탤릭* 메타 태그 (insightship-nlp · ...) → 작게 표시
+    // *이탤릭* — insightship 메타 태그 또는 일반 이탤릭
     if (t.startsWith('*') && t.endsWith('*') && !t.startsWith('**')) {
       const meta = t.slice(1, -1)
       if (meta.includes('insightship') || meta.includes(' · ')) {
@@ -154,14 +246,13 @@ function renderLongformSummary(text) {
           <div key={`meta-${i}`} style={{
             fontFamily:'var(--f-mono)', fontSize:'10px',
             color:'var(--t4, var(--t3))', marginTop:'32px',
-            letterSpacing:'0.08em', opacity:0.5,
+            letterSpacing:'0.08em', opacity:0.45,
           }}>
             {meta}
           </div>
         )
         i++; continue
       }
-      // 일반 이탤릭 → 작은 안내 문구
       elements.push(
         <p key={`italic-${i}`} style={{
           margin:'0 0 16px', lineHeight:1.85,
@@ -187,7 +278,7 @@ function renderLongformSummary(text) {
   return elements
 }
 
-// 하위 호환 alias
+// 하위 호환 alias (v7~v15 모두 동일 렌더러 사용)
 const renderV7Summary = renderLongformSummary
 
 

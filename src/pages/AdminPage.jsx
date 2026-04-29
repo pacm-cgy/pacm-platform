@@ -1400,6 +1400,56 @@ function SystemTab({ stats, onRefresh }) {
   const [dbSetupRunning, setDbSetupRunning] = useState(false)
   const [dbSetupResult, setDbSetupResult] = useState(null)
 
+  // ── 뉴스 재처리 상태 ──────────────────────────────────────────────────
+  const [reprocessStatus, setReprocessStatus] = useState(null)       // GET 현황
+  const [reprocessLoading, setReprocessLoading] = useState(false)    // 현황 로딩
+  const [reprocessRunning, setReprocessRunning] = useState(false)    // 배치 실행 중
+  const [reprocessResult, setReprocessResult] = useState(null)       // 배치 결과
+  const [reprocessOffset, setReprocessOffset] = useState(0)          // 현재 오프셋
+  const [reprocessBatch, setReprocessBatch] = useState(40)           // 배치 크기
+  const [reprocessForce, setReprocessForce] = useState(false)        // 강제 전체
+
+  const loadReprocessStatus = async () => {
+    setReprocessLoading(true)
+    try {
+      const r = await fetch('/api/reprocess-all-news')
+      const d = await r.json()
+      setReprocessStatus(d)
+    } catch (e) {
+      setReprocessStatus({ error: e.message })
+    }
+    setReprocessLoading(false)
+  }
+
+  const runReprocess = async (resetOffset = false) => {
+    setReprocessRunning(true)
+    setReprocessResult(null)
+    const currentOffset = resetOffset ? 0 : reprocessOffset
+    if (resetOffset) setReprocessOffset(0)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const r = await fetch('/api/reprocess-all-news', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token || ''}`,
+        },
+        body: JSON.stringify({ batch: reprocessBatch, offset: currentOffset, force: reprocessForce }),
+      })
+      const d = await r.json()
+      setReprocessResult(d)
+      if (d.next_offset !== undefined) setReprocessOffset(d.next_offset)
+      // 현황 갱신
+      await loadReprocessStatus()
+    } catch (e) {
+      setReprocessResult({ error: e.message })
+    }
+    setReprocessRunning(false)
+  }
+
+  // 컴포넌트 마운트 시 현황 자동 조회
+  const [reprocessAutoLoaded, setReprocessAutoLoaded] = useState(false)
+
   // ── 직원채팅 DB 초기화 ──────────────────────────────────────────────
   const runDbSetup = async () => {
     setDbSetupRunning(true)
@@ -1472,13 +1522,190 @@ function SystemTab({ stats, onRefresh }) {
 
   return (
     <div>
+      {/* ── 뉴스 v15 재처리 패널 ─────────────────────────────────── */}
+      <Panel style={{ marginBottom:20, border:'1px solid rgba(59,130,246,0.3)' }}>
+        <SectionHeader icon={RefreshCw} label="뉴스 AI 롱폼 재처리 (v15)" color="#3B82F6"/>
+        <div style={{ fontSize:12, color:'var(--t3)', marginBottom:12 }}>
+          본문 있으면 BM25 키문장 추출, 없으면 NER 완전 기반 동적 생성 —{' '}
+          <code style={{ color:'#93C5FD', background:'#0f172a', padding:'2px 6px', borderRadius:4 }}>insightship-longform-v15</code>{' '}
+          엔진으로 모든 기사를 재처리합니다. 배치 단위로 실행하세요.
+        </div>
+
+        {/* 현황 조회 */}
+        <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:10, flexWrap:'wrap' }}>
+          <button onClick={async () => { setReprocessAutoLoaded(true); await loadReprocessStatus() }}
+            disabled={reprocessLoading} className="btn btn-ghost btn-sm" style={{ gap:5 }}>
+            {reprocessLoading
+              ? <Loader size={12} style={{ animation:'spin 1s linear infinite' }}/>
+              : <Activity size={12}/>}
+            현황 조회
+          </button>
+          {reprocessStatus && !reprocessStatus.error && (
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+              {[
+                { label:'전체',     value: reprocessStatus.total_articles,  color:'#9ca3af' },
+                { label:'v15완료',  value: reprocessStatus.v15_done,        color:'#22C55E' },
+                { label:'v14완료',  value: reprocessStatus.v14_done,        color:'#a78bfa' },
+                { label:'미처리',   value: reprocessStatus.no_summary,      color:'#F43F5E' },
+                { label:'재처리필요', value: reprocessStatus.needs_reprocess, color:'#3B82F6' },
+              ].map(s => (
+                <span key={s.label} style={{
+                  display:'inline-flex', alignItems:'center', gap:4,
+                  background:'var(--bg2)', border:'1px solid var(--b1)',
+                  borderRadius:4, padding:'3px 8px', fontSize:11,
+                }}>
+                  <span style={{ color: s.color, fontWeight:700 }}>{(s.value ?? '—').toLocaleString()}</span>
+                  <span style={{ color:'var(--t3)' }}>{s.label}</span>
+                </span>
+              ))}
+              <span style={{
+                display:'inline-flex', alignItems:'center', gap:4,
+                background: reprocessStatus.progress_pct >= 100 ? 'rgba(34,197,94,0.1)' : 'rgba(59,130,246,0.1)',
+                border: `1px solid ${reprocessStatus.progress_pct >= 100 ? '#22c55e40' : '#3b82f640'}`,
+                borderRadius:4, padding:'3px 8px', fontSize:11, fontWeight:700,
+                color: reprocessStatus.progress_pct >= 100 ? '#4ade80' : '#60a5fa',
+              }}>
+                {reprocessStatus.progress_pct}% 완료
+              </span>
+            </div>
+          )}
+          {reprocessStatus?.error && (
+            <span style={{ fontSize:11, color:'#f87171' }}>❌ {reprocessStatus.error}</span>
+          )}
+        </div>
+
+        {/* 배치 설정 */}
+        <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:10, flexWrap:'wrap' }}>
+          <label style={{ fontSize:11, color:'var(--t3)', display:'flex', alignItems:'center', gap:5 }}>
+            배치 크기:
+            <select value={reprocessBatch} onChange={e => setReprocessBatch(Number(e.target.value))}
+              style={{ background:'var(--bg2)', border:'1px solid var(--b1)', borderRadius:4,
+                color:'var(--t1)', fontSize:11, padding:'2px 6px' }}>
+              {[20,40,60].map(n => <option key={n} value={n}>{n}건</option>)}
+            </select>
+          </label>
+          <label style={{ fontSize:11, color:'var(--t3)', display:'flex', alignItems:'center', gap:5, cursor:'pointer' }}>
+            <input type="checkbox" checked={reprocessForce}
+              onChange={e => setReprocessForce(e.target.checked)}
+              style={{ cursor:'pointer' }}/>
+            강제 전체 (v15 포함 재처리)
+          </label>
+          <span style={{ fontSize:11, color:'var(--t3)' }}>
+            offset: <code style={{ color:'#93C5FD' }}>{reprocessOffset}</code>
+          </span>
+          <button onClick={() => setReprocessOffset(0)}
+            className="btn btn-ghost btn-sm" style={{ fontSize:10, gap:4, padding:'3px 8px' }}>
+            <RotateCcw size={10}/> offset 초기화
+          </button>
+        </div>
+
+        {/* 실행 버튼 */}
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+          <button onClick={() => runReprocess(false)}
+            disabled={reprocessRunning || reprocessLoading} className="btn btn-primary btn-sm"
+            style={{ gap:5, background:'linear-gradient(135deg,#1d4ed8,#3B82F6)' }}>
+            {reprocessRunning
+              ? <><Loader size={12} style={{ animation:'spin 1s linear infinite' }}/> 재처리 중…</>
+              : <><Play size={12}/> 배치 실행 (offset {reprocessOffset})</>}
+          </button>
+          <button onClick={() => runReprocess(true)}
+            disabled={reprocessRunning || reprocessLoading} className="btn btn-ghost btn-sm"
+            style={{ gap:5, fontSize:11 }}>
+            <RotateCcw size={11}/> 처음부터 재처리
+          </button>
+        </div>
+
+        {/* 실행 결과 */}
+        {reprocessResult && (
+          <div style={{ marginTop:12, padding:10, borderRadius:6,
+            background: reprocessResult.error ? '#3f0f0f40' : '#052e1640',
+            border: `1px solid ${reprocessResult.error ? '#f43f5e30' : '#22c55e30'}` }}>
+            {reprocessResult.error ? (
+              <div style={{ fontSize:12, color:'#f87171' }}>❌ {reprocessResult.error}</div>
+            ) : (
+              <div style={{ fontSize:12 }}>
+                <div style={{ fontWeight:700, color:'#4ade80', marginBottom:6 }}>
+                  ✅ 처리 완료 — {reprocessResult.done}/{reprocessResult.processed}건 성공
+                  {reprocessResult.failed > 0 && <span style={{ color:'#fbbf24', marginLeft:8 }}>⚠ 실패 {reprocessResult.failed}건</span>}
+                </div>
+                <div style={{ display:'flex', gap:12, flexWrap:'wrap', color:'var(--t3)' }}>
+                  <span>남은 기사: <strong style={{ color:'#93c5fd' }}>{(reprocessResult.remaining ?? '—').toLocaleString()}</strong></span>
+                  <span>다음 offset: <code style={{ color:'#93C5FD', fontSize:11 }}>{reprocessResult.next_offset}</code></span>
+                  <span>엔진: <code style={{ color:'#a78bfa', fontSize:11 }}>{reprocessResult.engine}</code></span>
+                </div>
+                {reprocessResult.errors?.length > 0 && (
+                  <details style={{ marginTop:6 }}>
+                    <summary style={{ fontSize:10, color:'var(--t3)', cursor:'pointer' }}>오류 상세</summary>
+                    <pre style={{ fontFamily:'var(--f-mono)', fontSize:10, color:'#f87171',
+                      maxHeight:80, overflowY:'auto', margin:'4px 0 0' }}>
+                      {reprocessResult.errors.join('\n')}
+                    </pre>
+                  </details>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </Panel>
+
       {/* ── 직원채팅 DB 초기화 패널 ─────────────────────────────── */}
       <Panel style={{ marginBottom:20, border: dbSetupResult?.ok === false ? '1px solid #F43F5E40' : '1px solid rgba(99,102,241,0.3)' }}>
         <SectionHeader icon={Database} label="직원채팅 DB 초기화" color="#818CF8"/>
         <div style={{ fontSize:12, color:'var(--t3)', marginBottom:12 }}>
           <code style={{ color:'#93C5FD', background:'#0f172a', padding:'2px 6px', borderRadius:4 }}>staff_chat_messages</code> 테이블이 없으면 직원 채팅이 동작하지 않습니다.
-          아래 버튼으로 자동 생성을 시도하거나, SQL을 직접 실행하세요.
+          자동 생성 실패 시 아래 SQL을 Supabase SQL Editor에서 직접 실행하세요.
         </div>
+
+        {/* SQL 항상 표시 (클릭 한 번으로 복사 가능) */}
+        <details style={{ marginBottom:10 }}>
+          <summary style={{ fontSize:11, color:'#a78bfa', cursor:'pointer', userSelect:'none' }}>
+            📋 테이블 생성 SQL 보기 / 복사
+          </summary>
+          <pre style={{
+            fontFamily:'var(--f-mono)', fontSize:10, color:'#94a3b8',
+            background:'#0a0a14', border:'1px solid #334155', borderRadius:4,
+            padding:'8px 10px', whiteSpace:'pre-wrap', maxHeight:200, overflowY:'auto',
+            userSelect:'all', cursor:'text', margin:'6px 0 0'
+          }}>{`CREATE TABLE IF NOT EXISTS public.staff_chat_messages (
+  id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  room          text        NOT NULL DEFAULT 'general',
+  sender_key    text        NOT NULL,
+  sender_name   text        NOT NULL,
+  sender_emoji  text,
+  sender_color  text,
+  sender_team   text,
+  message       text        NOT NULL CHECK (char_length(message) <= 2000),
+  msg_type      text        NOT NULL DEFAULT 'chat',
+  reply_to      uuid        REFERENCES public.staff_chat_messages(id) ON DELETE SET NULL,
+  is_deleted    boolean     NOT NULL DEFAULT false,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_scm_room_time ON public.staff_chat_messages(room, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_scm_sender ON public.staff_chat_messages(sender_key);
+ALTER TABLE public.staff_chat_messages ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS scm_service_all ON public.staff_chat_messages;
+CREATE POLICY scm_service_all ON public.staff_chat_messages FOR ALL TO service_role USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS scm_admin_all ON public.staff_chat_messages;
+CREATE POLICY scm_admin_all ON public.staff_chat_messages FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);`}</pre>
+          <div style={{ display:'flex', gap:8, marginTop:6 }}>
+            <button
+              onClick={() => {
+                const sql = `CREATE TABLE IF NOT EXISTS public.staff_chat_messages (\n  id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),\n  room          text        NOT NULL DEFAULT 'general',\n  sender_key    text        NOT NULL,\n  sender_name   text        NOT NULL,\n  sender_emoji  text,\n  sender_color  text,\n  sender_team   text,\n  message       text        NOT NULL CHECK (char_length(message) <= 2000),\n  msg_type      text        NOT NULL DEFAULT 'chat',\n  reply_to      uuid        REFERENCES public.staff_chat_messages(id) ON DELETE SET NULL,\n  is_deleted    boolean     NOT NULL DEFAULT false,\n  created_at    timestamptz NOT NULL DEFAULT now()\n);\nCREATE INDEX IF NOT EXISTS idx_scm_room_time ON public.staff_chat_messages(room, created_at DESC);\nCREATE INDEX IF NOT EXISTS idx_scm_sender ON public.staff_chat_messages(sender_key);\nALTER TABLE public.staff_chat_messages ENABLE ROW LEVEL SECURITY;\nDROP POLICY IF EXISTS scm_service_all ON public.staff_chat_messages;\nCREATE POLICY scm_service_all ON public.staff_chat_messages FOR ALL TO service_role USING (true) WITH CHECK (true);\nDROP POLICY IF EXISTS scm_admin_all ON public.staff_chat_messages;\nCREATE POLICY scm_admin_all ON public.staff_chat_messages FOR ALL USING (\n  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')\n);`
+                navigator.clipboard?.writeText(sql).then(()=>alert('복사 완료! Supabase SQL Editor에 붙여넣기하세요.'))
+              }}
+              className="btn btn-ghost btn-sm" style={{ fontSize:10, gap:4 }}>
+              📋 SQL 복사
+            </button>
+            <a href="https://supabase.com/dashboard/project/itcbantrpkjpkfhnriom/sql/new"
+              target="_blank" rel="noopener noreferrer"
+              className="btn btn-ghost btn-sm" style={{ fontSize:10, gap:4 }}>
+              🔗 SQL Editor 열기
+            </a>
+          </div>
+        </details>
+
         <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
           <button onClick={runDbSetup} disabled={dbSetupRunning} className="btn btn-primary btn-sm"
             style={{ gap:5, background:'linear-gradient(135deg,#4F46E5,#818CF8)' }}>
@@ -1486,10 +1713,10 @@ function SystemTab({ stats, onRefresh }) {
               ? <><Loader size={12} style={{ animation:'spin 1s linear infinite' }}/> 초기화 중…</>
               : <><Database size={12}/> 테이블 자동 생성</>}
           </button>
-          <a href="https://supabase.com/dashboard/project/itcbantrpkjpkfhnriom/sql"
+          <a href="https://supabase.com/dashboard/project/itcbantrpkjpkfhnriom/sql/new"
             target="_blank" rel="noopener noreferrer"
             className="btn btn-ghost btn-sm" style={{ gap:5, fontSize:11 }}>
-            <Globe size={11}/> Supabase SQL Editor
+            <Globe size={11}/> SQL Editor 바로가기
           </a>
         </div>
         {dbSetupResult && (
@@ -1499,30 +1726,9 @@ function SystemTab({ stats, onRefresh }) {
             <div style={{ fontSize:12, fontWeight:600, color: dbSetupResult.ok ? '#4ade80' : '#f87171', marginBottom:6 }}>
               {dbSetupResult.message || (dbSetupResult.ok ? '✅ 성공' : '❌ 실패')}
             </div>
-            {!dbSetupResult.ok && dbSetupResult.manual_sql && (
-              <div>
-                <div style={{ fontSize:11, color:'#F59E0B', marginBottom:4, fontWeight:600 }}>
-                  📋 Supabase SQL Editor에서 아래 SQL을 복사하여 실행하세요:
-                </div>
-                <pre style={{
-                  fontFamily:'var(--f-mono)', fontSize:10, color:'#94a3b8',
-                  background:'#0a0a14', border:'1px solid #334155', borderRadius:4,
-                  padding:'8px 10px', whiteSpace:'pre-wrap', maxHeight:200, overflowY:'auto',
-                  userSelect:'all', cursor:'text', margin:0
-                }}>
-                  {dbSetupResult.manual_sql}
-                </pre>
-                <div style={{ display:'flex', gap:8, marginTop:6 }}>
-                  <button
-                    onClick={() => navigator.clipboard?.writeText(dbSetupResult.manual_sql).then(()=>alert('복사됨!'))}
-                    className="btn btn-ghost btn-sm" style={{ fontSize:10, gap:4 }}>
-                    📋 SQL 복사
-                  </button>
-                  <a href={dbSetupResult.supabase_url} target="_blank" rel="noopener noreferrer"
-                    className="btn btn-ghost btn-sm" style={{ fontSize:10, gap:4 }}>
-                    🔗 SQL Editor 열기
-                  </a>
-                </div>
+            {!dbSetupResult.ok && (
+              <div style={{ fontSize:11, color:'#F59E0B', marginTop:4 }}>
+                ⬆ 위 "테이블 생성 SQL 보기"를 열어 SQL을 복사한 뒤 SQL Editor에서 실행하세요.
               </div>
             )}
             {dbSetupResult.stmt_results && (

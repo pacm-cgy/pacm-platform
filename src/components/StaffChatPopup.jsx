@@ -465,33 +465,45 @@ export default function StaffChatPopup() {
               {tableNotReady && !tableSetup && (
                 <div style={{
                   background: 'rgba(244,63,94,0.08)', borderBottom: '1px solid rgba(244,63,94,0.2)',
-                  padding: '8px 14px', fontSize: 10, color: '#F87171',
-                  fontFamily: 'var(--f-mono)', flexShrink: 0,
-                  display: 'flex', flexDirection: 'column', gap: 6,
+                  padding: '10px 14px', fontSize: 11, color: '#F87171',
+                  flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8,
                 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:6, fontWeight:700 }}>
                     <span>⚠️</span>
-                    <span style={{ fontWeight:600 }}>DB 테이블 없음 — 채팅 데이터를 저장할 수 없습니다</span>
+                    <span>staff_chat_messages 테이블 없음</span>
                   </div>
-                  <div style={{ display:'flex', gap:6 }}>
+                  <div style={{ fontSize:10, color:'#fca5a5', lineHeight:1.6 }}>
+                    Supabase에 테이블을 생성해야 채팅이 활성화됩니다.<br/>
+                    <strong>Admin 시스템 탭</strong>에서 SQL을 복사 후 Supabase SQL Editor에서 실행하세요.
+                  </div>
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                     <button
                       onClick={() => { tableInitRef.current = false; ensureTable() }}
                       style={{
                         background:'rgba(244,63,94,0.15)', border:'1px solid rgba(244,63,94,0.3)',
-                        borderRadius:4, color:'#F87171', cursor:'pointer', fontSize:9, padding:'3px 8px',
-                        fontFamily:'var(--f-mono)'
+                        borderRadius:4, color:'#F87171', cursor:'pointer', fontSize:10, padding:'4px 10px',
                       }}
                     >
-                      ⚙️ 재시도
+                      ⚙️ 자동 생성 재시도
                     </button>
-                    <a href="/admin?tab=cron"
+                    <a href="/admin?tab=system"
                       style={{
-                        background:'rgba(96,165,250,0.1)', border:'1px solid rgba(96,165,250,0.2)',
-                        borderRadius:4, color:'#60A5FA', cursor:'pointer', fontSize:9, padding:'3px 8px',
-                        fontFamily:'var(--f-mono)', textDecoration:'none', display:'inline-block'
+                        background:'rgba(129,140,248,0.15)', border:'1px solid rgba(129,140,248,0.3)',
+                        borderRadius:4, color:'#a78bfa', cursor:'pointer', fontSize:10, padding:'4px 10px',
+                        textDecoration:'none', display:'inline-block'
                       }}
                     >
-                      🔧 Admin → 시스템 탭에서 DB 초기화
+                      🔧 Admin 시스템 탭 이동
+                    </a>
+                    <a href="https://supabase.com/dashboard/project/itcbantrpkjpkfhnriom/sql/new"
+                      target="_blank" rel="noopener noreferrer"
+                      style={{
+                        background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.2)',
+                        borderRadius:4, color:'#4ade80', cursor:'pointer', fontSize:10, padding:'4px 10px',
+                        textDecoration:'none', display:'inline-block'
+                      }}
+                    >
+                      🔗 SQL Editor 열기
                     </a>
                   </div>
                 </div>
