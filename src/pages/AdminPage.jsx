@@ -1397,6 +1397,29 @@ function SystemTab({ stats, onRefresh }) {
   const [nlTestEmail, setNlTestEmail] = useState('')
   const [nlSending, setNlSending] = useState(false)
   const [nlResult, setNlResult] = useState('')
+  const [dbSetupRunning, setDbSetupRunning] = useState(false)
+  const [dbSetupResult, setDbSetupResult] = useState(null)
+
+  // ── 직원채팅 DB 초기화 ──────────────────────────────────────────────
+  const runDbSetup = async () => {
+    setDbSetupRunning(true)
+    setDbSetupResult(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const r = await fetch('/api/db-setup-staff', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token || ''}`,
+        },
+      })
+      const d = await r.json()
+      setDbSetupResult(d)
+    } catch (e) {
+      setDbSetupResult({ ok: false, message: '❌ 오류: ' + e.message })
+    }
+    setDbSetupRunning(false)
+  }
 
   const runCron = async (path, label) => {
     setRunningCron(label)
@@ -1449,6 +1472,72 @@ function SystemTab({ stats, onRefresh }) {
 
   return (
     <div>
+      {/* ── 직원채팅 DB 초기화 패널 ─────────────────────────────── */}
+      <Panel style={{ marginBottom:20, border: dbSetupResult?.ok === false ? '1px solid #F43F5E40' : '1px solid rgba(99,102,241,0.3)' }}>
+        <SectionHeader icon={Database} label="직원채팅 DB 초기화" color="#818CF8"/>
+        <div style={{ fontSize:12, color:'var(--t3)', marginBottom:12 }}>
+          <code style={{ color:'#93C5FD', background:'#0f172a', padding:'2px 6px', borderRadius:4 }}>staff_chat_messages</code> 테이블이 없으면 직원 채팅이 동작하지 않습니다.
+          아래 버튼으로 자동 생성을 시도하거나, SQL을 직접 실행하세요.
+        </div>
+        <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+          <button onClick={runDbSetup} disabled={dbSetupRunning} className="btn btn-primary btn-sm"
+            style={{ gap:5, background:'linear-gradient(135deg,#4F46E5,#818CF8)' }}>
+            {dbSetupRunning
+              ? <><Loader size={12} style={{ animation:'spin 1s linear infinite' }}/> 초기화 중…</>
+              : <><Database size={12}/> 테이블 자동 생성</>}
+          </button>
+          <a href="https://supabase.com/dashboard/project/itcbantrpkjpkfhnriom/sql"
+            target="_blank" rel="noopener noreferrer"
+            className="btn btn-ghost btn-sm" style={{ gap:5, fontSize:11 }}>
+            <Globe size={11}/> Supabase SQL Editor
+          </a>
+        </div>
+        {dbSetupResult && (
+          <div style={{ marginTop:12, padding:10, borderRadius:6,
+            background: dbSetupResult.ok ? '#052e1640' : '#3f0f0f40',
+            border: `1px solid ${dbSetupResult.ok ? '#22c55e30' : '#f43f5e30'}` }}>
+            <div style={{ fontSize:12, fontWeight:600, color: dbSetupResult.ok ? '#4ade80' : '#f87171', marginBottom:6 }}>
+              {dbSetupResult.message || (dbSetupResult.ok ? '✅ 성공' : '❌ 실패')}
+            </div>
+            {!dbSetupResult.ok && dbSetupResult.manual_sql && (
+              <div>
+                <div style={{ fontSize:11, color:'#F59E0B', marginBottom:4, fontWeight:600 }}>
+                  📋 Supabase SQL Editor에서 아래 SQL을 복사하여 실행하세요:
+                </div>
+                <pre style={{
+                  fontFamily:'var(--f-mono)', fontSize:10, color:'#94a3b8',
+                  background:'#0a0a14', border:'1px solid #334155', borderRadius:4,
+                  padding:'8px 10px', whiteSpace:'pre-wrap', maxHeight:200, overflowY:'auto',
+                  userSelect:'all', cursor:'text', margin:0
+                }}>
+                  {dbSetupResult.manual_sql}
+                </pre>
+                <div style={{ display:'flex', gap:8, marginTop:6 }}>
+                  <button
+                    onClick={() => navigator.clipboard?.writeText(dbSetupResult.manual_sql).then(()=>alert('복사됨!'))}
+                    className="btn btn-ghost btn-sm" style={{ fontSize:10, gap:4 }}>
+                    📋 SQL 복사
+                  </button>
+                  <a href={dbSetupResult.supabase_url} target="_blank" rel="noopener noreferrer"
+                    className="btn btn-ghost btn-sm" style={{ fontSize:10, gap:4 }}>
+                    🔗 SQL Editor 열기
+                  </a>
+                </div>
+              </div>
+            )}
+            {dbSetupResult.stmt_results && (
+              <details style={{ marginTop:8 }}>
+                <summary style={{ fontSize:10, color:'var(--t3)', cursor:'pointer' }}>실행 상세 결과 보기</summary>
+                <pre style={{ fontFamily:'var(--f-mono)', fontSize:9, color:'var(--t3)',
+                  maxHeight:120, overflowY:'auto', margin:'4px 0 0' }}>
+                  {JSON.stringify(dbSetupResult.stmt_results, null, 2)}
+                </pre>
+              </details>
+            )}
+          </div>
+        )}
+      </Panel>
+
       {/* 뉴스레터 테스트 발송 패널 */}
       <Panel style={{ marginBottom:20 }}>
         <SectionHeader icon={Send} label="뉴스레터 테스트 발송" color="#F472B6"/>
