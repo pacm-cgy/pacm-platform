@@ -171,24 +171,8 @@ async function setupTable() {
   if (_setupInProgress) return false   // 동시 중복 호출 스킵
   _setupInProgress = true
   try {
-    const ref = _getProjectRef()
-
-    // 1차: Supabase Management API (sbp_* PAT 필요 — service_role 키는 401)
-    if (ref && SB_KEY) {
-      try {
-        const r = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
-          method:  'POST',
-          headers: { Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ query: TABLE_DDL }),
-        })
-        if (r.ok || r.status === 201) {
-          _tableReady = true
-          return true
-        }
-      } catch (_) { /* fallthrough */ }
-    }
-
-    // 2차: exec_sql RPC (Supabase에서 미리 생성한 경우)
+    // exec_sql RPC — Supabase에 미리 생성한 경우만 동작
+    // Management API는 service_role 키로 항상 401이므로 시도하지 않음
     try {
       const r = await fetch(`${SB_URL}/rest/v1/rpc/exec_sql`, {
         method:  'POST',
@@ -199,45 +183,9 @@ async function setupTable() {
         _tableReady = true
         return true
       }
-    } catch (_) { /* fallthrough */ }
+    } catch (_) { /* exec_sql 없음 → fallthrough */ }
 
-    // 3차: /api/setup-db self-call (CRON_SECRET + APP_URL)
-    // setup-db.js는 staff_chat_messages DDL을 Management API로 실행
-    if (CRON_SECRET && APP_URL) {
-      try {
-        const setupR = await fetch(`${APP_URL}/api/setup-db`, {
-          method:  'POST',
-          headers: {
-            Authorization:  `Bearer ${CRON_SECRET}`,
-            'Content-Type': 'application/json',
-          },
-        })
-        if (setupR.ok) {
-          _tableReady = true
-          return true
-        }
-      } catch (_) { /* fallthrough */ }
-    }
-
-    // 4차: /api/db-setup-staff self-call (CRON_SECRET + APP_URL)
-    if (CRON_SECRET && APP_URL) {
-      try {
-        const r = await fetch(`${APP_URL}/api/db-setup-staff`, {
-          method:  'POST',
-          headers: {
-            Authorization:  `Bearer ${CRON_SECRET}`,
-            'Content-Type': 'application/json',
-          },
-        })
-        const d = await r.json().catch(() => ({}))
-        if (r.ok || d.ok) {
-          _tableReady = true
-          return true
-        }
-      } catch (_) { /* fallthrough */ }
-    }
-
-    // 모든 방법 실패 → Supabase SQL Editor에서 직접 실행 필요
+    // 모든 방법 실패 → AdminPage 시스템 탭에서 SQL 직접 실행 필요
     return false
   } finally {
     _setupInProgress = false
