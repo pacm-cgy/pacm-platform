@@ -13,7 +13,8 @@ import {
   Play, Pause, Terminal, Radio, Star, Award, Briefcase,
   Hash, Clock, ToggleLeft, ToggleRight, Send, PieChart,
   Globe, Heart, Layers, Cpu, Wifi, WifiOff, ChevronRight,
-  Download, Upload, Filter, RotateCcw, Target, Inbox
+  Download, Upload, Filter, RotateCcw, Target, Inbox,
+  MessageCircle, ShieldCheck, ShieldOff, Inbox as InboxIcon
 } from 'lucide-react'
 
 // ── 탭 정의 ──────────────────────────────────────────────────────────
@@ -23,11 +24,47 @@ const TABS = [
   { id: 'users',      label: '유저 관리',   icon: Users     },
   { id: 'reports',    label: '신고 처리',   icon: Flag      },
   { id: 'community',  label: '커뮤니티',    icon: MessageSquare },
+  { id: 'staffchat',  label: '직원 채팅',   icon: MessageCircle },
+  { id: 'feedback',   label: '피드백 관리', icon: Inbox     },
+  { id: 'security',   label: '보안 관리',   icon: ShieldCheck },
   { id: 'teams',      label: 'AI 팀',       icon: Bot       },
   { id: 'workers',    label: '워커 제어',   icon: Activity  },
   { id: 'ops',        label: '자동 운영',   icon: Zap       },
   { id: 'cron',       label: '시스템',      icon: Settings  },
 ]
+
+// ── 채팅방 상수 ──────────────────────────────────────────────────────
+const CHAT_ROOMS = [
+  { id: 'general',  label: '전체 채팅',  emoji: '💬', color: '#60A5FA' },
+  { id: 'ops',      label: '업무 지시',  emoji: '📋', color: '#F59E0B' },
+  { id: 'feedback', label: '피드백',     emoji: '📥', color: '#34D399' },
+  { id: 'strategy', label: '전략 회의',  emoji: '🎯', color: '#F472B6' },
+]
+
+const AI_STAFF_COLORS = {
+  ai_aria:'#818CF8', ai_nova:'#C084FC', ai_lumi:'#34D399',
+  ai_pulse:'#38BDF8', ai_trend:'#FB923C', ai_sage:'#10B981',
+  ai_echo:'#F472B6', ai_learn:'#A78BFA', ai_hana:'#FBBF24', ai_max:'#F87171',
+}
+function staffColor(username) {
+  if (!username) return '#60A5FA'
+  if (AI_STAFF_COLORS[username]) return AI_STAFF_COLORS[username]
+  if (username.startsWith('ai_ops')) return '#9AA5FF'
+  if (username.startsWith('ai_cnt')) return '#C084FC'
+  if (username.startsWith('ai_mnt')) return '#34D399'
+  if (username.startsWith('ai_nws')) return '#38BDF8'
+  if (username.startsWith('ai_anl')) return '#FB923C'
+  if (username.startsWith('ai_rpt')) return '#10B981'
+  if (username.startsWith('ai_nwl')) return '#F472B6'
+  if (username.startsWith('ai_tch')) return '#A78BFA'
+  if (username.startsWith('ai_cmm')) return '#FBBF24'
+  if (username.startsWith('ai_mgt')) return '#F87171'
+  return '#60A5FA'
+}
+function fmtTime(ts) {
+  const d = new Date(ts)
+  return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`
+}
 
 // ── 공통 컴포넌트 ─────────────────────────────────────────────────────
 function StatCard({ label, value, icon: Icon, color = '#F59E0B', sub, onClick }) {
@@ -1406,6 +1443,553 @@ function SystemTab({ stats, onRefresh }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// 직원 채팅 탭 (Admin Panel 내 풀스크린 채팅)
+// ══════════════════════════════════════════════════════════════════════
+
+function StaffChatTab() {
+  const { profile } = useAuthStore()
+  const [room, setRoom]         = useState('general')
+  const [messages, setMessages] = useState([])
+  const [input, setInput]       = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [sending, setSending]   = useState(false)
+  const [topic, setTopic]       = useState('')
+  const [triggering, setTriggering] = useState(false)
+  const [msg, setMsg]           = useState('')
+  const bottomRef = useRef(null)
+
+  const fetchMsgs = useCallback(async () => {
+    setLoading(true)
+    try {
+      const r = await fetch(`/api/staff-chat?room=${room}&limit=80`)
+      const d = await r.json()
+      if (d.messages) setMessages(d.messages)
+    } catch (_) {}
+    setLoading(false)
+  }, [room])
+
+  useEffect(() => { setMessages([]); fetchMsgs() }, [room])
+  useEffect(() => { const t = setInterval(() => fetchMsgs(), 6000); return () => clearInterval(t) }, [fetchMsgs])
+  useEffect(() => { setTimeout(() => bottomRef.current?.scrollIntoView({ behavior:'smooth' }), 80) }, [messages])
+
+  const sendMsg = async () => {
+    if (!input.trim() || sending) return
+    setSending(true)
+    try {
+      await fetch(`/api/staff-chat?room=${room}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender_key:   profile?.username || 'admin',
+          sender_name:  profile?.display_name || 'Admin',
+          sender_emoji: '👤',
+          sender_color: '#60A5FA',
+          sender_team:  '관리자',
+          message:      input.trim(),
+          msg_type:     'chat',
+        }),
+      })
+      setInput('')
+      await fetchMsgs()
+    } catch (_) {}
+    setSending(false)
+  }
+
+  const triggerDiscussion = async () => {
+    if (!topic.trim() || triggering) return
+    setTriggering(true)
+    setMsg('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const r = await fetch(`/api/staff-chat?room=${room}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token || ''}`,
+        },
+        body: JSON.stringify({ action: 'ai_discuss', topic: topic.trim(), participants: ['MAX','ARIA','NOVA','PULSE','HANA'] }),
+      })
+      const d = await r.json()
+      if (d.ok) { setMsg(`✅ AI 직원 ${d.created}명 토론 생성 완료`); setTopic(''); await fetchMsgs() }
+      else setMsg(`❌ ${d.error || '실패'}`)
+    } catch (e) { setMsg(`❌ ${e.message}`) }
+    setTriggering(false)
+  }
+
+  const currentRoom = CHAT_ROOMS.find(r => r.id === room)
+
+  const MSG_TYPE_MAP = {
+    task_directive:   { label:'업무지시', color:'#F59E0B' },
+    ai_auto:          { label:'AI 자동',  color:'#818CF8' },
+    feedback_handled: { label:'피드백',   color:'#34D399' },
+    notice:           { label:'공지',     color:'#F43F5E' },
+  }
+
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:'1fr 340px', gap:16, height:'calc(100vh - 280px)', minHeight:480 }}>
+      {/* 왼쪽: 채팅 메인 */}
+      <Panel style={{ display:'flex', flexDirection:'column', padding:0, overflow:'hidden' }}>
+        {/* 헤더 */}
+        <div style={{ background:'linear-gradient(135deg,#1e3a5f,#1a1a2e)', padding:'12px 16px',
+          borderBottom:'1px solid rgba(96,165,250,0.2)', display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
+          <MessageCircle size={14} color="#60A5FA"/>
+          <span style={{ fontFamily:'var(--f-mono)', fontSize:11, color:'#93C5FD', letterSpacing:'2px', fontWeight:700 }}>
+            STAFF ROOM
+          </span>
+          <span style={{ color: currentRoom?.color, fontSize:13 }}>{currentRoom?.emoji} {currentRoom?.label}</span>
+          <button onClick={fetchMsgs} style={{ marginLeft:'auto', background:'none', border:'none',
+            color:'#444', cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
+            <RefreshCw size={12}/> <span style={{ fontFamily:'var(--f-mono)', fontSize:9 }}>새로고침</span>
+          </button>
+        </div>
+
+        {/* 방 탭 */}
+        <div style={{ display:'flex', borderBottom:'1px solid rgba(255,255,255,0.06)',
+          background:'rgba(255,255,255,0.02)', flexShrink:0 }}>
+          {CHAT_ROOMS.map(r => (
+            <button key={r.id} onClick={() => setRoom(r.id)}
+              style={{ flex:1, background:'none', border:'none',
+                borderBottom: room===r.id ? `2px solid ${r.color}` : '2px solid transparent',
+                color: room===r.id ? r.color : '#555', padding:'8px 6px', cursor:'pointer',
+                fontFamily:'var(--f-mono)', fontSize:9, letterSpacing:'0.5px',
+                display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
+              <span style={{ fontSize:14 }}>{r.emoji}</span>
+              <span>{r.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* 메시지 */}
+        <div style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:10 }}>
+          {loading && <div style={{ textAlign:'center', color:'#444', fontFamily:'var(--f-mono)', fontSize:11, padding:20 }}>로딩 중…</div>}
+          {!loading && messages.length === 0 && (
+            <div style={{ textAlign:'center', color:'#333', fontFamily:'var(--f-mono)', fontSize:11, padding:40 }}>
+              <MessageCircle size={24} color="#333" style={{ marginBottom:8 }}/><br/>
+              아직 메시지가 없습니다<br/>
+              <span style={{ fontSize:10, color:'#444' }}>오른쪽에서 AI 토론을 시작하거나 직접 입력하세요</span>
+            </div>
+          )}
+          {messages.map(m => {
+            const typeMeta = MSG_TYPE_MAP[m.msg_type]
+            const color = staffColor(m.sender_key)
+            return (
+              <div key={m.id} style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
+                <div style={{ width:32, height:32, borderRadius:'50%', flexShrink:0,
+                  background:`${color}15`, border:`1px solid ${color}30`,
+                  display:'flex', alignItems:'center', justifyContent:'center', fontSize:15 }}>
+                  {m.sender_emoji || '👤'}
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3, flexWrap:'wrap' }}>
+                    <span style={{ fontFamily:'var(--f-mono)', fontSize:12, fontWeight:700, color }}>{m.sender_name}</span>
+                    <span style={{ fontSize:10, color:'#444', fontFamily:'var(--f-mono)' }}>{m.sender_team}</span>
+                    {typeMeta && (
+                      <span style={{ fontSize:9, background:`${typeMeta.color}20`, color:typeMeta.color,
+                        border:`1px solid ${typeMeta.color}40`, borderRadius:3, padding:'1px 5px', fontFamily:'var(--f-mono)' }}>
+                        {typeMeta.label}
+                      </span>
+                    )}
+                    <span style={{ marginLeft:'auto', fontSize:9, color:'#333', fontFamily:'var(--f-mono)' }}>{fmtTime(m.created_at)}</span>
+                  </div>
+                  <div style={{ fontSize:12, color:'#C0C0C0', lineHeight:1.6,
+                    background:'rgba(255,255,255,0.03)', borderRadius:8, padding:'8px 12px',
+                    borderLeft:`2px solid ${color}25`, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
+                    {m.message}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+          <div ref={bottomRef}/>
+        </div>
+
+        {/* 입력창 */}
+        <div style={{ borderTop:'1px solid rgba(255,255,255,0.06)', padding:'10px 12px',
+          display:'flex', gap:8, flexShrink:0, background:'rgba(255,255,255,0.02)' }}>
+          <textarea value={input} onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg()} }}
+            placeholder="메시지 입력… (Enter 전송, Shift+Enter 줄바꿈)" rows={2}
+            style={{ flex:1, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)',
+              borderRadius:8, color:'#E0E0E0', fontSize:12, padding:'8px 12px', resize:'none', outline:'none',
+              fontFamily:'inherit', lineHeight:1.5 }}/>
+          <button onClick={sendMsg} disabled={sending || !input.trim()}
+            style={{ background: sending||!input.trim() ? '#1a1a2e' : 'linear-gradient(135deg,#3B82F6,#818CF8)',
+              border:'none', borderRadius:8, padding:'0 14px', color: sending||!input.trim() ? '#444' : '#fff',
+              cursor: sending||!input.trim() ? 'not-allowed' : 'pointer', fontSize:18, flexShrink:0 }}>
+            {sending ? <Loader size={14} style={{ animation:'spin 1s linear infinite' }}/> : <Send size={14}/>}
+          </button>
+        </div>
+      </Panel>
+
+      {/* 오른쪽: 컨트롤 패널 */}
+      <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+        {/* AI 토론 트리거 */}
+        <Panel>
+          <SectionHeader icon={Bot} label="AI 직원 토론 생성" color="#818CF8"/>
+          <p style={{ fontSize:11, color:'var(--t3)', marginBottom:12, lineHeight:1.5 }}>
+            주제를 입력하면 AI 직원들이 자동으로 채팅방에서 토론합니다.
+          </p>
+          <textarea value={topic} onChange={e => setTopic(e.target.value)}
+            placeholder="예: 이번 주 피드백 처리 방향에 대해 논의해주세요" rows={3}
+            style={{ width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)',
+              borderRadius:8, color:'var(--t1)', fontSize:12, padding:'8px 12px', resize:'none', outline:'none',
+              fontFamily:'inherit', boxSizing:'border-box', marginBottom:8 }}/>
+          <button onClick={triggerDiscussion} disabled={triggering || !topic.trim()}
+            className="btn btn-primary btn-sm" style={{ width:'100%', gap:6, justifyContent:'center' }}>
+            {triggering ? <><Loader size={12} style={{ animation:'spin 1s linear infinite' }}/> 생성 중…</> : <><Bot size={12}/> AI 토론 시작</>}
+          </button>
+          <Msg msg={msg}/>
+        </Panel>
+
+        {/* 채팅방 안내 */}
+        <Panel>
+          <SectionHeader icon={MessageCircle} label="채팅방 안내" color="#60A5FA"/>
+          {CHAT_ROOMS.map(r => (
+            <div key={r.id} onClick={() => setRoom(r.id)}
+              style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 0',
+                borderBottom:'1px solid rgba(255,255,255,0.04)', cursor:'pointer',
+                opacity: room===r.id ? 1 : 0.6 }}>
+              <span style={{ fontSize:16 }}>{r.emoji}</span>
+              <div>
+                <div style={{ fontSize:11, fontWeight:600, color: room===r.id ? r.color : 'var(--t2)' }}>{r.label}</div>
+              </div>
+              {room===r.id && <div style={{ marginLeft:'auto', width:6, height:6, borderRadius:'50%', background:r.color }}/>}
+            </div>
+          ))}
+        </Panel>
+
+        {/* 빠른 업무 지시 */}
+        <Panel>
+          <SectionHeader icon={Terminal} label="빠른 업무 지시" color="#F59E0B"/>
+          {[
+            { label:'피드백 검토 지시', msg:'📋 전팀 공지: 오늘 들어온 유저 피드백을 각 팀별로 검토하고 개선 사항을 ops 채널에 보고해주세요.', room:'ops' },
+            { label:'주간 전략 브리핑', msg:'🎯 이번 주 플랫폼 전략 방향을 논의합니다. 각 팀 선임 매니저분들 의견 부탁드립니다.', room:'strategy' },
+            { label:'피드백 처리 완료 보고 요청', msg:'📥 피드백 채널: 오늘 수신된 피드백 처리 현황을 공유해주세요.', room:'feedback' },
+          ].map(item => (
+            <button key={item.label} onClick={async () => {
+              await fetch(`/api/staff-chat?room=${item.room}`, {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ sender_key:'ai_max', sender_name:'MAX', sender_emoji:'🏛️',
+                  sender_color:'#F87171', sender_team:'관리팀', message:item.msg, msg_type:'task_directive' }),
+              })
+              setRoom(item.room)
+              await fetchMsgs()
+            }}
+              style={{ width:'100%', background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.2)',
+                borderRadius:6, padding:'7px 10px', color:'var(--t2)', fontSize:11, cursor:'pointer',
+                textAlign:'left', marginBottom:4, display:'flex', alignItems:'center', gap:6 }}>
+              <Terminal size={10} color="#F59E0B"/> {item.label}
+            </button>
+          ))}
+        </Panel>
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 피드백 관리 탭
+// ══════════════════════════════════════════════════════════════════════
+
+function FeedbackManageTab() {
+  const [feedbacks, setFeedbacks] = useState([])
+  const [loading, setLoading]    = useState(false)
+  const [processing, setProcessing] = useState(false)
+  const [msg, setMsg]            = useState('')
+  const [result, setResult]      = useState(null)
+
+  const loadFeedbacks = async () => {
+    setLoading(true)
+    try {
+      const r = await fetch('/api/feedback-reply')
+      const d = await r.json()
+      if (d.feedbacks) setFeedbacks(d.feedbacks)
+    } catch (_) {}
+    setLoading(false)
+  }
+
+  useEffect(() => { loadFeedbacks() }, [])
+
+  const processAll = async () => {
+    setProcessing(true); setMsg(''); setResult(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const r = await fetch('/api/feedback-reply', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', Authorization:`Bearer ${session?.access_token||''}` },
+        body: JSON.stringify({ action:'process_all' }),
+      })
+      const d = await r.json()
+      if (d.ok) {
+        setMsg(`✅ ${d.summary?.replied || 0}건 답변 완료 (실패 ${d.summary?.failed || 0}건)`)
+        setResult(d.summary)
+        await loadFeedbacks()
+      } else setMsg(`❌ ${d.error || '처리 실패'}`)
+    } catch (e) { setMsg(`❌ ${e.message}`) }
+    setProcessing(false)
+  }
+
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:'1fr 300px', gap:16 }}>
+      <div>
+        <Panel style={{ marginBottom:16 }}>
+          <SectionHeader icon={Inbox} label="미답변 피드백 게시물" color="#34D399">
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={loadFeedbacks} className="btn btn-ghost btn-sm" style={{ gap:4 }}>
+                <RefreshCw size={11}/> 새로고침
+              </button>
+              <button onClick={processAll} disabled={processing} className="btn btn-primary btn-sm" style={{ gap:4 }}>
+                {processing ? <Loader size={11} style={{ animation:'spin 1s linear infinite' }}/> : <Bot size={11}/>}
+                {processing ? '처리 중…' : 'AI 일괄 답변'}
+              </button>
+            </div>
+          </SectionHeader>
+          <Msg msg={msg}/>
+          {result && (
+            <div style={{ display:'flex', gap:10, marginBottom:12 }}>
+              {[
+                { label:'총 처리', value:result.total, color:'#60A5FA' },
+                { label:'답변 완료', value:result.replied, color:'#34D399' },
+                { label:'실패', value:result.failed, color:'#F43F5E' },
+              ].map(s => (
+                <div key={s.label} style={{ flex:1, background:`${s.color}10`, border:`1px solid ${s.color}25`,
+                  borderRadius:8, padding:'10px 12px', textAlign:'center' }}>
+                  <div style={{ fontFamily:'var(--f-mono)', fontSize:18, fontWeight:700, color:s.color }}>{s.value}</div>
+                  <div style={{ fontFamily:'var(--f-mono)', fontSize:9, color:'var(--t3)' }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {loading && <div style={{ textAlign:'center', color:'#444', padding:20, fontFamily:'var(--f-mono)', fontSize:11 }}>로딩 중…</div>}
+          {!loading && feedbacks.length === 0 && (
+            <div style={{ textAlign:'center', color:'#444', padding:30, fontFamily:'var(--f-mono)', fontSize:11 }}>
+              <CheckCircle size={24} color="#34D399" style={{ marginBottom:8 }}/><br/>
+              미답변 피드백이 없습니다
+            </div>
+          )}
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {feedbacks.map(fb => (
+              <div key={fb.id} style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.06)',
+                borderRadius:8, padding:'12px 14px' }}>
+                <div style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom:6 }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:13, fontWeight:600, color:'var(--t1)', marginBottom:4 }}>{fb.title}</div>
+                    <div style={{ fontSize:11, color:'var(--t3)', lineHeight:1.5 }}>{fb.preview}</div>
+                  </div>
+                  <div style={{ fontSize:10, color:'#34D399', fontFamily:'var(--f-mono)', flexShrink:0 }}>
+                    → {fb.assigned}
+                  </div>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+                  {(fb.tags || []).map(t => (
+                    <span key={t} style={{ fontSize:9, background:'rgba(96,165,250,0.1)', color:'#60A5FA',
+                      border:'1px solid rgba(96,165,250,0.2)', borderRadius:3, padding:'1px 5px', fontFamily:'var(--f-mono)' }}>
+                      {t}
+                    </span>
+                  ))}
+                  <span style={{ marginLeft:'auto', fontSize:10, color:'#444', fontFamily:'var(--f-mono)' }}>
+                    {fb.created_at ? new Date(fb.created_at).toLocaleDateString('ko-KR') : ''}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </div>
+
+      {/* 오른쪽 안내 */}
+      <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+        <Panel>
+          <SectionHeader icon={Bot} label="자동 답변 시스템" color="#818CF8"/>
+          <p style={{ fontSize:11, color:'var(--t3)', lineHeight:1.7, marginBottom:12 }}>
+            피드백 내용을 분석해 적합한 AI 직원이 자동으로 댓글을 달고, staff 채팅방의 피드백 채널에 공유됩니다.
+          </p>
+          {[
+            { team:'운영팀 ARIA', emoji:'⚙️', triggers:'운영, 버그, 오류, 속도', color:'#818CF8' },
+            { team:'커뮤니티 HANA', emoji:'🤝', triggers:'커뮤니티, 댓글, 분위기', color:'#FBBF24' },
+            { team:'관리팀 MAX', emoji:'🏛️', triggers:'정책, 개선, 제안, 요청', color:'#F87171' },
+            { team:'기술팀 LEARN', emoji:'🔬', triggers:'기능, 개발, 앱, 검색', color:'#A78BFA' },
+          ].map(r => (
+            <div key={r.team} style={{ display:'flex', gap:8, alignItems:'flex-start', marginBottom:10 }}>
+              <span style={{ fontSize:16 }}>{r.emoji}</span>
+              <div>
+                <div style={{ fontSize:11, fontWeight:600, color:r.color }}>{r.team}</div>
+                <div style={{ fontSize:10, color:'#555' }}>{r.triggers}</div>
+              </div>
+            </div>
+          ))}
+        </Panel>
+        <Panel>
+          <SectionHeader icon={Activity} label="처리 흐름" color="#34D399"/>
+          {['피드백 게시물 감지 (태그: 피드백/건의/제안)', 'AI 직원 자동 배정', 'Gemini 답변 생성', '댓글 자동 등록', 'staff-chat 피드백 채널 공유', '업무지시(ops) 채널 요약 보고'].map((step, i) => (
+            <div key={i} style={{ display:'flex', gap:8, alignItems:'center', marginBottom:7 }}>
+              <div style={{ width:18, height:18, borderRadius:'50%', background:'rgba(52,211,153,0.15)',
+                border:'1px solid rgba(52,211,153,0.3)', display:'flex', alignItems:'center',
+                justifyContent:'center', fontSize:9, fontFamily:'var(--f-mono)', color:'#34D399', flexShrink:0 }}>
+                {i+1}
+              </div>
+              <div style={{ fontSize:11, color:'var(--t3)' }}>{step}</div>
+            </div>
+          ))}
+        </Panel>
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 보안 관리 탭 — AI 계정 권한 잠금 & 탈취 방지
+// ══════════════════════════════════════════════════════════════════════
+
+function SecurityTab() {
+  const [statuses, setStatuses]   = useState([])
+  const [summary, setSummary]     = useState(null)
+  const [loading, setLoading]     = useState(false)
+  const [locking, setLocking]     = useState(false)
+  const [msg, setMsg]             = useState('')
+  const [filter, setFilter]       = useState('all')
+
+  const loadStatus = async () => {
+    setLoading(true)
+    try {
+      const r = await fetch('/api/staff-auth')
+      const d = await r.json()
+      if (d.accounts) {
+        setStatuses(d.accounts)
+        setSummary({ total: d.total, locked: d.locked, needs_lock: d.needs_lock })
+      }
+    } catch (_) {}
+    setLoading(false)
+  }
+
+  useEffect(() => { loadStatus() }, [])
+
+  const lockAll = async () => {
+    setLocking(true); setMsg('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const r = await fetch('/api/staff-auth', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', Authorization:`Bearer ${session?.access_token||''}` },
+      })
+      const d = await r.json()
+      if (d.ok) {
+        setMsg(`✅ ${d.summary.locked}명 권한 잠금 완료`)
+        await loadStatus()
+      } else setMsg(`❌ ${d.error || '실패'}`)
+    } catch (e) { setMsg(`❌ ${e.message}`) }
+    setLocking(false)
+  }
+
+  const filtered = statuses.filter(s => {
+    if (filter === 'locked')   return !s.needs_lock
+    if (filter === 'unlocked') return  s.needs_lock
+    return true
+  })
+
+  return (
+    <div>
+      {/* 상태 요약 */}
+      {summary && (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:20 }}>
+          <StatCard label="총 AI 직원" value={summary.total}      icon={Bot}          color="#818CF8"/>
+          <StatCard label="권한 잠금 완료" value={summary.locked}    icon={ShieldCheck}  color="#34D399"/>
+          <StatCard label="잠금 필요"   value={summary.needs_lock} icon={ShieldOff}    color={summary.needs_lock>0?'#F43F5E':'#34D399'}/>
+        </div>
+      )}
+
+      <Panel style={{ marginBottom:16 }}>
+        <SectionHeader icon={ShieldCheck} label="AI 직원 관리자 권한 & 보안 잠금" color="#34D399">
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={loadStatus} className="btn btn-ghost btn-sm" style={{ gap:4 }}>
+              <RefreshCw size={11}/> 새로고침
+            </button>
+            <button onClick={lockAll} disabled={locking} className="btn btn-primary btn-sm"
+              style={{ gap:4, background:'linear-gradient(135deg,#10B981,#34D399)' }}>
+              {locking ? <Loader size={11} style={{ animation:'spin 1s linear infinite' }}/> : <Lock size={11}/>}
+              {locking ? '적용 중…' : '전체 권한 잠금 실행'}
+            </button>
+          </div>
+        </SectionHeader>
+        <Msg msg={msg}/>
+
+        {/* 보안 정책 요약 */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:10, marginBottom:16 }}>
+          {[
+            { icon:Lock,        color:'#34D399', title:'admin_locked',   desc:'role 변경 불가 잠금' },
+            { icon:ShieldCheck, color:'#818CF8', title:'is_ai_account',  desc:'AI 계정 식별 플래그' },
+            { icon:Shield,      color:'#60A5FA', title:'username 패턴',  desc:'ai_* 패턴 일반 등록 차단' },
+            { icon:Lock,        color:'#F59E0B', title:'CRON_SECRET',    desc:'API 인증 없이 변경 불가' },
+          ].map(item => (
+            <div key={item.title} style={{ background:`${item.color}08`, border:`1px solid ${item.color}20`,
+              borderRadius:8, padding:'10px 12px', display:'flex', gap:10, alignItems:'flex-start' }}>
+              <item.icon size={14} color={item.color} style={{ marginTop:2, flexShrink:0 }}/>
+              <div>
+                <div style={{ fontFamily:'var(--f-mono)', fontSize:10, color:item.color, fontWeight:700 }}>{item.title}</div>
+                <div style={{ fontSize:11, color:'var(--t3)', marginTop:2 }}>{item.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* 필터 */}
+        <div style={{ display:'flex', gap:6, marginBottom:12 }}>
+          {[['all','전체'],['locked','잠금 완료'],['unlocked','잠금 필요']].map(([v, l]) => (
+            <button key={v} onClick={() => setFilter(v)}
+              style={{ fontFamily:'var(--f-mono)', fontSize:10, padding:'4px 10px',
+                background: filter===v ? 'rgba(52,211,153,0.1)' : 'none',
+                border: filter===v ? '1px solid rgba(52,211,153,0.3)' : '1px solid rgba(255,255,255,0.08)',
+                borderRadius:4, color: filter===v ? '#34D399' : '#666', cursor:'pointer' }}>
+              {l}
+            </button>
+          ))}
+          <span style={{ marginLeft:'auto', fontFamily:'var(--f-mono)', fontSize:10, color:'#444', alignSelf:'center' }}>
+            {filtered.length}명
+          </span>
+        </div>
+
+        {/* 계정 목록 */}
+        {loading ? (
+          <div style={{ textAlign:'center', padding:20, color:'#444', fontFamily:'var(--f-mono)', fontSize:11 }}>로딩 중…</div>
+        ) : (
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))', gap:6 }}>
+            {filtered.map(s => (
+              <div key={s.username} style={{ background: s.needs_lock ? 'rgba(244,63,94,0.05)' : 'rgba(52,211,153,0.04)',
+                border: `1px solid ${s.needs_lock ? 'rgba(244,63,94,0.2)' : 'rgba(52,211,153,0.15)'}`,
+                borderRadius:8, padding:'10px 12px' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
+                  {s.needs_lock
+                    ? <ShieldOff size={12} color="#F43F5E"/>
+                    : <ShieldCheck size={12} color="#34D399"/>}
+                  <span style={{ fontFamily:'var(--f-mono)', fontSize:11, fontWeight:700,
+                    color: staffColor(s.username) }}>{s.username.replace('ai_','').toUpperCase()}</span>
+                  {!s.username.includes('_',3) && <span style={{ fontSize:8, background:'rgba(129,140,248,0.15)',
+                    color:'#818CF8', border:'1px solid rgba(129,140,248,0.3)', borderRadius:3,
+                    padding:'1px 4px', fontFamily:'var(--f-mono)' }}>LEAD</span>}
+                </div>
+                <div style={{ fontFamily:'var(--f-mono)', fontSize:9, color:'#555', marginBottom:4 }}>{s.username}</div>
+                <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                  <span style={{ fontSize:9, background: s.is_admin ? 'rgba(52,211,153,0.1)' : 'rgba(244,63,94,0.1)',
+                    color: s.is_admin ? '#34D399' : '#F43F5E',
+                    border:`1px solid ${s.is_admin ? 'rgba(52,211,153,0.2)' : 'rgba(244,63,94,0.2)'}`,
+                    borderRadius:3, padding:'1px 5px', fontFamily:'var(--f-mono)' }}>
+                    {s.role || 'no-role'}
+                  </span>
+                  {s.admin_locked && <span style={{ fontSize:9, background:'rgba(96,165,250,0.1)', color:'#60A5FA',
+                    border:'1px solid rgba(96,165,250,0.2)', borderRadius:3, padding:'1px 5px', fontFamily:'var(--f-mono)' }}>
+                    🔒 locked
+                  </span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // EyeOff 아이콘
 // ══════════════════════════════════════════════════════════════════════
 
@@ -1597,6 +2181,9 @@ export default function AdminPage() {
         {tab === 'users'     && <UsersTab/>}
         {tab === 'reports'   && <ReportsTab/>}
         {tab === 'community' && <CommunityTab/>}
+        {tab === 'staffchat' && <StaffChatTab/>}
+        {tab === 'feedback'  && <FeedbackManageTab/>}
+        {tab === 'security'  && <SecurityTab/>}
         {tab === 'teams'     && <TeamsTab/>}
         {tab === 'workers'   && <WorkersTab/>}
         {tab === 'ops'       && <OpsTab/>}
