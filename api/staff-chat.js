@@ -1,6 +1,6 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════╗
- * ║  api/staff-chat.js — 직원 전용 채팅방 API v1.0                      ║
+ * ║  api/staff-chat.js — 직원 전용 채팅방 API v2.0                      ║
  * ║                                                                      ║
  * ║  기능:                                                               ║
  * ║  - GET  ?room=general|ops|task  채팅 메시지 조회                    ║
@@ -20,7 +20,6 @@ export const config = { runtime: 'edge' }
 const SB_URL       = process.env.SUPABASE_URL
 const SB_KEY       = process.env.SUPABASE_SERVICE_ROLE_KEY
 const CRON_SECRET  = process.env.CRON_SECRET
-const GEMINI_KEY   = process.env.GEMINI_API_KEY
 
 const H = () => ({
   apikey:         SB_KEY,
@@ -77,26 +76,13 @@ const ROOMS = {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// Gemini 호출
+// 자체 AI 엔진 — 채팅 메시지 생성 (외부 API 없음)
 // ══════════════════════════════════════════════════════════════════════
 
-async function callGemini(prompt) {
-  if (!GEMINI_KEY) return null
-  try {
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.85, maxOutputTokens: 300 },
-        }),
-      }
-    )
-    const d = await r.json()
-    return d?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
-  } catch { return null }
+import { generateChat } from './ai-engine.js'
+
+function generateStaffMessage(staff, topic, room, recentMessages = []) {
+  return generateChat(staff.username, topic, room, recentMessages)
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -165,31 +151,19 @@ async function setupTable() {
 // AI 직원 자동 토론 생성
 // ══════════════════════════════════════════════════════════════════════
 
-async function generateAIDiscussion(topic, room, participantKeys) {
+async function generateAIDiscussion(topic, room, participantKeys, recentMessages = []) {
   const participants = participantKeys
     .map(k => AI_STAFF[k])
     .filter(Boolean)
-    .slice(0, 4)
+    .slice(0, 6)
 
   if (participants.length === 0) return []
 
   const inserted = []
 
   for (const staff of participants) {
-    const prompt = `당신은 Insightship 플랫폼의 ${staff.team} ${staff.title} ${staff.name}입니다.
-직원 내부 채팅방에서 다음 주제에 대해 동료들과 소통하고 있습니다.
-
-주제: ${topic}
-채팅방: ${ROOMS[room]?.label || room}
-
-당신의 팀(${staff.team}) 전문성과 역할에 맞게 짧고 자연스러운 한국어 메시지를 작성하세요.
-- 1~3문장 이내
-- 다른 팀원에게 말하듯 자연스럽게 (존댓말, 이모지 1~2개)
-- 절대로 "AI입니다"라고 하지 말 것
-- 업무적이지만 따뜻한 톤
-메시지만 출력하세요. (다른 설명 없이)`
-
-    const message = await callGemini(prompt)
+    // 자체 AI 엔진으로 메시지 생성 — 외부 API 없음
+    const message = generateStaffMessage(staff, topic, room, recentMessages)
     if (!message) continue
 
     const row = await insertMessage({
@@ -202,10 +176,13 @@ async function generateAIDiscussion(topic, room, participantKeys) {
       message:      message.slice(0, 500),
       msg_type:     'ai_auto',
     })
-    if (row) inserted.push(row)
+    if (row) {
+      inserted.push(row)
+      recentMessages = [...recentMessages, row] // 이전 메시지 맥락 전달
+    }
 
     // 메시지 간격 (자연스러운 순서)
-    await new Promise(r => setTimeout(r, 100))
+    await new Promise(r => setTimeout(r, 80))
   }
 
   return inserted

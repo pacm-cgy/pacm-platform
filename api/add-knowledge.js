@@ -1,31 +1,11 @@
 // 지속 학습: AI 지식베이스에 새 데이터 추가
 // 뉴스 요약 완료 후 자동 실행되어 RAG 지식베이스를 갱신
+// 임베딩 없이 텍스트 기반 지식 저장 (외부 API 없음)
 export const config = { runtime: 'edge' }
 
-const GEMINI_KEY  = process.env.GEMINI_API_KEY
 const SB_URL      = process.env.SUPABASE_URL
 const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
 const CRON_SECRET = process.env.CRON_SECRET
-
-// 텍스트 임베딩 생성
-async function embed(text) {
-  const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'models/text-embedding-004',
-        content: { parts: [{ text: text.slice(0, 2000) }] },
-        taskType: 'RETRIEVAL_DOCUMENT',
-      }),
-      signal: AbortSignal.timeout(10000),
-    }
-  )
-  if (!r.ok) return null
-  const d = await r.json()
-  return d.embedding?.values || null
-}
 
 export default async function handler(req) {
   const isAuthed = req.headers.get('x-vercel-cron') === '1'
@@ -56,30 +36,30 @@ export default async function handler(req) {
     const ex = await exists.json()
     if (ex?.length > 0) continue
 
-    // 임베딩 생성
     const content = `${a.title}\n${a.ai_summary}`
-    const embedding = await embed(content)
 
+    // 임베딩 없이 텍스트 기반으로 저장 (자체 RAG용 텍스트 검색 활용)
     const insertR = await fetch(`${SB_URL}/rest/v1/ai_knowledge`, {
       method: 'POST',
       headers: { ...H, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
       body: JSON.stringify({
         content,
-        embedding: embedding || null,
-        category: a.ai_category === 'startup' ? 'trend' : (a.ai_category || 'news'),
-        source: `article:${a.id}`,
-        keywords: a.tags || [],
-        quality: 6, // 뉴스 자동 추가는 6점 (운영자 수동 추가는 9점)
+        embedding: null,   // 임베딩 비활성화 (외부 API 없음)
+        category:  a.ai_category === 'startup' ? 'trend' : (a.ai_category || 'news'),
+        source:    `article:${a.id}`,
+        keywords:  a.tags || [],
+        quality:   6,      // 뉴스 자동 추가는 6점 (운영자 수동 추가는 9점)
       }),
     })
     if (insertR.ok || insertR.status === 201) added++
 
-    await new Promise(res => setTimeout(res, 300))
+    await new Promise(res => setTimeout(res, 200))
   }
 
   return new Response(JSON.stringify({
-    processed: articles.length,
+    processed:  articles.length,
     added,
-    timestamp: new Date().toISOString(),
+    model:      'insightship-ai-v1-no-embedding',
+    timestamp:  new Date().toISOString(),
   }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 }
