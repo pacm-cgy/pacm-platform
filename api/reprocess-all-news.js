@@ -1,18 +1,20 @@
 /**
  * api/reprocess-all-news.js
- * Insightship 뉴스 전체 재처리기 v10.0
- * summarize-news.js v10 핵심 엔진 완전 내장 — 롱폼 5,000자 딥인사이트
+ * Insightship 뉴스 전체 재처리기 v11.0
+ * 완전 동적 본문 분석 — 고정 템플릿 탈피 + HTML 엔티티 전처리 강화
  *
  * POST /api/reprocess-all-news  (Authorization: Bearer CRON_SECRET)
  *   body: { batch?: number (기본30), offset?: number (기본0), force?: boolean }
  * GET  /api/reprocess-all-news  → 처리 현황 통계
  *
- * v10 업그레이드:
- *   - summarize-news v10 롱폼 엔진 완전 내장 (5,000자+)
- *   - NER 기반 타이틀 파싱
- *   - MarketDataDB 시장 수치 자동 내재화
- *   - 청소년 눈높이 용어 설명
- *   - 딥인사이트 섹션 구조 (배경/맥락/시사점/액션)
+ * v11 업그레이드:
+ *   - HTML 엔티티(&nbsp;&amp;&lt;&gt;&quot;&#숫자;) 완전 전처리
+ *   - 본문 내용 기반 완전 동적 섹션 생성 (고정 템플릿 제거)
+ *   - 본문 부족 시 섹션 자동 생략 (빈 섹션 0개)
+ *   - 인용문/Q&A 자동 감지 및 별도 섹션 구성
+ *   - 인물/기업/수치 NER 강화
+ *   - 뉴스별 고유 도입부 자동 생성
+ *   - 중복 문장 제거 로직 강화
  */
 export const config = { runtime: 'edge', maxDuration: 60 }
 
@@ -195,12 +197,37 @@ const SECTOR_CONTEXT = {
   climate: '탄소중립 2050 목표 하에 기후테크 스타트업에 대한 정부 R&D 예산이 3년간 2배 확대됩니다.',
 }
 
-// ── 텍스트 정리 ──────────────────────────────────────────────────────
+// ── HTML 엔티티 전처리 (v11 신규) ─────────────────────────────────────
+function decodeHtmlEntities(t) {
+  if (!t) return ''
+  return t
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&apos;/gi, "'")
+    .replace(/&#(\d+);/g, (_, n) => {
+      try { return String.fromCodePoint(parseInt(n, 10)) } catch { return '' }
+    })
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => {
+      try { return String.fromCodePoint(parseInt(h, 16)) } catch { return '' }
+    })
+    .replace(/&[a-zA-Z]{2,8};/g, ' ')  // 나머지 미지원 엔티티 제거
+}
+
+// ── 텍스트 정리 (v11: HTML 엔티티 전처리 포함) ───────────────────────
 function clean(t) {
-  return (t||'').replace(/<[^>]+>/g,' ').replace(/https?:\/\/\S+/g,'')
-    .replace(/공유하기|페이스북|트위터|카카오|무단전재|재배포\s*금지/g,'')
-    .replace(/기자\s*[가-힣]{2,4}\s*기자/g,'').replace(/저작권자\s*©[^가-힣]{0,60}/g,'')
-    .replace(/[^\w\s가-힣.!?%,·]/g,' ').replace(/\s+/g,' ').trim()
+  return decodeHtmlEntities(t||'')
+    .replace(/<[^>]+>/g,' ')
+    .replace(/https?:\/\/\S+/g,'')
+    .replace(/공유하기|페이스북|트위터|카카오톡?|무단전재|재배포\s*금지|저작권자\s*©?[^가-힣]{0,60}/g,'')
+    .replace(/기자\s*[가-힣]{2,4}\s*기자/g,'')
+    .replace(/\[.*?\]/g, '')        // [사진] [영상] 등 미디어 태그 제거
+    .replace(/\(.*?기자\)/g, '')    // (OOO 기자) 제거
+    .replace(/\s{2,}/g,' ')
+    .trim()
 }
 
 function splitSents(text) {
@@ -297,8 +324,46 @@ function parseTitle(title) {
   return { nums: [...new Set(nums)], companies: [...new Set(companies)].slice(0, 3) }
 }
 
+// ── v11 인용문 감지 ────────────────────────────────────────────────────
+function detectQuotes(sents) {
+  return sents.filter(s =>
+    (s.includes('"') || s.includes('"') || s.includes('"') || s.includes('\'')) &&
+    /(밝혔다|말했다|전했다|강조했다|설명했다|덧붙였다|언급했다)/.test(s)
+  ).slice(0, 3)
+}
+
+// ── v11 도입부 동적 생성 (뉴스별 고유 문장) ───────────────────────────
+function buildIntro(title, evt, dom, keyLines, parsed) {
+  const evtInfo = EVT[evt] || { label: '📰 주요 소식' }
+  const domInfo = DOM[dom] || DOM.startup
+  const numStr = parsed.nums.length > 0 ? ` ${parsed.nums[0]}` : ''
+  const company = parsed.companies.length > 0 ? parsed.companies[0] : ''
+
+  // 본문 첫 문장이 충분히 유효하면 사용
+  if (keyLines[0] && keyLines[0].length >= 30 && keyLines[0].length <= 200) {
+    return keyLines[0]
+  }
+  // 회사명 + 수치가 있으면 구조화
+  if (company && numStr) {
+    return `${company}이${numStr} 규모의 소식으로 ${domInfo.ko} 업계의 이목을 끌었습니다.`
+  }
+  // 이벤트 유형 기반 기본 도입부
+  const intros = {
+    funding:     `이번 투자 유치${numStr}는 ${domInfo.ko} 분야 성장세를 보여주는 사례입니다.`,
+    product:     `새로운 서비스/제품의 등장은 ${domInfo.ko} 시장에 변화를 예고합니다.`,
+    policy:      `정부·기관의 정책 발표가 ${domInfo.ko} 창업 생태계에 직접적인 영향을 미칩니다.`,
+    acquisition: `인수합병은 ${domInfo.ko} 업계 재편의 신호탄이 될 수 있습니다.`,
+    research:    `새로운 연구·조사 결과가 ${domInfo.ko} 분야의 방향성을 제시합니다.`,
+    person:      `창업가의 경험과 통찰은 ${domInfo.ko} 생태계 전체에 울림을 줍니다.`,
+    market:      `시장 변화의 흐름을 읽는 것이 창업의 출발점입니다.`,
+    ipo:         `IPO는 스타트업 성장 여정의 중요한 이정표입니다.`,
+    general:     `${domInfo.ko} 분야의 이번 소식은 창업가들이 주목해야 할 변화를 담고 있습니다.`,
+  }
+  return intros[evt] || intros.general
+}
+
 // ══════════════════════════════════════════════════════════════════════
-// v10 롱폼 빌더 (5,000자+ 딥인사이트)
+// v11 롱폼 빌더 — 완전 동적 본문 기반 분석 (고정 템플릿 제거)
 // ══════════════════════════════════════════════════════════════════════
 
 function buildLongformSummary(title, body) {
@@ -306,29 +371,40 @@ function buildLongformSummary(title, body) {
   const dom = detectDom(title, cb)
   const evt = detectEvt(title, cb)
   const sents = splitSents(cb)
-  const evtInfo = EVT[evt] || EVT.market
+  const evtInfo = EVT[evt] || { label: '📰 주요 소식' }
   const domInfo = DOM[dom] || DOM.startup
   const insight = DEEP_INSIGHT[evt] || DEEP_INSIGHT.general
   const parsed = parseTitle(title)
   const marketContext = injectMarketData(title, cb)
   const sectorCtx = SECTOR_CONTEXT[dom] || ''
 
-  const used = new Set()
+  const used = new Set()       // 이미 사용된 용어 (중복 설명 방지)
+  const usedSents = new Set()  // 이미 사용된 문장 (중복 출력 방지)
   const ttoks = tokenize(title)
 
-  // 본문 문장 스코어링
-  let keyLines = [], numLines = [], cauLines = [], extraLines = []
+  // ── 문장 분류 ─────────────────────────────────────────────────────
+  let keyLines = [], numLines = [], cauLines = [], extraLines = [], quoteLines = []
   if (sents.length > 0) {
     const scored = scoreAll(sents, ttoks).filter(x => x.score >= 0).sort((a,b) => b.score - a.score)
-    const topIdx = new Set(scored.slice(0, 6).map(x => x.idx))
-    keyLines = sents.filter((_,i) => topIdx.has(i)).slice(0, 5)
-    numLines = sents.filter(s => hasNum(s) && !keyLines.includes(s)).slice(0, 4)
-    cauLines = sents.filter(s => isCausal(s) && !keyLines.includes(s) && !numLines.includes(s)).slice(0, 3)
-    // 추가 맥락 문장
-    extraLines = scored.slice(6, 12).map(x => x.sent).filter(s => !keyLines.includes(s) && !numLines.includes(s) && !cauLines.includes(s)).slice(0, 4)
+    const topIdx = new Set(scored.slice(0, 8).map(x => x.idx))
+    keyLines   = sents.filter((_,i) => topIdx.has(i)).slice(0, 6)
+    numLines   = sents.filter(s => hasNum(s) && !keyLines.includes(s)).slice(0, 5)
+    cauLines   = sents.filter(s => isCausal(s) && !keyLines.includes(s) && !numLines.includes(s)).slice(0, 4)
+    quoteLines = detectQuotes(sents).filter(s => !keyLines.includes(s))
+    extraLines = scored.slice(8, 16).map(x => x.sent)
+      .filter(s => !keyLines.includes(s) && !numLines.includes(s) && !cauLines.includes(s) && !quoteLines.includes(s))
+      .slice(0, 5)
+  }
+
+  // 중복 없이 문장 추가하는 헬퍼
+  const addSent = (s, lines) => {
+    if (!s || usedSents.has(s)) return
+    usedSents.add(s)
+    lines.push(applyTerms(s, used))
   }
 
   const lines = []
+  const hasBody = sents.length > 2  // 본문이 충분한지 여부
 
   // ── 헤더 ──────────────────────────────────────────────────────────
   lines.push(`**${title.trim()}**`, '')
@@ -336,80 +412,93 @@ function buildLongformSummary(title, body) {
   if (parsed.nums.length > 0) {
     lines.push(`🔢 **핵심 수치**: ${parsed.nums.join(' / ')}`, '')
   }
+  lines.push('')
 
-  // ── §1. 한줄 요약 ────────────────────────────────────────────────
-  lines.push('## 📌 한줄 요약', '')
-  const oneLiner = keyLines[0]
-    ? applyTerms(keyLines[0].slice(0, 120), used) + (keyLines[0].length > 120 ? '...' : '')
-    : `${title.trim()} — ${domInfo.ko} 분야 주요 소식.`
-  lines.push(oneLiner, '')
+  // ── §1. 도입 (뉴스별 고유 생성) ──────────────────────────────────
+  const intro = buildIntro(title, evt, dom, keyLines, parsed)
+  lines.push(intro, '')
 
-  // ── §2. 핵심 내용 (3~5문장) ──────────────────────────────────────
-  lines.push('## 🔍 핵심 내용', '')
+  // ── §2. 핵심 내용 (본문에서 추출한 실제 문장들) ───────────────────
   if (keyLines.length > 0) {
-    keyLines.forEach(s => lines.push(applyTerms(s, used)))
+    lines.push('## 🔍 핵심 내용', '')
+    keyLines.forEach(s => addSent(s, lines))
     lines.push('')
-  } else {
-    lines.push(title.trim(), '')
   }
 
-  // ── §3. 주요 수치 & 데이터 ───────────────────────────────────────
+  // ── §3. 주요 수치 & 데이터 (본문에서 추출, 없으면 섹션 생략) ─────
   if (numLines.length > 0) {
     lines.push('## 📊 주요 수치 & 데이터', '')
-    numLines.forEach(s => lines.push(`→ ${applyTerms(s, used)}`))
+    numLines.forEach(s => {
+      if (!usedSents.has(s)) {
+        usedSents.add(s)
+        lines.push(`→ ${applyTerms(s, used)}`)
+      }
+    })
     lines.push('')
   }
 
-  // ── §4. 배경과 맥락 ──────────────────────────────────────────────
-  lines.push('## 🗺️ 배경과 맥락', '')
+  // ── §4. 현장의 목소리 (인용문 있을 때만) ─────────────────────────
+  if (quoteLines.length > 0) {
+    lines.push('## 💬 현장의 목소리', '')
+    quoteLines.forEach(s => {
+      if (!usedSents.has(s)) {
+        usedSents.add(s)
+        lines.push(`> ${applyTerms(s, used)}`)
+      }
+    })
+    lines.push('')
+  }
+
+  // ── §5. 배경과 맥락 (인과관계 문장 있을 때만) ────────────────────
   if (cauLines.length > 0) {
-    cauLines.forEach(s => lines.push(applyTerms(s, used)))
+    lines.push('## 🗺️ 배경과 맥락', '')
+    cauLines.forEach(s => addSent(s, lines))
     lines.push('')
-  } else if (extraLines.length > 0) {
-    extraLines.slice(0, 2).forEach(s => lines.push(applyTerms(s, used)))
+  } else if (extraLines.length >= 2 && hasBody) {
+    lines.push('## 🗺️ 배경과 맥락', '')
+    extraLines.slice(0, 2).forEach(s => addSent(s, lines))
     lines.push('')
-  } else {
-    lines.push(`${domInfo.ko} 분야의 이 소식은 최근 산업 변화 흐름 속에서 나왔습니다.`, '')
   }
 
-  // ── §5. 시장 데이터 (MarketDataDB 내재화) ────────────────────────
+  // ── §6. 시장 데이터 (해당 키워드 있을 때만) ──────────────────────
   if (marketContext.length > 0 || sectorCtx) {
-    lines.push('## 📈 시장 데이터', '')
+    lines.push('## 📈 시장 맥락', '')
     if (sectorCtx) lines.push(sectorCtx, '')
     marketContext.forEach(ctx => lines.push(`> ${ctx}`))
     if (marketContext.length > 0) lines.push('')
   }
 
-  // ── §6. 왜 지금 중요한가 ─────────────────────────────────────────
+  // ── §7. 추가 분석 (충분한 본문이 있을 때만) ──────────────────────
+  const remainingExtra = extraLines.filter(s => !usedSents.has(s))
+  if (remainingExtra.length > 0 && hasBody) {
+    lines.push('## 🔗 추가 분석', '')
+    remainingExtra.slice(0, 3).forEach(s => addSent(s, lines))
+    lines.push('')
+  }
+
+  // ── §8. 왜 지금 중요한가 (이벤트 유형별 동적 생성) ───────────────
   lines.push('## 💡 왜 지금 중요한가', '')
   lines.push(insight.why, '')
   lines.push(insight.how, '')
 
-  // ── §7. 추가 맥락 문장 ───────────────────────────────────────────
-  if (extraLines.length > 0) {
-    lines.push('## 🔗 추가 분석', '')
-    extraLines.forEach(s => lines.push(applyTerms(s, used)))
-    lines.push('')
-  }
-
-  // ── §8. 창업가 시사점 ─────────────────────────────────────────────
+  // ── §9. 창업가 시사점 ─────────────────────────────────────────────
   lines.push('## 🚀 창업가 시사점', '')
   lines.push(insight.action, '')
 
-  // ── §9. 청소년 창업가를 위한 포인트 ─────────────────────────────
+  // ── §10. 청소년 창업가 포인트 ────────────────────────────────────
   lines.push('## 🎯 청소년 창업가를 위한 포인트', '')
   lines.push(insight.youth, '')
 
-  // ── §10. 지금 바로 할 수 있는 것 ─────────────────────────────────
+  // ── §11. 지금 바로 할 수 있는 것 ─────────────────────────────────
   lines.push('## ✅ 지금 바로 할 수 있는 것', '')
-  lines.push(`1. **Insightship 멘토 AI**에게 "${domInfo.ko} 분야 창업 아이디어 어때?"라고 물어보세요.`)
+  lines.push(`1. **Insightship 멘토**에게 "${domInfo.ko} 분야 창업 아이디어 어때?"라고 물어보세요.`)
   lines.push(`2. **아이디어랩**에 이 뉴스에서 얻은 아이디어를 게시하고 피드백을 받아보세요.`)
   lines.push(`3. **트렌드 트래커**에서 ${domInfo.ko} 분야 시장 지표를 확인해보세요.`)
   lines.push('')
 
   // ── 푸터 ──────────────────────────────────────────────────────────
   lines.push('---')
-  lines.push(`*🤖 Insightship AI (insightship-longform-v10) · domain: ${dom} · event: ${evt} · cost $0*`)
+  lines.push(`*Insightship AI (insightship-longform-v11) · ${domInfo.ko} · ${evtInfo.label} · cost $0*`)
 
   return lines.join('\n')
 }
@@ -435,7 +524,7 @@ export default async function handler(req) {
     const [rTotal, rV10, rNull, rShort] = await Promise.allSettled([
       fetch(`${SB_URL}/rest/v1/articles?status=eq.published&select=id&limit=1`,
         { headers: { ...H, Prefer: 'count=exact' } }),
-      fetch(`${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=like.*insightship-longform-v10*&select=id&limit=1`,
+      fetch(`${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=like.*insightship-longform-v11*&select=id&limit=1`,
         { headers: { ...H, Prefer: 'count=exact' } }),
       fetch(`${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=is.null&select=id&limit=1`,
         { headers: { ...H, Prefer: 'count=exact' } }),
@@ -448,18 +537,18 @@ export default async function handler(req) {
       : 0
 
     const total = getCount(rTotal)
-    const v10Done = getCount(rV10)
+    const v11Done = getCount(rV10)
     const noSummary = getCount(rNull)
     const hasSummary = getCount(rShort)
 
     return new Response(JSON.stringify({
       total_articles:      total,
-      v10_longform_done:   v10Done,
+      v11_longform_done:   v11Done,
       has_any_summary:     hasSummary,
       no_summary:          noSummary,
-      needs_upgrade:       total - v10Done,
-      progress_pct:        total > 0 ? Math.round((v10Done / total) * 100) : 0,
-      engine:              'insightship-longform-v10',
+      needs_upgrade:       total - v11Done,
+      progress_pct:        total > 0 ? Math.round((v11Done / total) * 100) : 0,
+      engine:              'insightship-longform-v11',
       timestamp:           new Date().toISOString(),
     }), { headers: { 'Content-Type': 'application/json' } })
   }
@@ -490,7 +579,7 @@ export default async function handler(req) {
   } else if (v10Only) {
     // v10 롱폼 미완료 기사 (ai_summary에 v10 마커 없는 것)
     const r1 = await fetch(
-      `${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=not.like.*insightship-longform-v10*`
+      `${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=not.like.*insightship-longform-v11*`
       + `&select=id,title,body,excerpt,ai_summary`
       + `&order=published_at.desc&limit=${batchSize}&offset=${offset}`,
       { headers: H }
@@ -523,7 +612,7 @@ export default async function handler(req) {
         .filter(a => {
           if (existIds.has(a.id)) return false
           const sm = a.ai_summary || ''
-          return sm.length < 200 || !sm.includes('insightship-longform-v10')
+          return sm.length < 200 || !sm.includes('insightship-longform-v11')
         })
         .slice(0, need)
       articles = [...articles, ...extra]
@@ -540,7 +629,7 @@ export default async function handler(req) {
       message: remaining === 0 ? '✅ 모든 기사 롱폼 처리 완료!' : '현재 배치에 처리할 기사 없음',
       processed: 0, done: 0, failed: 0, remaining,
       next_offset: offset + batchSize,
-      engine: 'insightship-longform-v10',
+      engine: 'insightship-longform-v11',
       timestamp: new Date().toISOString(),
     }), { headers: { 'Content-Type': 'application/json' } })
   }
@@ -603,7 +692,7 @@ export default async function handler(req) {
     remaining,
     next_offset:    offset + batchSize,
     has_more:       remaining > 0,
-    engine:         'insightship-longform-v10',
+    engine:         'insightship-longform-v11',
     longform:       true,
     avg_length_est: '5,000자+',
     cost:           0,

@@ -5,8 +5,9 @@ import {
   MessageCircle, Heart, Eye, PenSquare, AlertCircle, Pin,
   ChevronRight, Search, X, Flame, Filter, Users, TrendingUp,
   Clock, ArrowUpRight, Hash, CheckCircle, Star, Zap, Plus,
-  RefreshCw, ThumbsUp
+  RefreshCw, ThumbsUp, Flag, MoreVertical
 } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { usePosts, useCreatePost, useHotPosts } from '../hooks/useData'
@@ -38,23 +39,98 @@ function Sk({ h=16, w='100%', r=6 }) {
     borderRadius:r, animation:'skPulse 1.6s ease-in-out infinite' }}/>
 }
 
+/* ── Report Modal ─────────────────────────────────── */
+function ReportModal({ targetType, targetId, onClose }) {
+  const [reason, setReason] = useState('')
+  const [sending, setSending] = useState(false)
+  const [done, setDone] = useState(false)
+  const { user } = useAuthStore()
+
+  const submit = async () => {
+    if (!reason.trim() || reason.trim().length < 10) { alert('신고 사유를 10자 이상 입력해주세요'); return }
+    setSending(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const r = await fetch('/api/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+        body: JSON.stringify({ target_type: targetType, target_id: targetId, reason: reason.trim() }),
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || '신고 실패')
+      setDone(true)
+      setTimeout(onClose, 1500)
+    } catch(e) {
+      alert('신고 실패: ' + (e.message?.slice(0, 60) || '오류'))
+    } finally { setSending(false) }
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:9000, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{ background:'var(--bg2)', border:'1px solid rgba(244,63,94,0.3)', borderRadius:14, padding:24, width:'100%', maxWidth:440, boxShadow:'0 20px 60px rgba(0,0,0,0.4)' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16 }}>
+          <Flag size={16} color="#F43F5E"/>
+          <span style={{ fontFamily:'var(--f-display)', fontSize:16, fontWeight:700, color:'var(--t1)' }}>신고하기</span>
+          <button onClick={onClose} style={{ marginLeft:'auto', background:'none', border:'none', color:'var(--t4)', cursor:'pointer', fontSize:18 }}>✕</button>
+        </div>
+        {done ? (
+          <div style={{ textAlign:'center', padding:'20px 0', color:'#22C55E', fontFamily:'var(--f-mono)', fontSize:13 }}>
+            ✅ 신고가 접수되었습니다. 관리자가 검토합니다.
+          </div>
+        ) : (
+          <>
+            <p style={{ fontSize:13, color:'var(--t3)', lineHeight:1.6, marginBottom:14 }}>
+              부적절한 콘텐츠(스팸, 욕설, 불법 정보 등)를 신고해주세요.
+            </p>
+            <div style={{ marginBottom:8 }}>
+              <div style={{ fontFamily:'var(--f-mono)', fontSize:10, color:'var(--t3)', marginBottom:6, letterSpacing:'1px' }}>신고 사유 *</div>
+              <textarea value={reason} onChange={e=>setReason(e.target.value)}
+                placeholder="신고 사유를 구체적으로 입력해주세요 (스팸, 욕설, 불법 정보 등)"
+                rows={4} maxLength={500}
+                style={{ width:'100%', padding:'10px 12px', background:'var(--bg3)', border:'1px solid var(--b1)', color:'var(--t1)', fontSize:13, fontFamily:'var(--f-sans)', resize:'vertical', outline:'none', borderRadius:8, boxSizing:'border-box' }}/>
+              <div style={{ fontFamily:'var(--f-mono)', fontSize:10, color:'var(--t4)', textAlign:'right', marginTop:4 }}>{reason.length}/500</div>
+            </div>
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+              <button onClick={onClose} style={{ padding:'9px 16px', background:'var(--bg3)', border:'1px solid var(--b1)', borderRadius:8, color:'var(--t2)', fontSize:13, cursor:'pointer', fontFamily:'var(--f-sans)' }}>취소</button>
+              <button onClick={submit} disabled={sending || reason.length < 10}
+                style={{ padding:'9px 18px', background: reason.length < 10 ? 'rgba(244,63,94,0.3)' : 'rgba(244,63,94,0.9)', border:'1px solid rgba(244,63,94,0.4)', borderRadius:8, color:'#fff', fontSize:13, cursor: reason.length < 10 ? 'not-allowed' : 'pointer', fontFamily:'var(--f-sans)', fontWeight:600, display:'flex', alignItems:'center', gap:6 }}>
+                {sending ? '접수 중...' : <><Flag size={12}/> 신고 접수</>}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 /* ── Post card ──────────────────────────────────────── */
-function PostCard({ post }) {
+function PostCard({ post, onReport }) {
   const navigate = useNavigate()
+  const { user } = useAuthStore()
   const [hov, setHov] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const author = post.profiles
   const tc = TYPE_COLORS[post.post_type]||'var(--t3)'
   const isNotice = post.post_type==='notice'
   const isRecruit = post.post_type==='recruit'
+  const isAuthor = user?.id === post.author_id
+
+  const handleCardClick = (e) => {
+    if (e.target.closest('[data-action]')) return
+    navigate(`/community/${post.id}`)
+  }
+
   return (
-    <div onClick={()=>navigate(`/community/${post.id}`)}
-      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+    <div onClick={handleCardClick}
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>{setHov(false);setMenuOpen(false)}}
       style={{ padding:'16px 20px', background:hov?'var(--bg3)':'var(--bg2)',
         border:`1px solid ${hov?(isNotice?'rgba(244,63,94,0.35)':isRecruit?'rgba(34,197,94,0.3)':'var(--b2)'):'var(--b1)'}`,
         borderRadius:12, cursor:'pointer', transition:'all .2s',
         borderLeft:`3px solid ${isNotice?'#F43F5E':isRecruit?'#22C55E':'transparent'}`,
         background:isNotice?'rgba(244,63,94,0.025)':hov?'var(--bg3)':'var(--bg2)',
-        transform:hov?'translateX(2px)':'none' }}>
+        transform:hov?'translateX(2px)':'none', position:'relative' }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, marginBottom:8 }}>
         <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
           {post.is_pinned && (
@@ -99,13 +175,33 @@ function PostCard({ post }) {
           overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
           {author?.display_name||'익명'}
         </span>
-        <div style={{ display:'flex', gap:12, flexShrink:0 }}>
+        <div style={{ display:'flex', gap:12, flexShrink:0, alignItems:'center' }}>
           {[[Eye,post.view_count||0],[ThumbsUp,post.like_count||0],[MessageCircle,post.reply_count||post.comment_count||0]].map(([Icon,count],i)=>(
             <span key={i} style={{ display:'flex', alignItems:'center', gap:3,
               fontFamily:'var(--f-mono)', fontSize:10, color:'var(--t3)' }}>
               <Icon size={10}/>{count}
             </span>
           ))}
+          {/* 신고 버튼 (작성자 제외, 로그인한 경우만) */}
+          {user && !isAuthor && (
+            <div data-action style={{ position:'relative' }}>
+              <button data-action
+                onClick={e=>{e.stopPropagation();setMenuOpen(p=>!p)}}
+                style={{ background:'none', border:'none', cursor:'pointer', color:'var(--t4)', padding:'2px 4px', display:'flex', alignItems:'center', borderRadius:4, opacity: hov ? 1 : 0, transition:'opacity .15s' }}
+                title="더보기">
+                <MoreVertical size={13}/>
+              </button>
+              {menuOpen && (
+                <div data-action style={{ position:'absolute', right:0, bottom:'100%', marginBottom:4, background:'var(--bg2)', border:'1px solid var(--b1)', borderRadius:8, boxShadow:'0 4px 16px rgba(0,0,0,0.3)', zIndex:100, minWidth:110 }}>
+                  <button data-action
+                    onClick={e=>{e.stopPropagation();setMenuOpen(false);onReport&&onReport(post.id)}}
+                    style={{ width:'100%', display:'flex', alignItems:'center', gap:8, padding:'9px 14px', background:'none', border:'none', cursor:'pointer', color:'#F43F5E', fontSize:13, fontFamily:'var(--f-sans)', whiteSpace:'nowrap' }}>
+                    <Flag size={12}/> 신고하기
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -359,6 +455,7 @@ export default function CommunityPage() {
   const [searchOn, setSearchOn] = useState(false)
   const [showWrite, setShowWrite] = useState(false)
   const [page, setPage] = useState(0)
+  const [reportTarget, setReportTarget] = useState(null) // { type, id }
 
   const { data:posts=[], isLoading } = usePosts({ type:tab==='all'?undefined:tab, page })
   const createPost = useCreatePost()
@@ -520,7 +617,7 @@ export default function CommunityPage() {
             </div>
           ) : (
             <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
-              {filtered.map(p=><PostCard key={p.id} post={p}/>)}
+              {filtered.map(p=><PostCard key={p.id} post={p} onReport={id=>setReportTarget({type:'post',id})}/>)}
             </div>
           )}
 
@@ -669,6 +766,15 @@ export default function CommunityPage() {
 
       {showWrite && (
         <WriteModal onClose={()=>setShowWrite(false)} onSubmit={handleWrite}/>
+      )}
+
+      {/* 신고 모달 */}
+      {reportTarget && (
+        <ReportModal
+          targetType={reportTarget.type}
+          targetId={reportTarget.id}
+          onClose={()=>setReportTarget(null)}
+        />
       )}
 
       <style>{`
