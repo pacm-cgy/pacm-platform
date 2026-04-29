@@ -109,28 +109,30 @@ export default function StaffChatPopup() {
   // ── 이중 admin 보안 검사 ────────────────────────────────────────
   if (!profile || profile.role !== 'admin') return null
 
-  const [open,      setOpen]      = useState(false)
-  const [room,      setRoom]      = useState('general')
-  const [messages,  setMessages]  = useState([])
-  const [input,     setInput]     = useState('')
-  const [loading,   setLoading]   = useState(false)
-  const [sending,   setSending]   = useState(false)
-  const [unread,    setUnread]    = useState(0)
-  const [minimized, setMinimized] = useState(false)
-  const [aiTyping,  setAiTyping]  = useState(false)    // AI 직원 타이핑 표시
-  const [autoMsg,   setAutoMsg]   = useState(null)     // 자동 반응 결과 표시
+  const [open,        setOpen]        = useState(false)
+  const [room,        setRoom]        = useState('general')
+  const [messages,    setMessages]    = useState([])
+  const [input,       setInput]       = useState('')
+  const [loading,     setLoading]     = useState(false)
+  const [sending,     setSending]     = useState(false)
+  const [unread,      setUnread]      = useState(0)
+  const [minimized,   setMinimized]   = useState(false)
+  const [aiTyping,    setAiTyping]    = useState(false)    // AI 직원 타이핑 표시
+  const [autoMsg,     setAutoMsg]     = useState(null)     // 자동 반응 결과 표시
+  const [tableSetup,  setTableSetup]  = useState(false)    // 테이블 초기화 중 표시
 
-  const bottomRef   = useRef(null)
-  const pollRef     = useRef(null)
-  const prevCountRef = useRef(0)
-  const roomRef     = useRef(room)   // BUG3 fix: 폴링에서 최신 room 참조
-  const openRef     = useRef(open)   // BUG3 fix: 폴링에서 최신 open 참조
+  const bottomRef     = useRef(null)
+  const pollRef       = useRef(null)
+  const prevCountRef  = useRef(0)
+  const roomRef       = useRef(room)   // BUG3 fix: 폴링에서 최신 room 참조
+  const openRef       = useRef(open)   // BUG3 fix: 폴링에서 최신 open 참조
+  const tableInitRef  = useRef(false)  // 테이블 생성 중복 방지
 
   // ref 동기화
   useEffect(() => { roomRef.current = room }, [room])
   useEffect(() => { openRef.current = open  }, [open])
 
-  // ── CRON_SECRET 없이도 admin 토큰으로 호출 가능하게 ─────────────
+  // ── admin JWT 헤더 반환 ──────────────────────────────────────────
   const getAuthHeader = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -140,9 +142,38 @@ export default function StaffChatPopup() {
     } catch { return {} }
   }, [])
 
+  // fetchMessages ref — 순환 참조 없이 ensureTable → fetchMessages 호출용
+  const fetchMessagesRef = useRef(null)
+
+  // ── 테이블 자동 생성 (table_ready=false 감지 시 1회 호출) ────────
+  const ensureTable = useCallback(async () => {
+    if (tableInitRef.current) return   // 이미 진행 중이면 스킵
+    tableInitRef.current = true
+    setTableSetup(true)
+    try {
+      const authH = await getAuthHeader()
+      if (!authH.Authorization) {
+        // admin JWT 없어도 최소한 setupTable fire-and-forget은 API에서 시도됨
+        // → 그냥 스킵하지 말고 계속 폴링하면 API가 자동 생성 시도
+      } else {
+        const r = await fetch('/api/db-setup-staff', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', ...authH },
+        })
+        const d = await r.json().catch(() => ({}))
+        if (d.ok || d.results?.table_exists) {
+          // 테이블 생성 완료 → 즉시 재조회
+          fetchMessagesRef.current?.(true)
+        }
+      }
+    } catch (_) {}
+    setTableSetup(false)
+    tableInitRef.current = false
+  }, [getAuthHeader])
+
   // ── 메시지 조회 ─────────────────────────────────────────────────
-  // BUG2 fix: table_ready=false(null 반환)면 기존 messages 유지 — 빈배열로 덮지 않음
-  // BUG3 fix: useCallback deps에서 room/open 제거 → ref로 참조해 폴링 재생성 방지
+  // BUG2 fix: table_ready=false 면 기존 messages 유지 — 빈배열로 덮지 않음
+  // BUG3 fix: useCallback deps [] → 함수 재생성 없음 → 폴링 인터벌 안정적
   const fetchMessages = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
     try {
@@ -150,9 +181,9 @@ export default function StaffChatPopup() {
       const r = await fetch(`/api/staff-chat?room=${currentRoom}&limit=80`)
       const d = await r.json().catch(() => ({}))
 
-      // table_ready=false 이거나 d.messages가 null/undefined면 → 기존 messages 건드리지 않음
+      // table_ready=false → 테이블 없음: 기존 메시지 유지 + 자동 생성 트리거 (1회)
       if (d.table_ready === false) {
-        // 테이블 아직 없음 — 폴링이 기존 메시지를 날리지 않도록 early return
+        if (!tableInitRef.current) ensureTable()
         if (!silent) setLoading(false)
         return
       }
@@ -161,14 +192,14 @@ export default function StaffChatPopup() {
         setMessages(prev => {
           // BUG2 fix: 새 메시지가 기존보다 적으면 (예: 빈배열) 기존 유지
           if (d.messages.length === 0 && prev.length > 0) return prev
-          const newCount = d.messages.length - prev.length
+          const newCount = d.messages.length - prev.filter(m => !m.id?.startsWith('optimistic-')).length
           if (!openRef.current && newCount > 0) setUnread(u => u + newCount)
           return d.messages
         })
       }
     } catch (_) {}
     if (!silent) setLoading(false)
-  }, [])   // BUG3 fix: deps [] → 함수 재생성 없음 → 폴링 인터벌 안정적
+  }, [ensureTable])   // ensureTable 포함 — 순환 ref로 역방향 참조 해결됨
 
   // 방 변경 시 메시지 로드
   useEffect(() => {
@@ -176,6 +207,11 @@ export default function StaffChatPopup() {
     prevCountRef.current = 0
     fetchMessages()
   }, [room])  // eslint-disable-line
+
+  // fetchMessagesRef 동기화 — ensureTable에서 역참조용
+  useEffect(() => {
+    fetchMessagesRef.current = fetchMessages
+  }, [fetchMessages])
 
   // 폴링 — 3초마다, fetchMessages가 재생성되지 않아 인터벌 안정적
   useEffect(() => {
@@ -417,6 +453,18 @@ export default function StaffChatPopup() {
                   </button>
                 ))}
               </div>
+
+              {/* ── 테이블 초기화 중 배너 ─────────────────────── */}
+              {tableSetup && (
+                <div style={{
+                  background: 'rgba(251,191,36,0.08)', borderBottom: '1px solid rgba(251,191,36,0.2)',
+                  padding: '5px 14px', fontSize: 10, color: '#FBBF24',
+                  fontFamily: 'var(--f-mono)', letterSpacing: '0.5px', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <span>⚙️</span> 채팅 DB 초기화 중… (최초 1회)
+                </div>
+              )}
 
               {/* ── 자동 반응 알림 ─────────────────────────────── */}
               {autoMsg && (
