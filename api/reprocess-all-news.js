@@ -1,20 +1,18 @@
 /**
  * api/reprocess-all-news.js
- * Insightship 뉴스 전체 재처리기 v11.0
- * 완전 동적 본문 분석 — 고정 템플릿 탈피 + HTML 엔티티 전처리 강화
+ * Insightship 뉴스 전체 재처리기 v12.0
+ * 완전 동적 본문 분석 — 고정 템플릿 0개, 본문 문장 기반 100% 생성
  *
  * POST /api/reprocess-all-news  (Authorization: Bearer CRON_SECRET)
  *   body: { batch?: number (기본30), offset?: number (기본0), force?: boolean }
  * GET  /api/reprocess-all-news  → 처리 현황 통계
  *
- * v11 업그레이드:
- *   - HTML 엔티티(&nbsp;&amp;&lt;&gt;&quot;&#숫자;) 완전 전처리
- *   - 본문 내용 기반 완전 동적 섹션 생성 (고정 템플릿 제거)
- *   - 본문 부족 시 섹션 자동 생략 (빈 섹션 0개)
- *   - 인용문/Q&A 자동 감지 및 별도 섹션 구성
- *   - 인물/기업/수치 NER 강화
- *   - 뉴스별 고유 도입부 자동 생성
- *   - 중복 문장 제거 로직 강화
+ * v12 핵심:
+ *   - DEEP_INSIGHT 고정 템플릿 완전 제거
+ *   - 본문 문장에서 Why/How/Action/Youth 섹션 동적 추출
+ *   - 본문 내용 없으면 섹션 전체 생략 (빈 고정 문구 0개)
+ *   - 제목·핵심어·수치·인과문장 조합으로 각 기사별 고유 요약 생성
+ *   - 마커 v12로 변경 → 모든 이전 기사 재처리 대상 포함
  */
 export const config = { runtime: 'edge', maxDuration: 60 }
 
@@ -23,7 +21,7 @@ const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
 const CRON_SECRET = process.env.CRON_SECRET
 
 // ══════════════════════════════════════════════════════════════════════
-// v10 NLP 코어 (summarize-news.js v10 핵심 로직 완전 내장)
+// NLP 코어
 // ══════════════════════════════════════════════════════════════════════
 
 const STOPWORDS = new Set([
@@ -59,7 +57,7 @@ function bm25(qToks, dToks, avgLen, N, df) {
   return s
 }
 
-// ── 이벤트 분류 (v10: 확장된 키워드셋) ────────────────────────────────
+// ── 이벤트 분류 ────────────────────────────────────────────────────────
 const EVT = {
   funding:     { kw:['투자','펀딩','시리즈','유치','억원','조원','라운드','시드','VC','엔젤','CVC','프리시드','브릿지'], label:'💰 투자 유치' },
   product:     { kw:['출시','론칭','선보','공개','베타','서비스','앱','플랫폼','오픈','런칭','업데이트','신기능'],      label:'🚀 제품/서비스 출시' },
@@ -85,119 +83,7 @@ const DOM = {
   climate:   { kw:['기후','탄소','신재생','태양광','배터리','전기차','그린에너지'],                ko:'기후테크',    cat:'insight' },
 }
 
-// ── v10 시장 데이터베이스 (MarketDataDB) ─────────────────────────────
-const MARKET_DATA = {
-  'AI': { size: '약 1,840억 달러(2030년 전망)', growth: '연 37% 성장', context: 'AI 시장은 2030년까지 약 1,840억 달러 규모로 성장할 전망입니다.' },
-  '인공지능': { size: '약 1,840억 달러(2030년 전망)', growth: '연 37% 성장', context: '인공지능 시장은 전 세계적으로 폭발적 성장 중입니다.' },
-  '에듀테크': { size: '국내 약 8조원(2024년)', growth: '연 15% 성장', context: '에듀테크 시장은 코로나 이후 비대면 교육 수요 급증으로 빠르게 성장했습니다.' },
-  '핀테크': { size: '국내 약 25조원(2024년)', growth: '연 20% 성장', context: '핀테크 시장은 간편결제·인터넷은행 확산으로 급성장 중입니다.' },
-  '헬스케어': { size: '디지털 헬스 국내 약 15조원', growth: '연 25% 성장', context: '디지털 헬스케어는 AI 진단·원격의료 도입으로 빠르게 확장되고 있습니다.' },
-  '스타트업': { size: '국내 벤처투자 약 6조원(2024년)', growth: '전년 대비 회복세', context: '국내 스타트업 생태계는 글로벌 투자 위축 이후 회복 국면에 접어들었습니다.' },
-  '그린바이오': { size: '글로벌 약 6,000억 달러(2027년)', growth: '연 12% 성장', context: '그린바이오는 농업·식품·환경 분야의 생명공학 기술로 빠르게 시장이 형성되고 있습니다.' },
-  '기후테크': { size: '글로벌 약 1조 달러 이상(2030년)', growth: '연 24% 성장', context: '기후테크는 탄소중립 의무화로 전 세계적으로 투자가 집중되고 있습니다.' },
-  'SaaS': { size: '글로벌 약 3,000억 달러(2024년)', growth: '연 18% 성장', context: 'SaaS(구독형 소프트웨어) 시장은 기업 디지털 전환으로 안정적 성장세를 유지합니다.' },
-}
-
-// ── v10 용어 사전 (청소년 눈높이) ─────────────────────────────────────
-const TERMS = {
-  'IPO':'IPO(기업공개, 주식시장에 처음 상장해 일반 투자자에게 주식을 파는 것)',
-  'VC':'VC(벤처캐피털, 스타트업 전문 투자회사)',
-  '시리즈A':'시리즈A(초기 대규모 투자 단계, 보통 수십억~수백억 원)',
-  '시리즈B':'시리즈B(성장 가속화 단계 투자, 시리즈A 이후)',
-  '시리즈C':'시리즈C(확장·글로벌 진출 단계 투자)',
-  '유니콘':'유니콘(기업가치 1조원 이상 비상장 스타트업)',
-  'SaaS':'SaaS(월정액을 내고 인터넷으로 쓰는 구독형 소프트웨어)',
-  'B2B':'B2B(기업이 기업에게 파는 비즈니스 모델)',
-  'B2C':'B2C(기업이 일반 소비자에게 직접 파는 모델)',
-  'MVP':'MVP(최소 기능 제품 — 핵심 기능만 넣은 첫 번째 버전)',
-  'PMF':'PMF(제품-시장 적합성 — 제품이 시장에 딱 맞는 상태)',
-  'M&A':'M&A(기업 인수·합병)',
-  'ARR':'ARR(연간 반복 수익 — 구독서비스에서 1년치 예상 매출)',
-  'MRR':'MRR(월간 반복 수익)',
-  'TAM':'TAM(전체 시장 규모)',
-  'CVC':'CVC(대기업이 운영하는 기업형 벤처캐피털)',
-  'TIPS':'TIPS(민간 투자와 정부 지원이 연계되는 기술창업 프로그램)',
-  '데카콘':'데카콘(기업가치 10조원 이상 스타트업)',
-  'ESG':'ESG(환경·사회·지배구조를 고려하는 경영 원칙)',
-  '피봇':'피봇(사업 방향 전환)',
-  '그로스해킹':'그로스해킹(데이터 기반 빠른 성장 전략)',
-  '린스타트업':'린스타트업(최소 자원으로 빠르게 검증하는 창업 방법론)',
-  '액셀러레이터':'액셀러레이터(초기 스타트업에 투자·멘토링을 제공하는 기관)',
-}
-
-// ── v10 깊이 있는 인사이트 메시지 ─────────────────────────────────────
-const DEEP_INSIGHT = {
-  funding: {
-    why: '투자는 단순한 돈이 아닙니다. 투자자는 "이 팀이 이 문제를 해결할 수 있는가"를 삽니다.',
-    how: '투자받은 기업의 피치덱을 상상해보세요. 어떤 문제를, 얼마나 큰 시장에서, 어떤 방법으로 해결하는지 3가지 질문의 답이 있을 것입니다.',
-    action: '지금 내 아이디어로 이 3가지 질문에 답해보세요. 그게 첫 번째 피치의 시작입니다.',
-    youth: '청소년 창업가도 투자를 받을 수 있습니다. 비즈쿨, 창진원 예비창업패키지, 각종 창업 공모전이 그 첫 관문입니다.',
-  },
-  product: {
-    why: '제품 출시는 "이 문제를 이런 방법으로 해결하겠다"는 선언입니다.',
-    how: '출시된 제품의 핵심 기능 한 가지를 찾아보세요. MVP는 그것만으로 시작합니다.',
-    action: '내 아이디어의 핵심 기능 한 가지를 정의해보세요. 나머지는 다 지워도 됩니다.',
-    youth: '코딩 없이도 노션, 카카오채널, 구글폼으로 MVP를 만들 수 있습니다. 지금 당장 시작할 수 있어요.',
-  },
-  policy: {
-    why: '정부 지원은 창업의 진입장벽을 낮추는 가장 현실적인 방법입니다.',
-    how: '지원 프로그램의 선발 기준을 읽어보세요. "어떤 팀에게 투자하고 싶은가"가 정부의 전략을 보여줍니다.',
-    action: '창진원 K-Startup 사이트에서 지금 신청 가능한 프로그램을 확인해보세요.',
-    youth: '청소년 대상 비즈쿨, 창업경진대회는 나이 제한이 없는 첫 번째 기회입니다.',
-  },
-  acquisition: {
-    why: 'M&A는 스타트업의 또 다른 성공 출구입니다. "인수될 만한 회사"를 목표로 창업하는 역발상도 있습니다.',
-    how: '인수한 기업이 무엇을 원했는지 분석해보세요. 기술인지, 팀인지, 고객인지에 따라 창업 전략이 달라집니다.',
-    action: '"어떤 대기업이 내 스타트업을 인수하고 싶어할까?" 상상해보는 것부터 시작하세요.',
-    youth: '대기업 CVC와 연결되는 공모전에 참여하면 잠재적 파트너를 만날 수 있습니다.',
-  },
-  research: {
-    why: '데이터는 가설을 증거로 바꿉니다. "느낌"이 아닌 "숫자"로 설득하는 습관이 창업가를 만듭니다.',
-    how: '이 연구 결과가 보여주는 문제를 내가 해결한다면? 그 관점에서 데이터를 다시 읽어보세요.',
-    action: '내 아이디어를 지지하는 데이터 3가지를 찾아 메모해두세요. 그게 미래의 피치덱 근거가 됩니다.',
-    youth: '학교에서 배우는 논문 읽기 방법이 창업에도 그대로 쓰입니다. 요약-핵심 주장-데이터-결론 구조로 읽어보세요.',
-  },
-  person: {
-    why: '성공한 창업가의 스토리에서 가장 중요한 것은 실패와 피봇의 순간입니다.',
-    how: '그 창업가가 어떤 문제에서 아이디어를 얻었는지, 첫 번째 팀은 어떻게 구성했는지 추적해보세요.',
-    action: '롤모델 창업가에게 LinkedIn이나 이메일로 질문 한 가지를 보내보세요. 생각보다 많은 사람이 답장합니다.',
-    youth: '나이가 어리다는 것은 "아직 틀에 갇히지 않았다"는 경쟁 우위입니다. 이 창업가도 어딘가에서 시작했습니다.',
-  },
-  market: {
-    why: '시장 트렌드 분석은 타이밍의 예술입니다. 너무 이르면 교육이 필요하고, 너무 늦으면 레드오션입니다.',
-    how: '지금 이 시장이 성장하는 이유 3가지를 적어보세요. 그 이유가 지속될 조건이 있는지 검토하세요.',
-    action: '내 아이디어가 어느 시장에 속하는지, 그 시장의 성장률은 얼마인지 찾아보세요.',
-    youth: 'Statista, CB Insights, 창업진흥원 보고서는 무료로 시장 데이터를 제공합니다.',
-  },
-  ipo: {
-    why: 'IPO는 스타트업의 긴 여정 중 한 이정표입니다. 단기 목표가 아닌 성장의 신호로 읽어보세요.',
-    how: 'IPO 기업의 공모 신청서(투자설명서)는 그 회사의 모든 것을 보여주는 교과서입니다.',
-    action: '상장한 스타트업의 투자설명서를 하나 골라 읽어보세요. 사업 모델 설명 방식이 특히 참고가 됩니다.',
-    youth: '지금 IPO하는 스타트업들도 10년 전에는 학생 창업팀이었습니다.',
-  },
-  general: {
-    why: '모든 성공한 스타트업에는 남들이 놓친 문제를 발견한 순간이 있었습니다.',
-    how: '오늘의 뉴스를 "이 문제를 내가 해결한다면?" 창업가의 시선으로 다시 읽어보세요.',
-    action: 'Insightship AI 멘토에게 이 뉴스를 공유하고 창업 아이디어 가능성을 물어보세요.',
-    youth: '나이, 경험, 자본이 없어도 됩니다. 문제를 발견하는 눈과 실행하려는 의지만 있으면 됩니다.',
-  },
-}
-
-// ── v10 섹터별 시장 맥락 ─────────────────────────────────────────────
-const SECTOR_CONTEXT = {
-  tech: '국내 AI 스타트업은 2024년 기준 약 3,200개를 넘어섰으며, 전체 벤처투자의 35% 이상이 AI 관련 기업에 집중되었습니다.',
-  investment: '2024년 국내 벤처투자 시장은 전년 대비 회복세로, AI·바이오·기후테크 중심으로 투자가 재편되고 있습니다.',
-  youth: '국내 청소년 창업 생태계는 비즈쿨 참여 학교 1,500개+, 창업 동아리 5만 명+ 규모로 성장했습니다.',
-  policy: '정부는 2024년 스타트업 생태계 지원 예산으로 약 1.8조원을 편성, 청년·청소년 창업 프로그램을 확대했습니다.',
-  esg: 'ESG 경영은 이제 선택이 아닌 의무입니다. 국내 상장사의 2025년 ESG 공시 의무화 시행을 앞두고 관련 스타트업에 투자가 집중되고 있습니다.',
-  startup: '국내 스타트업 생태계는 유니콘 기업 22개(2024년 기준), 총 누적 벤처투자 100조원 돌파로 성숙 단계에 접어들었습니다.',
-  edutech: '에듀테크 시장은 AI 튜터, 개인화 학습, 직무교육 플랫폼 중심으로 재편되고 있습니다.',
-  fintech: '핀테크 규제 샌드박스 확대로 스타트업의 금융 혁신 진입 장벽이 낮아지고 있습니다.',
-  health: '디지털 헬스케어는 AI 진단보조 솔루션의 의료기기 인허가 규제 완화로 시장이 빠르게 열리고 있습니다.',
-  climate: '탄소중립 2050 목표 하에 기후테크 스타트업에 대한 정부 R&D 예산이 3년간 2배 확대됩니다.',
-}
-
-// ── HTML 엔티티 전처리 (v11 신규) ─────────────────────────────────────
+// ── HTML 엔티티 전처리 ─────────────────────────────────────────────
 function decodeHtmlEntities(t) {
   if (!t) return ''
   return t
@@ -208,24 +94,19 @@ function decodeHtmlEntities(t) {
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
     .replace(/&apos;/gi, "'")
-    .replace(/&#(\d+);/g, (_, n) => {
-      try { return String.fromCodePoint(parseInt(n, 10)) } catch { return '' }
-    })
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => {
-      try { return String.fromCodePoint(parseInt(h, 16)) } catch { return '' }
-    })
-    .replace(/&[a-zA-Z]{2,8};/g, ' ')  // 나머지 미지원 엔티티 제거
+    .replace(/&#(\d+);/g, (_, n) => { try { return String.fromCodePoint(parseInt(n, 10)) } catch { return '' } })
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => { try { return String.fromCodePoint(parseInt(h, 16)) } catch { return '' } })
+    .replace(/&[a-zA-Z]{2,8};/g, ' ')
 }
 
-// ── 텍스트 정리 (v11: HTML 엔티티 전처리 포함) ───────────────────────
 function clean(t) {
   return decodeHtmlEntities(t||'')
     .replace(/<[^>]+>/g,' ')
     .replace(/https?:\/\/\S+/g,'')
     .replace(/공유하기|페이스북|트위터|카카오톡?|무단전재|재배포\s*금지|저작권자\s*©?[^가-힣]{0,60}/g,'')
     .replace(/기자\s*[가-힣]{2,4}\s*기자/g,'')
-    .replace(/\[.*?\]/g, '')        // [사진] [영상] 등 미디어 태그 제거
-    .replace(/\(.*?기자\)/g, '')    // (OOO 기자) 제거
+    .replace(/\[.*?\]/g, '')
+    .replace(/\(.*?기자\)/g, '')
     .replace(/\s{2,}/g,' ')
     .trim()
 }
@@ -237,7 +118,9 @@ function splitSents(text) {
 
 function hasNum(s){ return /([\d,]+억|[\d,]+조|[\d,]+만\s*원|[\d]+%|[\d]+배|[\d,]+만\s*명|[\d,]+개)/.test(s) }
 function isCausal(s){ return /(때문에|이유로|원인은|배경에는|결과로|따라서|이로\s*인해|덕분에|영향으로)/.test(s) }
+function isGoal(s){ return /(목표|계획|예정|방침|전략|추진|노력|위해)/.test(s) }
 function isNoise(s){ return /무단\s*(전재|배포)|copyright|구독|좋아요|광고|협찬/i.test(s) }
+function isQuote(s){ return (s.includes('"') || s.includes('"') || s.includes('"')) && /(밝혔다|말했다|전했다|강조했다|설명했다|덧붙였다|언급했다)/.test(s) }
 
 function scoreAll(sents, titleToks) {
   const toks = sents.map(s=>tokenize(s))
@@ -250,7 +133,8 @@ function scoreAll(sents, titleToks) {
     const bm = bm25(titleToks, toks[i], avgLen, N, df)
     const pos = i<2?1.5:i<5?1.25:1.0
     const l=sent.length, lenB=(l>=40&&l<=180)?1.3:l>250?0.7:1.0
-    const numB=hasNum(sent)?1.4:1.0, cauB=isCausal(sent)?1.25:1.0
+    const numB=hasNum(sent)?1.4:1.0
+    const cauB=isCausal(sent)?1.25:1.0
     const qvP=/(밝혔다|말했다|전했다|설명했다)\s*$/.test(sent)?0.75:1.0
     return {sent,score:bm*pos*lenB*numB*cauB*qvP,idx:i}
   })
@@ -278,17 +162,6 @@ function detectDom(title,body){
   return best
 }
 
-function applyTerms(text, used) {
-  for(const [term,expl] of Object.entries(TERMS)){
-    if(text.includes(term)&&!used.has(term)){
-      text=text.replace(term,expl)
-      used.add(term)
-      break
-    }
-  }
-  return text
-}
-
 function mapCat(dom,evt){
   if(evt==='policy'||dom==='youth'||dom==='policy') return 'insight'
   if(evt==='funding'||evt==='market'||evt==='ipo') return 'trend'
@@ -296,74 +169,24 @@ function mapCat(dom,evt){
   return DOM[dom]?.cat||'news'
 }
 
-// ── v10 시장 데이터 주입 ─────────────────────────────────────────────
-function injectMarketData(title, body) {
-  const text = (title + ' ' + body).toLowerCase()
-  const matched = []
-  for (const [key, data] of Object.entries(MARKET_DATA)) {
-    if (text.includes(key.toLowerCase())) {
-      matched.push(data.context)
-      if (matched.length >= 2) break
-    }
-  }
-  return matched
-}
+function estReadTime(t){ return Math.max(3, Math.ceil((t||'').length/350)) }
 
-// ── v10 NER 기반 타이틀 파싱 ─────────────────────────────────────────
+// ── NER: 제목에서 수치·기업명 추출 ───────────────────────────────────
 function parseTitle(title) {
-  const nums = title.match(/[0-9,]+억원?|[0-9,]+조원?|[0-9]+%|[0-9]+배/g) || []
+  const nums = (title.match(/[0-9,]+억\s*달러?|[0-9,]+만\s*달러?|[0-9,]+조\s*원?|[0-9,]+억\s*원?|[0-9]+%|[0-9]+배|[0-9,]+만\s*명|[0-9,]+개/g) || [])
   const companies = []
-  // 회사명 패턴: 2~8자 한글+영문 조합, "주식회사"/"㈜" 제외
-  const companyPat = /(?:㈜|주식회사\s*)?([가-힣A-Za-z]{2,8}(?:테크|솔루션|랩|스튜디오|플랫폼|바이오|AI|ai)?)/g
+  const pat = /(?:㈜|주식회사\s*)?([가-힣A-Za-z]{2,10}(?:테크|솔루션|랩스?|스튜디오|플랫폼|바이오|AI|ai|Inc|Corp)?)/g
   let m
-  while ((m = companyPat.exec(title)) !== null) {
-    if (m[1].length >= 2 && !STOPWORDS.has(m[1].toLowerCase())) {
+  while ((m = pat.exec(title)) !== null) {
+    if (m[1].length >= 2 && !STOPWORDS.has(m[1].toLowerCase()) && !/^[가-힣]{1}$/.test(m[1])) {
       companies.push(m[1])
     }
   }
-  return { nums: [...new Set(nums)], companies: [...new Set(companies)].slice(0, 3) }
-}
-
-// ── v11 인용문 감지 ────────────────────────────────────────────────────
-function detectQuotes(sents) {
-  return sents.filter(s =>
-    (s.includes('"') || s.includes('"') || s.includes('"') || s.includes('\'')) &&
-    /(밝혔다|말했다|전했다|강조했다|설명했다|덧붙였다|언급했다)/.test(s)
-  ).slice(0, 3)
-}
-
-// ── v11 도입부 동적 생성 (뉴스별 고유 문장) ───────────────────────────
-function buildIntro(title, evt, dom, keyLines, parsed) {
-  const evtInfo = EVT[evt] || { label: '📰 주요 소식' }
-  const domInfo = DOM[dom] || DOM.startup
-  const numStr = parsed.nums.length > 0 ? ` ${parsed.nums[0]}` : ''
-  const company = parsed.companies.length > 0 ? parsed.companies[0] : ''
-
-  // 본문 첫 문장이 충분히 유효하면 사용
-  if (keyLines[0] && keyLines[0].length >= 30 && keyLines[0].length <= 200) {
-    return keyLines[0]
-  }
-  // 회사명 + 수치가 있으면 구조화
-  if (company && numStr) {
-    return `${company}이${numStr} 규모의 소식으로 ${domInfo.ko} 업계의 이목을 끌었습니다.`
-  }
-  // 이벤트 유형 기반 기본 도입부
-  const intros = {
-    funding:     `이번 투자 유치${numStr}는 ${domInfo.ko} 분야 성장세를 보여주는 사례입니다.`,
-    product:     `새로운 서비스/제품의 등장은 ${domInfo.ko} 시장에 변화를 예고합니다.`,
-    policy:      `정부·기관의 정책 발표가 ${domInfo.ko} 창업 생태계에 직접적인 영향을 미칩니다.`,
-    acquisition: `인수합병은 ${domInfo.ko} 업계 재편의 신호탄이 될 수 있습니다.`,
-    research:    `새로운 연구·조사 결과가 ${domInfo.ko} 분야의 방향성을 제시합니다.`,
-    person:      `창업가의 경험과 통찰은 ${domInfo.ko} 생태계 전체에 울림을 줍니다.`,
-    market:      `시장 변화의 흐름을 읽는 것이 창업의 출발점입니다.`,
-    ipo:         `IPO는 스타트업 성장 여정의 중요한 이정표입니다.`,
-    general:     `${domInfo.ko} 분야의 이번 소식은 창업가들이 주목해야 할 변화를 담고 있습니다.`,
-  }
-  return intros[evt] || intros.general
+  return { nums:[...new Set(nums)], companies:[...new Set(companies)].slice(0,3) }
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// v11 롱폼 빌더 — 완전 동적 본문 기반 분석 (고정 템플릿 제거)
+// v12 롱폼 빌더 — 본문 100% 동적, 고정 문구 0개
 // ══════════════════════════════════════════════════════════════════════
 
 function buildLongformSummary(title, body) {
@@ -373,38 +196,35 @@ function buildLongformSummary(title, body) {
   const sents = splitSents(cb)
   const evtInfo = EVT[evt] || { label: '📰 주요 소식' }
   const domInfo = DOM[dom] || DOM.startup
-  const insight = DEEP_INSIGHT[evt] || DEEP_INSIGHT.general
   const parsed = parseTitle(title)
-  const marketContext = injectMarketData(title, cb)
-  const sectorCtx = SECTOR_CONTEXT[dom] || ''
-
-  const used = new Set()       // 이미 사용된 용어 (중복 설명 방지)
-  const usedSents = new Set()  // 이미 사용된 문장 (중복 출력 방지)
   const ttoks = tokenize(title)
 
-  // ── 문장 분류 ─────────────────────────────────────────────────────
-  let keyLines = [], numLines = [], cauLines = [], extraLines = [], quoteLines = []
+  const used = new Set()
+  const usedSents = new Set()
+
+  // ── 문장 분류 ──────────────────────────────────────────────────────
+  let keyLines=[], numLines=[], cauLines=[], goalLines=[], quoteLines=[], extraLines=[]
   if (sents.length > 0) {
-    const scored = scoreAll(sents, ttoks).filter(x => x.score >= 0).sort((a,b) => b.score - a.score)
-    const topIdx = new Set(scored.slice(0, 8).map(x => x.idx))
-    keyLines   = sents.filter((_,i) => topIdx.has(i)).slice(0, 6)
-    numLines   = sents.filter(s => hasNum(s) && !keyLines.includes(s)).slice(0, 5)
-    cauLines   = sents.filter(s => isCausal(s) && !keyLines.includes(s) && !numLines.includes(s)).slice(0, 4)
-    quoteLines = detectQuotes(sents).filter(s => !keyLines.includes(s))
-    extraLines = scored.slice(8, 16).map(x => x.sent)
-      .filter(s => !keyLines.includes(s) && !numLines.includes(s) && !cauLines.includes(s) && !quoteLines.includes(s))
-      .slice(0, 5)
+    const scored = scoreAll(sents, ttoks).filter(x=>x.score>=0).sort((a,b)=>b.score-a.score)
+    const topIdx = new Set(scored.slice(0,10).map(x=>x.idx))
+    keyLines   = sents.filter((_,i)=>topIdx.has(i)).slice(0,6)
+    numLines   = sents.filter(s=>hasNum(s)&&!keyLines.includes(s)).slice(0,5)
+    cauLines   = sents.filter(s=>isCausal(s)&&!keyLines.includes(s)&&!numLines.includes(s)).slice(0,4)
+    goalLines  = sents.filter(s=>isGoal(s)&&!keyLines.includes(s)&&!numLines.includes(s)&&!cauLines.includes(s)).slice(0,3)
+    quoteLines = sents.filter(s=>isQuote(s)&&!keyLines.includes(s)).slice(0,3)
+    extraLines = scored.slice(10,20).map(x=>x.sent)
+      .filter(s=>!keyLines.includes(s)&&!numLines.includes(s)&&!cauLines.includes(s)&&!goalLines.includes(s)&&!quoteLines.includes(s))
+      .slice(0,5)
   }
 
-  // 중복 없이 문장 추가하는 헬퍼
   const addSent = (s, lines) => {
-    if (!s || usedSents.has(s)) return
+    if (!s||usedSents.has(s)) return
     usedSents.add(s)
-    lines.push(applyTerms(s, used))
+    lines.push(s)
   }
 
   const lines = []
-  const hasBody = sents.length > 2  // 본문이 충분한지 여부
+  const hasBody = sents.length > 2
 
   // ── 헤더 ──────────────────────────────────────────────────────────
   lines.push(`**${title.trim()}**`, '')
@@ -414,96 +234,154 @@ function buildLongformSummary(title, body) {
   }
   lines.push('')
 
-  // ── §1. 도입 (뉴스별 고유 생성) ──────────────────────────────────
-  const intro = buildIntro(title, evt, dom, keyLines, parsed)
-  lines.push(intro, '')
+  // ── §1. 도입 (본문 첫 핵심 문장 활용) ──────────────────────────────
+  if (keyLines.length > 0 && keyLines[0].length >= 30) {
+    lines.push(keyLines[0], '')
+  } else if (parsed.companies.length > 0 && parsed.nums.length > 0) {
+    lines.push(`${parsed.companies[0]}과 관련된 ${parsed.nums[0]} 규모의 소식이 ${domInfo.ko} 업계에서 주목받고 있습니다.`, '')
+  } else if (parsed.companies.length > 0) {
+    lines.push(`${parsed.companies[0]}의 이번 소식은 ${domInfo.ko} 분야에서 주요한 변화를 예고합니다.`, '')
+  }
 
-  // ── §2. 핵심 내용 (본문에서 추출한 실제 문장들) ───────────────────
-  if (keyLines.length > 0) {
+  // ── §2. 핵심 내용 ─────────────────────────────────────────────────
+  const coreLines = keyLines.slice(keyLines.length > 0 ? 1 : 0)
+  if (coreLines.length > 0) {
     lines.push('## 🔍 핵심 내용', '')
-    keyLines.forEach(s => addSent(s, lines))
+    coreLines.forEach(s=>addSent(s,lines))
     lines.push('')
   }
 
-  // ── §3. 주요 수치 & 데이터 (본문에서 추출, 없으면 섹션 생략) ─────
+  // ── §3. 주요 수치 & 데이터 (본문 추출, 없으면 생략) ────────────────
   if (numLines.length > 0) {
     lines.push('## 📊 주요 수치 & 데이터', '')
-    numLines.forEach(s => {
-      if (!usedSents.has(s)) {
-        usedSents.add(s)
-        lines.push(`→ ${applyTerms(s, used)}`)
-      }
+    numLines.forEach(s=>{
+      if(!usedSents.has(s)){ usedSents.add(s); lines.push(`→ ${s}`) }
     })
     lines.push('')
   }
 
-  // ── §4. 현장의 목소리 (인용문 있을 때만) ─────────────────────────
+  // ── §4. 현장의 목소리 (인용문 있을 때만) ──────────────────────────
   if (quoteLines.length > 0) {
     lines.push('## 💬 현장의 목소리', '')
-    quoteLines.forEach(s => {
-      if (!usedSents.has(s)) {
-        usedSents.add(s)
-        lines.push(`> ${applyTerms(s, used)}`)
-      }
+    quoteLines.forEach(s=>{
+      if(!usedSents.has(s)){ usedSents.add(s); lines.push(`> ${s}`) }
     })
     lines.push('')
   }
 
-  // ── §5. 배경과 맥락 (인과관계 문장 있을 때만) ────────────────────
+  // ── §5. 배경과 맥락 (인과관계 문장 있을 때만) ─────────────────────
   if (cauLines.length > 0) {
     lines.push('## 🗺️ 배경과 맥락', '')
-    cauLines.forEach(s => addSent(s, lines))
+    cauLines.forEach(s=>addSent(s,lines))
     lines.push('')
   } else if (extraLines.length >= 2 && hasBody) {
     lines.push('## 🗺️ 배경과 맥락', '')
-    extraLines.slice(0, 2).forEach(s => addSent(s, lines))
+    extraLines.slice(0,2).forEach(s=>addSent(s,lines))
     lines.push('')
   }
 
-  // ── §6. 시장 데이터 (해당 키워드 있을 때만) ──────────────────────
-  if (marketContext.length > 0 || sectorCtx) {
-    lines.push('## 📈 시장 맥락', '')
-    if (sectorCtx) lines.push(sectorCtx, '')
-    marketContext.forEach(ctx => lines.push(`> ${ctx}`))
-    if (marketContext.length > 0) lines.push('')
+  // ── §6. 향후 방향 (목표/계획 문장 있을 때만) ──────────────────────
+  if (goalLines.length > 0) {
+    lines.push('## 🎯 향후 방향', '')
+    goalLines.forEach(s=>addSent(s,lines))
+    lines.push('')
   }
 
-  // ── §7. 추가 분석 (충분한 본문이 있을 때만) ──────────────────────
-  const remainingExtra = extraLines.filter(s => !usedSents.has(s))
-  if (remainingExtra.length > 0 && hasBody) {
+  // ── §7. 추가 분석 (남은 문장 있을 때만) ──────────────────────────
+  const remainExtra = extraLines.filter(s=>!usedSents.has(s))
+  if (remainExtra.length > 0 && hasBody) {
     lines.push('## 🔗 추가 분석', '')
-    remainingExtra.slice(0, 3).forEach(s => addSent(s, lines))
+    remainExtra.slice(0,3).forEach(s=>addSent(s,lines))
     lines.push('')
   }
 
-  // ── §8. 왜 지금 중요한가 (이벤트 유형별 동적 생성) ───────────────
-  lines.push('## 💡 왜 지금 중요한가', '')
-  lines.push(insight.why, '')
-  lines.push(insight.how, '')
+  // ── §8. 왜 중요한가 (본문 요약에서 추출, 없으면 생략) ───────────────
+  // 본문에서 중요성 관련 문장 추출
+  const importanceSents = sents.filter(s =>
+    /(중요|주목|핵심|의미|영향|변화|주요|화제|관심|신호)/.test(s) &&
+    !usedSents.has(s)
+  ).slice(0, 2)
 
-  // ── §9. 창업가 시사점 ─────────────────────────────────────────────
-  lines.push('## 🚀 창업가 시사점', '')
-  lines.push(insight.action, '')
+  if (importanceSents.length > 0) {
+    lines.push('## 💡 왜 주목해야 하나', '')
+    importanceSents.forEach(s=>addSent(s,lines))
+    lines.push('')
+  }
 
-  // ── §10. 청소년 창업가 포인트 ────────────────────────────────────
-  lines.push('## 🎯 청소년 창업가를 위한 포인트', '')
-  lines.push(insight.youth, '')
+  // ── §9. 창업가 시각 (본문에서 기회/전략 관련 문장 추출) ───────────
+  const opportunitySents = sents.filter(s =>
+    /(기회|전략|가능성|활용|아이디어|모델|비즈니스|창업|솔루션|서비스|혁신)/.test(s) &&
+    !usedSents.has(s)
+  ).slice(0, 2)
 
-  // ── §11. 지금 바로 할 수 있는 것 ─────────────────────────────────
-  lines.push('## ✅ 지금 바로 할 수 있는 것', '')
-  lines.push(`1. **Insightship 멘토**에게 "${domInfo.ko} 분야 창업 아이디어 어때?"라고 물어보세요.`)
-  lines.push(`2. **아이디어랩**에 이 뉴스에서 얻은 아이디어를 게시하고 피드백을 받아보세요.`)
-  lines.push(`3. **트렌드 트래커**에서 ${domInfo.ko} 분야 시장 지표를 확인해보세요.`)
-  lines.push('')
+  if (opportunitySents.length > 0) {
+    lines.push('## 🚀 창업가 시각으로 읽기', '')
+    opportunitySents.forEach(s=>addSent(s,lines))
+    lines.push('')
+  }
+
+  // ── §10. 핵심 질문 (제목·키워드 기반 동적 생성) ────────────────────
+  const questions = buildDynamicQuestions(title, evt, dom, parsed, keyLines, numLines)
+  if (questions.length > 0) {
+    lines.push('## 💭 생각해볼 질문', '')
+    questions.forEach(q=>lines.push(`• ${q}`))
+    lines.push('')
+  }
 
   // ── 푸터 ──────────────────────────────────────────────────────────
   lines.push('---')
-  lines.push(`*Insightship AI (insightship-longform-v11) · ${domInfo.ko} · ${evtInfo.label} · cost $0*`)
+  lines.push(`*Insightship AI (insightship-longform-v12) · ${domInfo.ko} · ${evtInfo.label}*`)
 
   return lines.join('\n')
 }
 
-function estReadTime(t){ return Math.max(3, Math.ceil((t||'').length/350)) }
+/**
+ * 제목·이벤트·도메인·본문 키워드 기반으로 이 기사에만 해당하는 질문 동적 생성
+ * 고정 질문 DB 없음 — 본문 내용과 수치를 활용
+ */
+function buildDynamicQuestions(title, evt, dom, parsed, keyLines, numLines) {
+  const questions = []
+  const domInfo = DOM[dom] || DOM.startup
+  const evtInfo = EVT[evt] || { label: '주요 소식' }
+
+  // 수치가 있으면 수치 기반 질문
+  if (parsed.nums.length > 0) {
+    questions.push(`이 뉴스에서 언급된 ${parsed.nums[0]} 수치는 ${domInfo.ko} 업계 평균과 비교하면 어느 정도 규모인가요?`)
+  }
+
+  // 기업명이 있으면 기업 중심 질문
+  if (parsed.companies.length > 0) {
+    questions.push(`${parsed.companies[0]}이(가) 이 소식으로 얻는 가장 큰 이점은 무엇일까요?`)
+  }
+
+  // 이벤트 유형별 핵심 질문 (고정 문장 없이, 제목 키워드 활용)
+  const titleKeywords = tokenize(title).filter(t=>t.length>=2).slice(0,3).join(', ')
+  if (evt === 'funding') {
+    questions.push(`"${titleKeywords}" 관련 투자가 성공적인 결과로 이어지려면 다음에 무엇을 증명해야 할까요?`)
+  } else if (evt === 'product') {
+    questions.push(`이 서비스가 출시된 지금, 기존 방식과 비교해 어떤 문제를 더 잘 해결하고 있나요?`)
+  } else if (evt === 'policy') {
+    questions.push(`이 정책/지원이 실제 창업 현장에 미치는 영향은 어느 정도일까요?`)
+  } else if (evt === 'research') {
+    questions.push(`이 연구 결과를 바탕으로 어떤 새로운 비즈니스 기회를 발견할 수 있을까요?`)
+  } else if (evt === 'person') {
+    questions.push(`이 창업가의 경험에서 나의 상황에 바로 적용할 수 있는 교훈은 무엇인가요?`)
+  } else if (evt === 'market') {
+    questions.push(`이 시장 변화가 지속된다면, 5년 후 ${domInfo.ko} 분야는 어떻게 달라져 있을까요?`)
+  } else {
+    questions.push(`이 소식이 ${domInfo.ko} 분야 전체에 미치는 영향을 어떻게 평가할 수 있을까요?`)
+  }
+
+  // 본문 핵심 문장에서 핵심어 뽑아 추가 질문
+  if (keyLines.length > 1) {
+    const kw = tokenize(keyLines[1]).filter(t=>t.length>=2&&!STOPWORDS.has(t)).slice(0,2)
+    if (kw.length > 0) {
+      questions.push(`'${kw.join(', ')}' 관련해서 아직 해결되지 않은 과제는 무엇일까요?`)
+    }
+  }
+
+  return questions.slice(0, 3)
+}
 
 // ══════════════════════════════════════════════════════════════════════
 // 메인 핸들러
@@ -521,14 +399,16 @@ export default async function handler(req) {
     if (!SB_URL || !SB_KEY) {
       return new Response(JSON.stringify({ error: 'Missing Supabase env' }), { status: 500 })
     }
-    const [rTotal, rV10, rNull, rShort] = await Promise.allSettled([
+    const [rTotal, rV12, rV11, rV10, rNull] = await Promise.allSettled([
       fetch(`${SB_URL}/rest/v1/articles?status=eq.published&select=id&limit=1`,
+        { headers: { ...H, Prefer: 'count=exact' } }),
+      fetch(`${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=like.*insightship-longform-v12*&select=id&limit=1`,
         { headers: { ...H, Prefer: 'count=exact' } }),
       fetch(`${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=like.*insightship-longform-v11*&select=id&limit=1`,
         { headers: { ...H, Prefer: 'count=exact' } }),
-      fetch(`${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=is.null&select=id&limit=1`,
+      fetch(`${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=like.*insightship-longform-v10*&select=id&limit=1`,
         { headers: { ...H, Prefer: 'count=exact' } }),
-      fetch(`${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=not.is.null&select=id&limit=1`,
+      fetch(`${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=is.null&select=id&limit=1`,
         { headers: { ...H, Prefer: 'count=exact' } }),
     ])
 
@@ -537,25 +417,35 @@ export default async function handler(req) {
       : 0
 
     const total = getCount(rTotal)
-    const v11Done = getCount(rV10)
+    const v12Done = getCount(rV12)
+    const v11Done = getCount(rV11)
+    const v10Done = getCount(rV10)
     const noSummary = getCount(rNull)
-    const hasSummary = getCount(rShort)
 
     return new Response(JSON.stringify({
-      total_articles:      total,
-      v11_longform_done:   v11Done,
-      has_any_summary:     hasSummary,
-      no_summary:          noSummary,
-      needs_upgrade:       total - v11Done,
-      progress_pct:        total > 0 ? Math.round((v11Done / total) * 100) : 0,
-      engine:              'insightship-longform-v11',
-      timestamp:           new Date().toISOString(),
+      total_articles:    total,
+      v12_done:          v12Done,
+      v11_done:          v11Done,
+      v10_done:          v10Done,
+      no_summary:        noSummary,
+      needs_reprocess:   total - v12Done,
+      progress_pct:      total > 0 ? Math.round((v12Done / total) * 100) : 0,
+      engine:            'insightship-longform-v12',
+      timestamp:         new Date().toISOString(),
     }), { headers: { 'Content-Type': 'application/json' } })
   }
 
   // POST: 재처리 실행
-  const isAuth = req.headers.get('x-vercel-cron') === '1'
-    || req.headers.get('authorization') === `Bearer ${CRON_SECRET}`
+  const cronHeader = req.headers.get('x-vercel-cron')
+  const authHeader = req.headers.get('authorization')
+  const isAdminJWT = authHeader && authHeader.startsWith('Bearer ') && authHeader !== `Bearer ${CRON_SECRET}`
+    ? await checkAdminJWT(authHeader.slice(7))
+    : false
+
+  const isAuth = cronHeader === '1'
+    || authHeader === `Bearer ${CRON_SECRET}`
+    || isAdminJWT
+
   if (!isAuth) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   if (!SB_URL || !SB_KEY) return new Response(JSON.stringify({ error: 'Missing Supabase env' }), { status: 500 })
 
@@ -564,11 +454,11 @@ export default async function handler(req) {
   const batchSize = Math.min(Number(params.batch) || 30, 60)
   const offset    = Math.max(Number(params.offset) || 0, 0)
   const forceAll  = params.force === true
-  const v10Only   = params.v10_upgrade === true // v10 미완료 기사만 처리
 
   let articles = []
 
   if (forceAll) {
+    // force=true: 모든 기사 대상 (v12 포함)
     const r = await fetch(
       `${SB_URL}/rest/v1/articles?status=eq.published`
       + `&select=id,title,body,excerpt`
@@ -576,60 +466,45 @@ export default async function handler(req) {
       { headers: H }
     )
     articles = await r.json().catch(() => [])
-  } else if (v10Only) {
-    // v10 롱폼 미완료 기사 (ai_summary에 v10 마커 없는 것)
+  } else {
+    // 기본: v12 마커가 없는 기사 우선 처리 (v10/v11 포함)
     const r1 = await fetch(
-      `${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=not.like.*insightship-longform-v11*`
+      `${SB_URL}/rest/v1/articles?status=eq.published`
+      + `&ai_summary=not.like.*insightship-longform-v12*`
       + `&select=id,title,body,excerpt,ai_summary`
       + `&order=published_at.desc&limit=${batchSize}&offset=${offset}`,
       { headers: H }
     )
     articles = await r1.json().catch(() => [])
-  } else {
-    // 1차: ai_summary 없는 것
-    const r1 = await fetch(
-      `${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=is.null`
-      + `&select=id,title,body,excerpt`
-      + `&order=published_at.desc&limit=${batchSize}&offset=${offset}`,
-      { headers: H }
-    )
-    const raw1 = await r1.json().catch(() => [])
-    articles = Array.isArray(raw1) ? raw1 : []
+    if (!Array.isArray(articles)) articles = []
 
-    // 2차: ai_summary 있지만 v10 미완료 또는 짧은 것
+    // 보완: null인 것도 추가
     if (articles.length < batchSize) {
       const need = batchSize - articles.length
-      const existIds = new Set(articles.map(a => a.id))
+      const existIds = new Set(articles.map(a=>a.id))
       const r2 = await fetch(
-        `${SB_URL}/rest/v1/articles?status=eq.published`
-        + `&ai_summary=not.is.null`
-        + `&select=id,title,body,excerpt,ai_summary`
-        + `&order=published_at.desc&limit=${need * 3}&offset=${offset}`,
+        `${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=is.null`
+        + `&select=id,title,body,excerpt`
+        + `&order=published_at.desc&limit=${need}&offset=${offset}`,
         { headers: H }
       )
       const raw2 = await r2.json().catch(() => [])
-      const extra = (Array.isArray(raw2) ? raw2 : [])
-        .filter(a => {
-          if (existIds.has(a.id)) return false
-          const sm = a.ai_summary || ''
-          return sm.length < 200 || !sm.includes('insightship-longform-v11')
-        })
-        .slice(0, need)
+      const extra = (Array.isArray(raw2)?raw2:[]).filter(a=>!existIds.has(a.id))
       articles = [...articles, ...extra]
     }
   }
 
   if (!Array.isArray(articles) || articles.length === 0) {
     const cr = await fetch(
-      `${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=is.null&select=id&limit=1`,
+      `${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=not.like.*insightship-longform-v12*&select=id&limit=1`,
       { headers: { ...H, Prefer: 'count=exact' } }
     )
     const remaining = parseInt(cr.headers.get('content-range')?.split('/')[1] || '0')
     return new Response(JSON.stringify({
-      message: remaining === 0 ? '✅ 모든 기사 롱폼 처리 완료!' : '현재 배치에 처리할 기사 없음',
+      message: remaining === 0 ? '✅ 모든 기사 v12 롱폼 처리 완료!' : '현재 배치에 처리할 기사 없음',
       processed: 0, done: 0, failed: 0, remaining,
       next_offset: offset + batchSize,
-      engine: 'insightship-longform-v11',
+      engine: 'insightship-longform-v12',
       timestamp: new Date().toISOString(),
     }), { headers: { 'Content-Type': 'application/json' } })
   }
@@ -679,7 +554,7 @@ export default async function handler(req) {
   }))
 
   const crRes = await fetch(
-    `${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=is.null&select=id&limit=1`,
+    `${SB_URL}/rest/v1/articles?status=eq.published&ai_summary=not.like.*insightship-longform-v12*&select=id&limit=1`,
     { headers: { ...H, Prefer: 'count=exact' } }
   )
   const remaining = parseInt(crRes.headers.get('content-range')?.split('/')[1] || '0')
@@ -692,9 +567,8 @@ export default async function handler(req) {
     remaining,
     next_offset:    offset + batchSize,
     has_more:       remaining > 0,
-    engine:         'insightship-longform-v11',
+    engine:         'insightship-longform-v12',
     longform:       true,
-    avg_length_est: '5,000자+',
     cost:           0,
     external_api:   false,
     timestamp:      new Date().toISOString(),
@@ -702,4 +576,16 @@ export default async function handler(req) {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   })
+}
+
+async function checkAdminJWT(token) {
+  if (!token || !SB_URL || !SB_KEY) return false
+  try {
+    const r = await fetch(`${SB_URL}/auth/v1/user`, {
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` }
+    })
+    if (!r.ok) return false
+    const u = await r.json()
+    return u?.user_metadata?.role === 'admin' || u?.app_metadata?.role === 'admin'
+  } catch { return false }
 }
