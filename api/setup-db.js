@@ -9,10 +9,33 @@ function getRef(url) {
   return url?.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1]
 }
 
+async function checkAdminJWT(token) {
+  if (!token || !SB_URL || !SB_KEY) return false
+  try {
+    const r1 = await fetch(`${SB_URL}/auth/v1/user`, {
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` },
+    })
+    if (!r1.ok) return false
+    const user = await r1.json()
+    if (!user?.id) return false
+    const r2 = await fetch(
+      `${SB_URL}/rest/v1/profiles?id=eq.${user.id}&select=id,role&limit=1`,
+      { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
+    )
+    if (!r2.ok) return false
+    const rows = await r2.json()
+    return Array.isArray(rows) && rows[0]?.role === 'admin'
+  } catch { return false }
+}
+
 export default async function handler(req) {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
   const auth = req.headers.get('authorization')
-  if (auth !== `Bearer ${CRON_SECRET}`) return new Response('Unauthorized', { status: 401 })
+  const isCron = auth === `Bearer ${CRON_SECRET}`
+  const isJWT  = auth?.startsWith('Bearer ') && auth !== `Bearer ${CRON_SECRET}`
+    ? await checkAdminJWT(auth.slice(7))
+    : false
+  if (!isCron && !isJWT) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
 
   const PROJECT_REF = getRef(SB_URL)
   const results = []
@@ -46,6 +69,10 @@ DROP POLICY IF EXISTS scm_service_all ON public.staff_chat_messages;
 CREATE POLICY scm_service_all ON public.staff_chat_messages FOR ALL TO service_role USING (true) WITH CHECK (true);
 DROP POLICY IF EXISTS scm_admin_all ON public.staff_chat_messages;
 CREATE POLICY scm_admin_all ON public.staff_chat_messages FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'));
+ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS ai_summary text;
+ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS ai_processed_at timestamptz;
+ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS ai_category text;
+ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS read_time integer DEFAULT 3;
   `.trim()
 
   // Management API 호출
@@ -99,6 +126,7 @@ CREATE POLICY scm_admin_all ON public.staff_chat_messages FOR ALL USING (EXISTS 
     fetch(`${SB_URL}/rest/v1/ai_notices?limit=1`, { headers: H }).then(r=>({ col:'ai_notices', ok: r.status===200 })),
     fetch(`${SB_URL}/rest/v1/newsletter_logs?limit=1`, { headers: H }).then(r=>({ col:'newsletter_logs', ok: r.status===200 })),
     fetch(`${SB_URL}/rest/v1/profiles?username=eq.ai_aria&select=id,username&limit=1`, { headers: H }).then(r=>({ col:'ai_team_aria', ok: r.status===200 })),
+    fetch(`${SB_URL}/rest/v1/articles?select=ai_summary,ai_processed_at,ai_category,read_time&limit=1`, { headers: H }).then(r=>({ col:'articles_ai_cols', ok: r.status===200 })),
   ])
   for (const c of checks) {
     if (c.status === 'fulfilled') results.push(c.value)

@@ -739,7 +739,7 @@ export default async function handler(req) {
     else {
       failed++
       const err = await u.text().catch(() => '')
-      errors.push(`[${a.id}] ${err.slice(0, 60)}`)
+      errors.push(`[${a.id}] HTTP${u.status} ${err.slice(0, 300)}`)
     }
   }))
 

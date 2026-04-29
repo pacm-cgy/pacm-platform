@@ -802,7 +802,7 @@ export default async function handler(req) {
       if (patchRes.ok || patchRes.status === 204) results.processed++
       else {
         const err = await patchRes.text()
-        results.errors.push(`[${id}] ${err.slice(0, 80)}`)
+        results.errors.push(`[${id}] HTTP${patchRes.status} ${err.slice(0, 300)}`)
       }
     } catch (e) {
       results.errors.push(e.message?.slice(0, 80))

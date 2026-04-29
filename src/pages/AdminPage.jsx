@@ -1399,6 +1399,8 @@ function SystemTab({ stats, onRefresh }) {
   const [nlResult, setNlResult] = useState('')
   const [dbSetupRunning, setDbSetupRunning] = useState(false)
   const [dbSetupResult, setDbSetupResult] = useState(null)
+  const [articlesMigrateRunning, setArticlesMigrateRunning] = useState(false)
+  const [articlesMigrateResult, setArticlesMigrateResult] = useState(null)
 
   // ── 뉴스 재처리 상태 ──────────────────────────────────────────────────
   const [reprocessStatus, setReprocessStatus] = useState(null)       // GET 현황
@@ -1449,6 +1451,27 @@ function SystemTab({ stats, onRefresh }) {
 
   // 컴포넌트 마운트 시 현황 자동 조회
   const [reprocessAutoLoaded, setReprocessAutoLoaded] = useState(false)
+
+  // ── articles 컬럼 추가 (PGRST204 해결) ─────────────────────────────
+  const runArticlesMigrate = async () => {
+    setArticlesMigrateRunning(true)
+    setArticlesMigrateResult(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const r = await fetch('/api/setup-db', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token || ''}`,
+        },
+      })
+      const d = await r.json()
+      setArticlesMigrateResult(d)
+    } catch (e) {
+      setArticlesMigrateResult({ ok: false, error: e.message })
+    }
+    setArticlesMigrateRunning(false)
+  }
 
   // ── 직원채팅 DB 초기화 ──────────────────────────────────────────────
   const runDbSetup = async () => {
@@ -1522,6 +1545,58 @@ function SystemTab({ stats, onRefresh }) {
 
   return (
     <div>
+      {/* ── articles 컬럼 추가 (PGRST204 해결) ─────────────────────── */}
+      <Panel style={{ marginBottom:20, border:'1px solid rgba(234,179,8,0.35)' }}>
+        <SectionHeader icon={Database} label="articles AI 컬럼 추가 (PGRST204 해결)" color="#EAB308"/>
+        <div style={{ fontSize:12, color:'var(--t3)', marginBottom:10 }}>
+          <code style={{ color:'#FDE047', background:'#0f172a', padding:'2px 6px', borderRadius:4 }}>ai_summary</code>{', '}
+          <code style={{ color:'#FDE047', background:'#0f172a', padding:'2px 6px', borderRadius:4 }}>ai_processed_at</code>{', '}
+          <code style={{ color:'#FDE047', background:'#0f172a', padding:'2px 6px', borderRadius:4 }}>ai_category</code>{', '}
+          <code style={{ color:'#FDE047', background:'#0f172a', padding:'2px 6px', borderRadius:4 }}>read_time</code>{' '}
+          컬럼이 articles 테이블에 없으면 PGRST204 에러가 발생합니다. 아래 버튼으로 추가하거나 직접 SQL을 실행하세요.
+        </div>
+        <details style={{ marginBottom:10 }}>
+          <summary style={{ fontSize:11, color:'var(--t3)', cursor:'pointer' }}>SQL 직접 실행 (Supabase SQL Editor)</summary>
+          <pre style={{ fontFamily:'var(--f-mono)', fontSize:10, color:'#FDE047', background:'#0f0f1a',
+            padding:'10px 12px', borderRadius:6, margin:'6px 0', overflowX:'auto', whiteSpace:'pre-wrap' }}>
+{`ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS ai_summary text;
+ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS ai_processed_at timestamptz;
+ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS ai_category text;
+ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS read_time integer DEFAULT 3;`}
+          </pre>
+          <div style={{ display:'flex', gap:8 }}>
+            <button
+              onClick={() => {
+                const sql = `ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS ai_summary text;\nALTER TABLE public.articles ADD COLUMN IF NOT EXISTS ai_processed_at timestamptz;\nALTER TABLE public.articles ADD COLUMN IF NOT EXISTS ai_category text;\nALTER TABLE public.articles ADD COLUMN IF NOT EXISTS read_time integer DEFAULT 3;`
+                navigator.clipboard?.writeText(sql).then(()=>alert('복사 완료! Supabase SQL Editor에 붙여넣기하세요.'))
+              }}
+              className="btn btn-ghost btn-sm" style={{ fontSize:10, gap:4 }}>📋 SQL 복사</button>
+            <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer"
+              className="btn btn-ghost btn-sm" style={{ fontSize:10, gap:4 }}>🔗 SQL Editor 열기</a>
+          </div>
+        </details>
+        <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', marginTop:4 }}>
+          <button onClick={runArticlesMigrate} disabled={articlesMigrateRunning}
+            className="btn btn-warning btn-sm"
+            style={{ gap:5, background:'linear-gradient(135deg,#D97706,#F59E0B)', color:'#000', fontWeight:600 }}>
+            {articlesMigrateRunning
+              ? <><span style={{ display:'inline-block', animation:'spin 1s linear infinite' }}>⏳</span> 실행 중…</>
+              : <>🔧 컬럼 자동 추가 (setup-db)</>}
+          </button>
+          <span style={{ fontSize:10, color:'var(--t4)' }}>* CRON_SECRET 환경변수 또는 admin 계정으로만 실행 가능</span>
+        </div>
+        {articlesMigrateResult && (
+          <div style={{ marginTop:8, padding:8, borderRadius:6, fontSize:11,
+            background: articlesMigrateResult.ok ? '#052e1640' : '#3f0f0f40',
+            border: `1px solid ${articlesMigrateResult.ok ? '#22c55e30' : '#f43f5e30'}`,
+            color: articlesMigrateResult.ok ? '#4ade80' : '#f87171' }}>
+            {articlesMigrateResult.ok
+              ? '✅ 컬럼 추가 완료 — 이제 재처리 배치를 실행하세요.'
+              : `❌ 실패: ${articlesMigrateResult.error || JSON.stringify(articlesMigrateResult).slice(0, 200)}`}
+          </div>
+        )}
+      </Panel>
+
       {/* ── 뉴스 v15 재처리 패널 ─────────────────────────────────── */}
       <Panel style={{ marginBottom:20, border:'1px solid rgba(59,130,246,0.3)' }}>
         <SectionHeader icon={RefreshCw} label="뉴스 AI 롱폼 재처리 (v15)" color="#3B82F6"/>
