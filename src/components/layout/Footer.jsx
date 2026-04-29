@@ -154,7 +154,7 @@ export default function Footer() {
             </div>
             <p style={{ fontFamily: 'var(--f-sans)', fontSize: 12, color: 'var(--t3)',
               lineHeight: 1.65, margin: '0 0 14px' }}>
-              매주 월요일, 창업 인사이트를 이메일로 받아보세요
+              매주 금요일, 창업 인사이트를 이메일로 받아보세요
             </p>
             {subDone ? (
               <div style={{ padding: '10px 14px', background: 'rgba(34,197,94,0.08)',

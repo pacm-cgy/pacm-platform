@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Search, Plus, ArrowLeft, MessageSquare, X, User, Check, Loader2, Users } from 'lucide-react'
+import { Helmet } from 'react-helmet-async'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store'
 import { Link } from 'react-router-dom'
@@ -259,6 +260,12 @@ export default function MessagesPage() {
 
   return (
     <div style={{ minHeight:'calc(100vh - var(--hdr-h) - 32px)', paddingBottom:40 }}>
+      <Helmet>
+        <title>메시지 | Insightship</title>
+        <meta name="description" content="Insightship 메시지 — 청소년 창업가들과 1:1로 소통하세요."/>
+        <meta name="robots" content="noindex"/>
+        <link rel="canonical" href="https://insightship.vercel.app/messages"/>
+      </Helmet>
       {/* 페이지 헤더 */}
       <div style={{ padding:'28px var(--pad-x) 20px', borderBottom:'1px solid var(--b1)', background:'linear-gradient(180deg,rgba(59,130,246,.05) 0%,transparent 100%)' }}>
         <div style={{ maxWidth:'var(--max-w)', margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between' }}>

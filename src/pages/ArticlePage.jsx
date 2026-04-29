@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import { Helmet } from 'react-helmet-async'
 import { Heart, Bookmark, Share2, ArrowLeft, Clock, Eye, ExternalLink } from 'lucide-react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
@@ -231,12 +232,6 @@ export default function ArticlePage() {
   const likeMutation = useLikeArticle()
   const { user } = useAuthStore()
 
-  // 페이지 타이틀
-  useEffect(() => {
-    if (article?.title) document.title = `${article.title} — Insightship`
-    return () => { document.title = 'Insightship — 청소년 창업 플랫폼' }
-  }, [article?.title])
-
   useEffect(() => {
     if (article) setLikeCount(article.like_count || 0)
   }, [article])
@@ -318,8 +313,27 @@ export default function ArticlePage() {
     ? article.ai_summary
     : null
 
+  const canonicalSlug = article?.slug || slug
+  const ogImage = article?.cover_image || 'https://insightship.vercel.app/icons/icon-512.png'
+  const ogDesc = article?.excerpt || article?.title || 'Insightship 아티클'
+
   return (
     <>
+      <Helmet>
+        <title>{article?.title ? `${article.title} — Insightship` : 'Insightship — 청소년 창업 플랫폼'}</title>
+        <meta name="description" content={ogDesc}/>
+        <meta property="og:title" content={article?.title || 'Insightship'}/>
+        <meta property="og:description" content={ogDesc}/>
+        <meta property="og:type" content="article"/>
+        <meta property="og:url" content={`https://insightship.vercel.app/article/${canonicalSlug}`}/>
+        <meta property="og:image" content={ogImage}/>
+        <meta name="twitter:card" content="summary_large_image"/>
+        <meta name="twitter:title" content={article?.title || 'Insightship'}/>
+        <meta name="twitter:description" content={ogDesc}/>
+        <meta name="twitter:image" content={ogImage}/>
+        <link rel="canonical" href={`https://insightship.vercel.app/article/${canonicalSlug}`}/>
+      </Helmet>
+
       {/* Reading Progress Bar */}
       <div style={{ position:'fixed', top:0, left:0, right:0, height:'3px', background:'var(--bg3)', zIndex:200, pointerEvents:'none' }}>
         <div style={{ height:'100%', width:`${progress}%`, background:'var(--amber)', transition:'width 0.1s linear' }}/>
@@ -385,14 +399,14 @@ export default function ArticlePage() {
           <div>
             {summary ? (
               <>
-                {/* AI 요약 배지 */}
+                {/* AI 롱폼 엔진 배지 */}
                 <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'24px', padding:'10px 16px', background:'var(--bg3)', borderLeft:'2px solid var(--t1)' }}>
                   <span style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--t1)', letterSpacing:'0.12em', textTransform:'uppercase' }}>
-                    AI 인사이트 요약
+                    INSIGHTSHIP AI — 롱폼 인사이트
                   </span>
                 </div>
 
-                {/* AI 인사이트 요약 렌더러 */}
+                {/* AI 롱폼 렌더러 (v7 포맷 호환) */}
                 <div style={{ fontSize:'15px', lineHeight:1.95, letterSpacing:'-0.01em' }}>
                   {renderV7Summary(summary)}
                 </div>

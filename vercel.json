@@ -101,43 +101,55 @@
   "crons": [
     {
       "path": "/api/fetch-news",
-      "schedule": "0 11 * * *"
+      "schedule": "0 2 * * *"
     },
     {
       "path": "/api/summarize-news",
-      "schedule": "0 13 * * *"
+      "schedule": "0 4 * * *"
     },
     {
       "path": "/api/run-summarize",
-      "schedule": "0 15 * * *"
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/longform-quality-check",
+      "schedule": "30 6 * * *"
     },
     {
       "path": "/api/extract-news-trends",
-      "schedule": "0 17 * * *"
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/news-cleanup",
-      "schedule": "0 19 * * *"
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/community-engine",
+      "schedule": "0 12 * * *"
     },
     {
       "path": "/api/ai-platform-operator",
-      "schedule": "0 21 * * *"
+      "schedule": "0 13 * * *"
     },
     {
       "path": "/api/ai-content-writer",
-      "schedule": "0 22 * * *"
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/badge-system",
+      "schedule": "0 15 * * *"
     },
     {
       "path": "/api/ai-mentor-learn",
-      "schedule": "0 23 * * *"
+      "schedule": "0 16 * * *"
     },
     {
       "path": "/api/generate-report",
-      "schedule": "0 6 * * 5"
+      "schedule": "0 17 * * 5"
     },
     {
       "path": "/api/send-newsletter",
-      "schedule": "0 10 * * 0"
+      "schedule": "0 23 * * 0"
     }
   ],
   "buildCommand": "npm run build",

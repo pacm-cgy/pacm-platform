@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store'
 import {
@@ -79,6 +80,16 @@ export default function LoginPage() {
       minHeight: '100vh', display: 'flex', background: 'var(--bg0)',
       fontFamily: 'var(--f-sans)',
     }}>
+      <Helmet>
+        <title>{mode === 'signup' ? '회원가입' : '로그인'} | Insightship</title>
+        <meta name="description" content="Insightship에 로그인하거나 회원가입하세요. 청소년 창업가를 위한 AI 인사이트, 트렌드, 커뮤니티를 무료로 이용하세요."/>
+        <meta property="og:title" content="로그인 | Insightship"/>
+        <meta property="og:description" content="청소년 창업가를 위한 무료 AI 창업 플랫폼 — Insightship"/>
+        <meta property="og:type" content="website"/>
+        <meta property="og:url" content="https://insightship.vercel.app/login"/>
+        <meta name="twitter:card" content="summary"/>
+        <link rel="canonical" href="https://insightship.vercel.app/login"/>
+      </Helmet>
       {/* ── LEFT PANEL ─────────────────────────────────────────────── */}
       <div style={{
         flex: '0 0 52%', display: 'flex', flexDirection: 'column',

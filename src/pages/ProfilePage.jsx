@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import {
   User, Settings, Bookmark, Heart, FileText, Edit2, Save,
   X, Camera, MapPin, Link2, Calendar, Star, Trophy,
@@ -224,6 +225,8 @@ export default function ProfilePage() {
   const [postsLoading, setPostsLoading] = useState(false)
   const [isFollowing, setIsFollowing]   = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
+  const [badges, setBadges]               = useState([])
+  const [badgesLoading, setBadgesLoading] = useState(false)
   const fileRef = useRef(null)
 
   const isOwn = !paramId || (user && paramId === user.id)
@@ -310,6 +313,65 @@ export default function ProfilePage() {
       .catch(() => setPostsLoading(false))
   }, [user, isOwn, tab])
 
+  /* ── ALL_BADGES 정의 (서버 DB 없으면 earned 계산으로 대체) ── */
+  const ALL_BADGES = [
+    { key:'first_idea',   emoji:'🚀', name:'첫 창업가',      desc:'첫 아이디어 제출',     color:'#3B82F6' },
+    { key:'idea_master',  emoji:'💡', name:'아이디어 마스터', desc:'아이디어 5개 공유',    color:'#F59E0B' },
+    { key:'comm_builder', emoji:'🤝', name:'커뮤니티 빌더',  desc:'댓글 20개 작성',       color:'#22C55E' },
+    { key:'knowledge',    emoji:'📚', name:'지식 탐구자',    desc:'아티클 10개 읽음',     color:'#A855F7' },
+    { key:'streak7',      emoji:'🔥', name:'연속 방문자',    desc:'7일 연속 방문',        color:'#F97316' },
+    { key:'star_founder', emoji:'🏆', name:'스타 창업가',    desc:'커뮤니티 좋아요 50개', color:'#F43F5E' },
+    { key:'ai_power',     emoji:'🌟', name:'AI 파워유저',   desc:'AI멘토 20회 사용',     color:'#06B6D4' },
+    { key:'unicorn',      emoji:'🦄', name:'유니콘 꿈나무',  desc:'아이디어랩 10개 등록', color:'#EC4899' },
+  ]
+
+  /* load badges — user_badges 테이블 우선, 없으면 활동 기반 계산 */
+  useEffect(() => {
+    if (!uid) return
+    setBadgesLoading(true)
+    supabase.from('user_badges')
+      .select('badge_key, earned_at')
+      .eq('user_id', uid)
+      .then(async ({ data: dbBadges, error }) => {
+        if (!error && dbBadges && dbBadges.length > 0) {
+          const earnedKeys = new Set(dbBadges.map(b => b.badge_key))
+          setBadges(ALL_BADGES.map(b => ({ ...b, earned: earnedKeys.has(b.key) })))
+        } else {
+          // DB 테이블 없음 → 활동 데이터로 동적 계산
+          try {
+            const [postsRes, ideasRes] = await Promise.all([
+              supabase.from('community_posts').select('id,like_count,reply_count').eq('author_id', uid).eq('is_deleted', false),
+              supabase.from('ideas').select('id').eq('author_id', uid),
+            ])
+            const postCount  = postsRes.data?.length  || 0
+            const totalLikes = (postsRes.data || []).reduce((a,p)=>a+(p.like_count||0),0)
+            const ideaCount  = ideasRes.data?.length  || 0
+            const totalReplies = (postsRes.data || []).reduce((a,p)=>a+(p.reply_count||0),0)
+            setBadges(ALL_BADGES.map(b => ({
+              ...b,
+              earned:
+                b.key === 'first_idea'   ? ideaCount  >= 1  :
+                b.key === 'idea_master'  ? ideaCount  >= 5  :
+                b.key === 'comm_builder' ? totalReplies >= 20 :
+                b.key === 'knowledge'    ? false :
+                b.key === 'streak7'      ? false :
+                b.key === 'star_founder' ? totalLikes >= 50 :
+                b.key === 'ai_power'     ? false :
+                b.key === 'unicorn'      ? ideaCount  >= 10 :
+                false
+            })))
+          } catch {
+            setBadges(ALL_BADGES.map(b => ({ ...b, earned: false })))
+          }
+        }
+        setBadgesLoading(false)
+      })
+      .catch(() => {
+        setBadges(ALL_BADGES.map(b => ({ ...b, earned: false })))
+        setBadgesLoading(false)
+      })
+  }, [uid])
+
   /* save */
   const handleSave = async () => {
     if (!user) return
@@ -354,16 +416,7 @@ export default function ProfilePage() {
     { id: 'badges',    label: '배지',     icon: Award },
   ]
 
-  const MOCK_BADGES = [
-    { emoji: '🚀', name: '첫 창업가',      desc: '첫 아이디어 제출',     color: '#3B82F6', earned: true  },
-    { emoji: '💡', name: '아이디어 마스터', desc: '아이디어 5개 공유',    color: '#F59E0B', earned: true  },
-    { emoji: '🤝', name: '커뮤니티 빌더',  desc: '댓글 20개 작성',       color: '#22C55E', earned: true  },
-    { emoji: '📚', name: '지식 탐구자',    desc: '아티클 10개 읽음',     color: '#A855F7', earned: true  },
-    { emoji: '🔥', name: '연속 방문자',    desc: '7일 연속 방문',        color: '#F97316', earned: false },
-    { emoji: '🏆', name: '스타 창업가',    desc: '커뮤니티 좋아요 50개', color: '#F43F5E', earned: false },
-    { emoji: '🌟', name: 'AI 파워유저',   desc: 'AI멘토 20회 사용',     color: '#06B6D4', earned: false },
-    { emoji: '🦄', name: '유니콘 꿈나무',  desc: '아이디어랩 10개 등록', color: '#EC4899', earned: false },
-  ]
+  const earnedBadges = badges.filter(b => b.earned)
 
   /* ── no user ── */
   if (!uid && !user) {
@@ -402,8 +455,18 @@ export default function ProfilePage() {
     )
   }
 
+  const displayName = display?.display_name || user?.email?.split('@')[0] || '프로필'
+
   return (
     <div style={{ background: 'var(--bg0)', minHeight: '100vh' }}>
+      <Helmet>
+        <title>{displayName}의 프로필 | Insightship</title>
+        <meta name="description" content={`${displayName} — Insightship 청소년 창업가 프로필. 아이디어, 활동, 배지를 확인하세요.`}/>
+        <meta property="og:title" content={`${displayName} | Insightship`}/>
+        <meta property="og:type" content="profile"/>
+        <meta property="og:url" content={`https://insightship.vercel.app/profile`}/>
+        <meta name="robots" content="noindex"/>
+      </Helmet>
       <div style={{ maxWidth: 'var(--max-w)', margin: '0 auto', padding: '32px var(--pad-x) 80px' }}>
 
         {loading ? (
@@ -528,7 +591,7 @@ export default function ProfilePage() {
                   <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
                     <StatBadge icon={FileText} label="게시글"    value={myPosts.length || 0}         color="#3B82F6" />
                     <StatBadge icon={Heart}    label="좋아요"    value={display?.like_count || 0}     color="#F43F5E" />
-                    <StatBadge icon={Trophy}   label="배지"      value={MOCK_BADGES.filter(b=>b.earned).length} color="#F59E0B" />
+                    <StatBadge icon={Trophy}   label="배지"      value={earnedBadges.length} color="#F59E0B" />
                   </div>
 
                   {/* Action buttons */}
@@ -858,9 +921,12 @@ export default function ProfilePage() {
                             </button>
                           </div>
                           <div className="profile-badges-grid" style={{ gap: 8 }}>
-                            {MOCK_BADGES.filter(b => b.earned).slice(0, 4).map((b, i) => (
-                              <BadgeCard key={i} badge={b} locked={false} />
-                            ))}
+                            {badgesLoading
+                              ? Array(4).fill(0).map((_,i)=>(<div key={i} style={{height:90,background:'var(--bg3)',borderRadius:10,animation:'skPulse 1.6s ease-in-out infinite'}}/>))
+                              : earnedBadges.slice(0, 4).length > 0
+                                ? earnedBadges.slice(0, 4).map((b, i) => (<BadgeCard key={i} badge={b} locked={false} />))
+                                : <div style={{fontSize:12,color:'var(--t4)',padding:'8px 0'}}>아직 획득한 배지가 없어요</div>
+                            }
                           </div>
                         </div>
 
@@ -971,22 +1037,25 @@ export default function ProfilePage() {
                       배지 컬렉션
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--t3)', marginBottom: 16 }}>
-                      {MOCK_BADGES.filter(b => b.earned).length}/{MOCK_BADGES.length} 획득
+                      {badgesLoading ? '로딩 중…' : `${earnedBadges.length}/${badges.length} 획득`}
                     </div>
                     {/* Progress bar */}
                     <div style={{ height: 4, background: 'var(--bg4)', borderRadius: 2, marginBottom: 20, overflow: 'hidden' }}>
                       <div style={{
                         height: '100%', borderRadius: 2,
                         background: 'linear-gradient(90deg,#3B82F6,#A855F7)',
-                        width: `${(MOCK_BADGES.filter(b=>b.earned).length / MOCK_BADGES.length) * 100}%`,
+                        width: badges.length ? `${(earnedBadges.length / badges.length) * 100}%` : '0%',
                         transition: 'width 1s ease',
                       }} />
                     </div>
-                    <div className="profile-badges-grid">
-                      {MOCK_BADGES.map((b, i) => (
-                        <BadgeCard key={i} badge={b} locked={!b.earned} />
-                      ))}
-                    </div>
+                    {badgesLoading
+                      ? <div className="profile-badges-grid">{Array(8).fill(0).map((_,i)=>(<div key={i} style={{height:100,background:'var(--bg3)',borderRadius:10,animation:'skPulse 1.6s ease-in-out infinite'}}/>))}</div>
+                      : <div className="profile-badges-grid">
+                          {badges.map((b, i) => (
+                            <BadgeCard key={i} badge={b} locked={!b.earned} />
+                          ))}
+                        </div>
+                    }
                   </div>
                 )}
 

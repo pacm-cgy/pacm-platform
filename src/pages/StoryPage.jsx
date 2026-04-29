@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import { useArticles } from '../hooks/useData'
 import { ArticleCard, ArticleCardSkeleton } from '../components/article/ArticleCard'
 import { Mic, Star, ArrowRight } from 'lucide-react'
@@ -22,6 +23,16 @@ export default function StoryPage() {
 
   return (
     <div style={{ paddingBottom: 80 }}>
+      <Helmet>
+        <title>창업자의 이야기 | Insightship — Founder Stories</title>
+        <meta name="description" content="청소년 창업가의 성공과 실패, 피벗 스토리까지. 나와 같은 청소년 창업가의 진짜 이야기를 만나보세요."/>
+        <meta property="og:title" content="창업자의 이야기 | Insightship"/>
+        <meta property="og:description" content="청소년 창업가의 성공·실패·피벗 스토리 큐레이션"/>
+        <meta property="og:type" content="website"/>
+        <meta property="og:url" content="https://insightship.vercel.app/stories"/>
+        <meta name="twitter:card" content="summary"/>
+        <link rel="canonical" href="https://insightship.vercel.app/stories"/>
+      </Helmet>
 
       {/* ── 헤더 */}
       <div style={{ padding: '32px 0 24px' }}>

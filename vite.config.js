@@ -5,27 +5,40 @@ export default defineConfig({
   plugins: [react()],
   build: {
     target: 'esnext',
-    chunkSizeWarningLimit: 800,
-    // 소스맵 완전 비활성화 (소스 역공학 방지)
+    chunkSizeWarningLimit: 1000,
     sourcemap: false,
-    // 코드 압축/난독화 (Vite 8 기본 oxc minifier 사용)
     minify: true,
+    cssMinify: true,
+    reportCompressedSize: false, // 빌드 속도 향상
     rollupOptions: {
       output: {
-        // 청크 파일명 해시화 (경로 추측 방지)
         chunkFileNames: 'assets/[hash:16].js',
         entryFileNames: 'assets/[hash:16].js',
         assetFileNames: 'assets/[hash:16].[ext]',
-        // 코드 압축
         compact: true,
         manualChunks(id) {
           if (id.includes('node_modules')) {
             if (id.includes('@supabase')) return 'vendor-supabase'
             if (id.includes('@tanstack')) return 'vendor-query'
             if (id.includes('lucide-react')) return 'vendor-ui'
+            if (id.includes('date-fns')) return 'vendor-datefns'
+            if (id.includes('react-router')) return 'vendor-router'
+            if (id.includes('react-helmet')) return 'vendor-helmet'
+            if (id.includes('zustand')) return 'vendor-zustand'
             if (id.includes('react')) return 'vendor-react'
           }
+          // 페이지 그룹 — 자주 함께 방문하는 페이지끼리 묶기
+          if (id.includes('src/pages/')) {
+            if (id.match(/HomePage|InsightPage|ArticlePage|NewsPage|NewsDetailPage/)) return 'pages-core'
+            if (id.match(/CommunityPage|PostDetailPage|IdeasPage|ProfilePage/)) return 'pages-community'
+            if (id.match(/MentorPage|EduPage|EventsPage|TrendPage/)) return 'pages-edu'
+            if (id.match(/AdminPage|OfficePage/)) return 'pages-admin'
+          }
         },
+      },
+      treeshake: {
+        moduleSideEffects: false,
+        propertyReadSideEffects: false,
       },
     },
   },
@@ -37,9 +50,25 @@ export default defineConfig({
       'X-Frame-Options': 'DENY',
     },
   },
-  optimizeDeps: {
-    include: ['react', 'react-dom', '@supabase/supabase-js', '@tanstack/react-query'],
+  preview: {
+    port: 4173,
+    headers: {
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+    },
   },
-  // 환경변수 노출 방지: VITE_ 접두사 외 노출 차단
+  optimizeDeps: {
+    include: [
+      'react', 'react-dom', 'react-router-dom',
+      '@supabase/supabase-js', '@tanstack/react-query',
+      'lucide-react', 'date-fns', 'zustand',
+    ],
+    exclude: ['@vite/client'],
+  },
   envPrefix: 'VITE_',
+  // CSS 코드 스플리팅
+  css: {
+    devSourcemap: false,
+  },
 })

@@ -1,10 +1,16 @@
 import { useNavigate } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import { ArrowLeft } from 'lucide-react'
 
 export default function TermsPage() {
   const navigate = useNavigate()
   return (
     <div style={{ paddingBottom: '80px' }}>
+      <Helmet>
+        <title>이용약관 | Insightship</title>
+        <meta name="description" content="Insightship 서비스 이용약관 — 서비스 이용 조건, 금지 행위, 면책 조항 등을 안내합니다."/>
+        <link rel="canonical" href="https://insightship.vercel.app/terms"/>
+      </Helmet>
       <div style={{ borderBottom: '1px solid var(--b1)', padding: '14px 0', marginBottom: '0' }}>
         <div className="container">
           <button onClick={() => navigate(-1)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', color: 'var(--t3)', fontSize: '13px', fontFamily: 'var(--f-mono)', cursor: 'pointer' }}>

@@ -1,9 +1,10 @@
 import { generateSlug } from '../utils/slug'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import { useAuthStore } from '../store'
 import { supabase } from '../lib/supabase'
-import { BarChart2, FileText, Users, Newspaper, RefreshCw, Loader, Zap } from 'lucide-react'
+import { BarChart2, FileText, Users, Newspaper, RefreshCw, Loader, Zap, Bell, Calendar, AlertTriangle } from 'lucide-react'
 
 function AIAssistant({ context, onInsert }) {
   const [loading, setLoading] = useState(false)
@@ -150,6 +151,10 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [writeOpen, setWriteOpen] = useState(false)
   const [runningCron, setRunningCron] = useState('')
+  const [noticeOpen, setNoticeOpen] = useState(false)
+  const [noticeForm, setNoticeForm] = useState({ title: '', body: '', maintenanceDate: '', type: 'maintenance', timeRange: '' })
+  const [noticeSaving, setNoticeSaving] = useState(false)
+  const [noticeMsg, setNoticeMsg] = useState('')
 
   useEffect(() => {
     if (!user || profile?.role !== 'admin') { navigate('/'); return }
@@ -182,19 +187,70 @@ export default function AdminPage() {
     }
   }
 
+  // 월간 점검 공지 게시 (최소 7일 전)
+  const postMaintenanceNotice = async () => {
+    if (!noticeForm.title.trim() || !noticeForm.body.trim() || !noticeForm.maintenanceDate) {
+      setNoticeMsg('❌ 제목, 내용, 점검 예정일을 모두 입력하세요.')
+      return
+    }
+    const maintenanceDate = new Date(noticeForm.maintenanceDate)
+    const today = new Date()
+    const daysUntil = Math.ceil((maintenanceDate - today) / (1000 * 60 * 60 * 24))
+    if (daysUntil < 7) {
+      setNoticeMsg(`❌ 점검 공지는 최소 7일 전에 게시해야 합니다. (현재 D-${daysUntil})`)
+      return
+    }
+    setNoticeSaving(true)
+    setNoticeMsg('')
+    try {
+      const TYPE_LABELS = { maintenance:'시스템 점검', qa:'QA 점검', update:'업데이트 배포', emergency:'긴급 점검' }
+      const typeLabel = TYPE_LABELS[noticeForm.type] || '시스템 점검'
+      const dateStr = maintenanceDate.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
+      const dayOfWeek = maintenanceDate.toLocaleDateString('ko-KR', { weekday: 'long' })
+      const timeStr = noticeForm.timeRange?.trim() ? `\n⏰ **점검 시간**: ${noticeForm.timeRange.trim()}` : ''
+      const fullBody = `📅 **점검 예정일**: ${dateStr} (${dayOfWeek})${timeStr}\n🔧 **점검 유형**: ${typeLabel}\n\n${noticeForm.body.trim()}\n\n---\n*본 공지는 정기 월간 점검 ${daysUntil}일 전(D-${daysUntil}) 게시되었습니다. 점검 시간 동안 일부 기능이 제한될 수 있습니다.*`
+      const { error } = await supabase.from('community_posts').insert({
+        title: noticeForm.title.trim(),
+        body: fullBody,
+        content: fullBody,
+        post_type: 'notice',
+        is_pinned: true,
+        author_id: profile?.id,
+        tags: ['점검공지', '월간점검', typeLabel.replace(/ /g,'')],
+      })
+      if (error) throw error
+      setNoticeMsg(`✅ 점검 공지가 게시되었습니다! (D-${daysUntil})`)
+      setNoticeForm({ title: '', body: '', maintenanceDate: '', type: 'maintenance', timeRange: '' })
+      setTimeout(() => setNoticeOpen(false), 2000)
+    } catch (e) {
+      setNoticeMsg('❌ ' + (e.message?.slice(0, 80) || '오류가 발생했습니다.'))
+    } finally {
+      setNoticeSaving(false)
+    }
+  }
+
   if (!user || profile?.role !== 'admin') return null
 
   return (
     <div style={{ paddingBottom: 80 }}>
+      <Helmet>
+        <title>관리자 대시보드 | Insightship</title>
+        <meta name="robots" content="noindex, nofollow"/>
+      </Helmet>
       <div style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--b1)', padding: '16px 0' }}>
         <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: '#60A5FA', letterSpacing: '3px', marginBottom: 4 }}>ADMIN</div>
             <h1 style={{ fontFamily: 'var(--f-display)', fontSize: 22, fontWeight: 700, color: 'var(--t1)' }}>관리자 대시보드</h1>
           </div>
-          <button onClick={() => setWriteOpen(true)} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <FileText size={14} /> 아티클 작성
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setNoticeOpen(p => !p)} className="btn btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 6, borderColor: '#F59E0B30', color: '#F59E0B' }}>
+              <Bell size={14} /> 점검 공지
+            </button>
+            <button onClick={() => setWriteOpen(true)} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <FileText size={14} /> 아티클 작성
+            </button>
+          </div>
         </div>
       </div>
 
@@ -211,26 +267,127 @@ export default function AdminPage() {
           )}
         </div>
 
+        {/* ── 월간 점검 공지 패널 */}
+        {noticeOpen && (
+          <div style={{ background: 'var(--bg2)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 12, padding: 24, marginBottom: 32 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+              <Bell size={15} color="#F59E0B" />
+              <span style={{ fontFamily: 'var(--f-mono)', fontSize: 11, color: '#F59E0B', letterSpacing: '2px' }}>월간 점검 공지 게시</span>
+              <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'var(--f-mono)', fontSize: 10, color: '#F59E0B', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', padding: '2px 8px', borderRadius: 4 }}>
+                <AlertTriangle size={10}/> 최소 7일 전 게시 의무
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t3)', marginBottom: 6 }}>공지 제목 *</div>
+                  <input value={noticeForm.title}
+                    onChange={e => setNoticeForm(f => ({ ...f, title: e.target.value }))}
+                    placeholder="예: [공지] 5월 정기 월간 점검 안내"
+                    className="input" style={{ fontSize: 13 }} />
+                </div>
+                <div>
+                  <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t3)', marginBottom: 6 }}>점검 예정일 * (오늘로부터 7일 이상)</div>
+                  <input type="date" value={noticeForm.maintenanceDate}
+                    onChange={e => setNoticeForm(f => ({ ...f, maintenanceDate: e.target.value }))}
+                    min={new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)}
+                    className="input" style={{ fontSize: 13 }} />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t3)', marginBottom: 6 }}>점검 유형</div>
+                  <select value={noticeForm.type}
+                    onChange={e => setNoticeForm(f => ({ ...f, type: e.target.value }))}
+                    className="input" style={{ fontSize: 13 }}>
+                    <option value="maintenance">시스템 점검</option>
+                    <option value="qa">QA 점검</option>
+                    <option value="update">업데이트 배포</option>
+                    <option value="emergency">긴급 점검</option>
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t3)', marginBottom: 6 }}>점검 시간대 (선택)</div>
+                  <input value={noticeForm.timeRange || ''}
+                    onChange={e => setNoticeForm(f => ({ ...f, timeRange: e.target.value }))}
+                    placeholder="예: 오전 2:00 ~ 6:00"
+                    className="input" style={{ fontSize: 13 }} />
+                </div>
+              </div>
+              <div>
+                <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--t3)', marginBottom: 6 }}>공지 내용 *</div>
+                <textarea value={noticeForm.body}
+                  onChange={e => setNoticeForm(f => ({ ...f, body: e.target.value }))}
+                  placeholder={`점검 내용을 입력하세요.\n예) 정기 월간 QA 점검이 예정되어 있습니다.\n점검 중에는 일부 서비스 이용이 제한될 수 있습니다.\n불편을 드려 죄송합니다.`}
+                  rows={4} className="input" style={{ fontSize: 13, resize: 'vertical' }} />
+              </div>
+              {/* D-day preview */}
+              {noticeForm.maintenanceDate && (()=>{
+                const d = Math.ceil((new Date(noticeForm.maintenanceDate) - new Date()) / 86400000)
+                return d > 0 ? (
+                  <div style={{ fontFamily:'var(--f-mono)', fontSize:11, color: d>=7?'#22C55E':'#F43F5E',
+                    display:'flex', alignItems:'center', gap:6 }}>
+                    <Calendar size={11}/>
+                    {d>=7 ? `✅ D-${d} — 7일 규정 충족` : `❌ D-${d} — 최소 7일 전 게시 필요 (${7-d}일 부족)`}
+                  </div>
+                ) : null
+              })()}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button onClick={postMaintenanceNotice} disabled={noticeSaving}
+                  className="btn btn-primary"
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg,#F59E0B,#D97706)' }}>
+                  {noticeSaving ? <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Bell size={13} />}
+                  {noticeSaving ? '게시 중...' : '공지 게시'}
+                </button>
+                {noticeMsg && (
+                  <span style={{ fontFamily: 'var(--f-mono)', fontSize: 12,
+                    color: noticeMsg.includes('✅') ? '#22C55E' : '#F43F5E' }}>
+                    {noticeMsg}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── AI 시장 분석 보조 */}
         <div style={{ marginBottom: 40 }}>
-          <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: '#F59E0B', letterSpacing: '2px', marginBottom: 16 }}>AI 시장 분석</div>
-          <AIAssistant context="한국 스타트업 시장 현황" onInsert={() => {}} />
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
+            <Zap size={14} color="#F59E0B"/>
+            <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: '#F59E0B', letterSpacing: '2px' }}>AI 시장 분석 · 운영 모니터링</div>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:10, marginBottom:16 }}>
+            {[
+              { label:'뉴스 수집', icon:'📰', desc:'마지막 수집 현황' },
+              { label:'AI 요약',   icon:'🤖', desc:'미처리 항목 확인' },
+              { label:'트렌드 분석', icon:'📊', desc:'시장 지표 현황' },
+              { label:'구독 현황', icon:'✉️',  desc:`활성 ${stats?.subscribers || 0}명` },
+            ].map((item,i)=>(
+              <div key={i} style={{ background:'var(--bg3)', border:'1px solid var(--b1)', borderRadius:10, padding:'14px 16px' }}>
+                <div style={{ fontSize:18, marginBottom:6 }}>{item.icon}</div>
+                <div style={{ fontFamily:'var(--f-sans)', fontSize:13, fontWeight:600, color:'var(--t1)', marginBottom:3 }}>{item.label}</div>
+                <div style={{ fontFamily:'var(--f-mono)', fontSize:10, color:'var(--t3)' }}>{item.desc}</div>
+              </div>
+            ))}
+          </div>
+          <AIAssistant context={`한국 스타트업 시장 현황. 현재 플랫폼 통계: 뉴스 ${stats?.news||0}건, 아티클 ${stats?.articles||0}편, 구독자 ${stats?.subscribers||0}명`} onInsert={() => {}} />
         </div>
 
         {/* ── Cron 수동 실행 */}
-        <div>
-          <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: '#60A5FA', letterSpacing: '2px', marginBottom: 14 }}>수동 실행</div>
+        <div style={{ marginBottom: 40 }}>
+          <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: '#60A5FA', letterSpacing: '2px', marginBottom: 14 }}>수동 실행 · CRON JOBS</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {[
-              { label: '뉴스 수집', path: '/api/fetch-news' },
-              { label: 'AI 요약',   path: '/api/summarize-news' },
-              { label: 'OG 이미지', path: '/api/fetch-og' },
-              { label: 'AI 리포트', path: '/api/generate-report' },
-            ].map(({ label, path }) => (
+              { label: '뉴스 수집',   path: '/api/fetch-news',        color:'#22C55E' },
+              { label: 'AI 요약',     path: '/api/summarize-news',    color:'#A855F7' },
+              { label: 'OG 이미지',   path: '/api/fetch-og',          color:'#3B82F6' },
+              { label: 'AI 리포트',   path: '/api/generate-report',   color:'#F59E0B' },
+              { label: '트렌드 업데이트', path: '/api/update-trends', color:'#F97316' },
+            ].map(({ label, path, color }) => (
               <button key={path} onClick={() => runCron(path, label)}
                 disabled={!!runningCron} className="btn btn-ghost btn-sm"
-                style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                {runningCron === label ? <Loader size={12} /> : <RefreshCw size={12} />}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, borderColor: runningCron===label ? color+'50' : undefined, color: runningCron===label ? color : undefined }}>
+                {runningCron === label ? <Loader size={12} style={{ animation:'spin 1s linear infinite' }} /> : <RefreshCw size={12} />}
                 {runningCron === label ? `${label} 실행 중...` : label}
               </button>
             ))}
@@ -239,6 +396,7 @@ export default function AdminPage() {
       </div>
 
       {writeOpen && <WritePanel onClose={() => { setWriteOpen(false); loadStats() }} />}
+
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg) } }

@@ -1,10 +1,16 @@
 import { useNavigate } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import { ArrowLeft } from 'lucide-react'
 
 export default function PrivacyPage() {
   const navigate = useNavigate()
   return (
     <div style={{ paddingBottom: '80px' }}>
+      <Helmet>
+        <title>개인정보처리방침 | Insightship</title>
+        <meta name="description" content="Insightship 개인정보처리방침 — 수집하는 정보, 이용 목적, 보관 기간 등을 안내합니다."/>
+        <link rel="canonical" href="https://insightship.vercel.app/privacy"/>
+      </Helmet>
       <div style={{ borderBottom: '1px solid var(--b1)', padding: '14px 0' }}>
         <div className="container">
           <button onClick={() => navigate(-1)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', color: 'var(--t3)', fontSize: '13px', fontFamily: 'var(--f-mono)', cursor: 'pointer' }}>
