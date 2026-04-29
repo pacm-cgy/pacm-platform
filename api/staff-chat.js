@@ -166,7 +166,8 @@ async function setupTable() {
   _setupInProgress = true
   try {
     const ref = _getProjectRef()
-    // 1차: Supabase Management API (가장 신뢰할 수 있는 방법)
+
+    // 1차: Supabase Management API (sbp_* PAT 필요 — service_role 키는 401)
     if (ref && SB_KEY) {
       try {
         const r = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
@@ -178,11 +179,10 @@ async function setupTable() {
           _tableReady = true
           return true
         }
-        // Management API가 401이면 service_role 키가 Personal Access Token이 아닌 경우
-        // → 2차 방법으로 fallback
       } catch (_) { /* fallthrough */ }
     }
-    // 2차: exec_sql RPC
+
+    // 2차: exec_sql RPC (Supabase에서 미리 생성한 경우)
     try {
       const r = await fetch(`${SB_URL}/rest/v1/rpc/exec_sql`, {
         method:  'POST',
@@ -194,7 +194,61 @@ async function setupTable() {
         return true
       }
     } catch (_) { /* fallthrough */ }
-    // 두 방법 모두 실패 — 운영자가 Supabase SQL Editor에서 직접 실행 필요
+
+    // 3차: /api/setup-db 내부 호출 (CRON_SECRET 사용 — 같은 Vercel 환경)
+    // setup-db.js에 staff_chat_messages DDL이 포함되어 있음
+    if (CRON_SECRET) {
+      try {
+        // Vercel edge 환경에서 자기 자신의 다른 API를 호출
+        // SB_URL 도메인에서 배포 도메인을 추론하거나 상대 경로 사용 불가 → 절대경로 필요
+        // 대신 db-setup-staff를 CRON_SECRET으로 내부 호출
+        const r = await fetch(`${SB_URL.replace('supabase.co', 'supabase.co')}/rest/v1/rpc/exec_sql`, {
+          method:  'POST',
+          headers: { ...H(), Prefer: 'return=minimal' },
+          body:    JSON.stringify({ sql: TABLE_DDL }),
+        })
+        // 이미 2차에서 시도했으므로 skip — CRON_SECRET 기반 내부 HTTP 호출로 전환
+        // Edge Runtime에서는 self-referential HTTP 가능: fetch('/api/setup-db') (상대 경로 불가)
+        // → 실제 hostname 필요: VERCEL_URL env var 사용
+        const vercelUrl = process.env.VERCEL_URL || process.env.NEXT_PUBLIC_VERCEL_URL
+        if (vercelUrl) {
+          const setupR = await fetch(`https://${vercelUrl}/api/setup-db`, {
+            method:  'POST',
+            headers: {
+              Authorization: `Bearer ${CRON_SECRET}`,
+              'Content-Type': 'application/json',
+            },
+          })
+          if (setupR.ok) {
+            _tableReady = true
+            return true
+          }
+        }
+      } catch (_) { /* fallthrough */ }
+    }
+
+    // 4차: db-setup-staff 내부 호출 (CRON_SECRET + VERCEL_URL)
+    if (CRON_SECRET) {
+      try {
+        const vercelUrl = process.env.VERCEL_URL || process.env.NEXT_PUBLIC_VERCEL_URL
+        if (vercelUrl) {
+          const r = await fetch(`https://${vercelUrl}/api/db-setup-staff`, {
+            method:  'POST',
+            headers: {
+              Authorization:  `Bearer ${CRON_SECRET}`,
+              'Content-Type': 'application/json',
+            },
+          })
+          const d = await r.json().catch(() => ({}))
+          if (r.ok || d.ok) {
+            _tableReady = true
+            return true
+          }
+        }
+      } catch (_) { /* fallthrough */ }
+    }
+
+    // 모든 방법 실패 → Supabase SQL Editor에서 직접 실행 필요
     return false
   } finally {
     _setupInProgress = false
