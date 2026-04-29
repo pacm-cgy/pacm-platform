@@ -120,9 +120,15 @@ export default function StaffChatPopup() {
   const [aiTyping,  setAiTyping]  = useState(false)    // AI 직원 타이핑 표시
   const [autoMsg,   setAutoMsg]   = useState(null)     // 자동 반응 결과 표시
 
-  const bottomRef  = useRef(null)
-  const pollRef    = useRef(null)
+  const bottomRef   = useRef(null)
+  const pollRef     = useRef(null)
   const prevCountRef = useRef(0)
+  const roomRef     = useRef(room)   // BUG3 fix: 폴링에서 최신 room 참조
+  const openRef     = useRef(open)   // BUG3 fix: 폴링에서 최신 open 참조
+
+  // ref 동기화
+  useEffect(() => { roomRef.current = room }, [room])
+  useEffect(() => { openRef.current = open  }, [open])
 
   // ── CRON_SECRET 없이도 admin 토큰으로 호출 가능하게 ─────────────
   const getAuthHeader = useCallback(async () => {
@@ -135,21 +141,34 @@ export default function StaffChatPopup() {
   }, [])
 
   // ── 메시지 조회 ─────────────────────────────────────────────────
+  // BUG2 fix: table_ready=false(null 반환)면 기존 messages 유지 — 빈배열로 덮지 않음
+  // BUG3 fix: useCallback deps에서 room/open 제거 → ref로 참조해 폴링 재생성 방지
   const fetchMessages = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
     try {
-      const r = await fetch(`/api/staff-chat?room=${room}&limit=80`)
+      const currentRoom = roomRef.current
+      const r = await fetch(`/api/staff-chat?room=${currentRoom}&limit=80`)
       const d = await r.json().catch(() => ({}))
+
+      // table_ready=false 이거나 d.messages가 null/undefined면 → 기존 messages 건드리지 않음
+      if (d.table_ready === false) {
+        // 테이블 아직 없음 — 폴링이 기존 메시지를 날리지 않도록 early return
+        if (!silent) setLoading(false)
+        return
+      }
+
       if (Array.isArray(d.messages)) {
         setMessages(prev => {
+          // BUG2 fix: 새 메시지가 기존보다 적으면 (예: 빈배열) 기존 유지
+          if (d.messages.length === 0 && prev.length > 0) return prev
           const newCount = d.messages.length - prev.length
-          if (!open && newCount > 0) setUnread(u => u + newCount)
+          if (!openRef.current && newCount > 0) setUnread(u => u + newCount)
           return d.messages
         })
       }
     } catch (_) {}
     if (!silent) setLoading(false)
-  }, [room, open])
+  }, [])   // BUG3 fix: deps [] → 함수 재생성 없음 → 폴링 인터벌 안정적
 
   // 방 변경 시 메시지 로드
   useEffect(() => {
@@ -158,7 +177,7 @@ export default function StaffChatPopup() {
     fetchMessages()
   }, [room])  // eslint-disable-line
 
-  // 폴링 — 3초마다 (5초에서 단축)
+  // 폴링 — 3초마다, fetchMessages가 재생성되지 않아 인터벌 안정적
   useEffect(() => {
     pollRef.current = setInterval(() => fetchMessages(true), 3000)
     return () => clearInterval(pollRef.current)
@@ -184,8 +203,23 @@ export default function StaffChatPopup() {
     setInput('')
 
     try {
-      // 1) 관리자 메시지 먼저 채팅방에 삽입
-      await fetch(`/api/staff-chat?room=${room}`, {
+      // 1) Optimistic update — 즉시 화면에 표시 (DB 응답 기다리지 않음)
+      const optimisticMsg = {
+        id:           `optimistic-${Date.now()}`,
+        room,
+        sender_key:   profile.username || 'admin',
+        sender_name:  profile.display_name || profile.username || '관리자',
+        sender_emoji: '👤',
+        sender_color: '#60A5FA',
+        sender_team:  '관리자',
+        message:      msg,
+        msg_type:     'admin_message',
+        created_at:   new Date().toISOString(),
+      }
+      setMessages(prev => [...prev, optimisticMsg])
+
+      // 2) 서버에 실제 저장
+      const postRes = await fetch(`/api/staff-chat?room=${room}`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -198,7 +232,20 @@ export default function StaffChatPopup() {
           msg_type:     'admin_message',
         }),
       })
-      await fetchMessages(true)
+      const postData = await postRes.json().catch(() => ({}))
+
+      if (postData.ok && postData.message) {
+        // optimistic 메시지를 실제 서버 메시지로 교체 (id 교체)
+        setMessages(prev => prev.map(m =>
+          m.id === optimisticMsg.id ? postData.message : m
+        ))
+      } else {
+        // 저장 실패 시 optimistic 메시지 제거 후 재조회
+        setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
+        await fetchMessages(true)
+      }
+      // 서버 상태 동기화 (AI 직원 반응 포함)
+      setTimeout(() => fetchMessages(true), 500)
 
       // 2) staff-chat-auto API로 직원 자동 반응 트리거
       setAiTyping(true)
