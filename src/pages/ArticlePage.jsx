@@ -38,93 +38,146 @@ function parseBold(text) {
   })
 }
 
-function renderV7Summary(text) {
+// ── LongBlack 스타일 롱폼 렌더러 ──────────────────────────────────────
+function renderLongformSummary(text) {
   if (!text) return null
   const lines = text.split('\n')
   const elements = []
   let i = 0
+
   while (i < lines.length) {
     const t = lines[i].trim()
 
-    // 메타 라인 [길이: N자] 숨김
-    if (t.startsWith('[길이:') || t.startsWith('[커버리지:')) { i++; continue }
-
-    // HR 구분선
-    if (t === '---') {
-      elements.push(<hr key={i} style={{ border:'none', borderTop:'1px solid var(--b1)', margin:'28px 0' }}/>)
-      i++; continue
-    }
-
-    // 빈 줄
+    // 빈 줄 스킵
     if (!t) { i++; continue }
 
-    // 이벤트·도메인 레이블 (💰 투자 유치 · 투자·금융)
-    if (i < 4 && /[💰🏛️🚀🤝🔬👤📊📰]/.test(t) && t.includes(' · ')) {
+    // --- 구분선 → 섹션 스페이서
+    if (t === '---') {
       elements.push(
-        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'11px', color:'var(--t3)', marginBottom:'20px', letterSpacing:'0.06em', display:'flex', alignItems:'center', gap:'6px' }}>
-          {t}
+        <div key={`hr-${i}`} style={{ margin:'40px 0 32px', display:'flex', alignItems:'center', gap:'12px' }}>
+          <div style={{ flex:1, height:'1px', background:'var(--b1)' }}/>
+          <div style={{ width:'4px', height:'4px', background:'var(--t3)', borderRadius:'50%', opacity:0.4 }}/>
+          <div style={{ flex:1, height:'1px', background:'var(--b1)' }}/>
         </div>
       )
       i++; continue
     }
 
-    // 💡 심층 개념 헤더 (이모지로 시작하는 섹션 제목)
-    if (/^[💡📚📈🚀💭]/.test(t) && !t.startsWith('•')) {
+    // ## 섹션 헤더 (이모지 포함)
+    if (t.startsWith('## ')) {
+      const heading = t.slice(3).trim()
       elements.push(
-        <div key={i} style={{ fontFamily:'var(--f-serif)', fontSize:'17px', fontWeight:700, color:'var(--t1)', margin:'32px 0 16px', paddingBottom:'10px', borderBottom:'1px solid var(--b1)' }}>
-          {t}
+        <div key={`h2-${i}`} style={{
+          display:'flex', alignItems:'center', gap:'10px',
+          margin:'0 0 20px',
+          fontFamily:'var(--f-serif)', fontSize:'clamp(16px,3vw,20px)',
+          fontWeight:700, color:'var(--t1)', lineHeight:1.35,
+        }}>
+          {heading}
         </div>
       )
       i++; continue
     }
 
-    // **볼드 전체 헤더** (** 로 시작하고 끝나는 라인)
-    if (t.startsWith('**') && t.endsWith('**') && t.length > 4) {
+    // > 인용 블록 (핵심 문장 강조)
+    if (t.startsWith('> ')) {
+      const content = t.slice(2).trim()
+      elements.push(
+        <blockquote key={`bq-${i}`} style={{
+          margin:'0 0 20px',
+          padding:'14px 20px',
+          borderLeft:'3px solid var(--amber, #D4AF37)',
+          background:'rgba(212,175,55,0.06)',
+          borderRadius:'0 4px 4px 0',
+        }}>
+          <p style={{ margin:0, lineHeight:1.9, color:'var(--t1)', fontSize:'15px', fontStyle:'italic' }}>
+            {parseBold(content)}
+          </p>
+        </blockquote>
+      )
+      i++; continue
+    }
+
+    // → 액션 포인트 라인
+    if (t.startsWith('→ ')) {
+      elements.push(
+        <div key={`arrow-${i}`} style={{
+          display:'flex', gap:'12px', margin:'0 0 16px',
+          padding:'14px 18px',
+          background:'rgba(99,102,241,0.08)',
+          border:'1px solid rgba(99,102,241,0.2)',
+          borderRadius:'4px',
+        }}>
+          <span style={{ color:'#818cf8', flexShrink:0, fontSize:'15px', marginTop:'1px' }}>→</span>
+          <span style={{ color:'var(--t2)', lineHeight:1.85, fontSize:'14px' }}>{parseBold(t.slice(2).trim())}</span>
+        </div>
+      )
+      i++; continue
+    }
+
+    // • 불릿 리스트
+    if (t.startsWith('• ')) {
+      elements.push(
+        <div key={`bullet-${i}`} style={{
+          display:'flex', gap:'10px', margin:'0 0 10px', paddingLeft:'4px',
+        }}>
+          <span style={{ color:'var(--amber, #D4AF37)', flexShrink:0, marginTop:'7px', fontSize:'6px' }}>◆</span>
+          <span style={{ color:'var(--t2)', lineHeight:1.85, fontSize:'14.5px' }}>{parseBold(t.slice(2).trim())}</span>
+        </div>
+      )
+      i++; continue
+    }
+
+    // **볼드 전체 줄** → 서브 헤더 역할
+    if (t.startsWith('**') && t.endsWith('**') && t.length > 4 && !t.slice(2,-2).includes('**')) {
       const label = t.slice(2, -2)
       elements.push(
-        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', letterSpacing:'0.14em', textTransform:'uppercase', color:'var(--t1)', opacity:0.7, marginTop:'28px', marginBottom:'12px', display:'flex', alignItems:'center', gap:'8px' }}>
-          <span style={{ display:'inline-block', width:'16px', height:'1px', background:'currentColor' }}/>
+        <div key={`bold-${i}`} style={{
+          fontFamily:'var(--f-mono)', fontSize:'10px',
+          letterSpacing:'0.14em', textTransform:'uppercase',
+          color:'var(--t2)', marginTop:'24px', marginBottom:'10px',
+          display:'flex', alignItems:'center', gap:'8px',
+        }}>
+          <span style={{ display:'inline-block', width:'20px', height:'1px', background:'var(--t3)' }}/>
           {label}
         </div>
       )
       i++; continue
     }
 
-    // → 화살표 인사이트 라인
-    if (t.startsWith('→')) {
-      elements.push(
-        <div key={i} style={{ display:'flex', gap:'10px', marginBottom:'14px', padding:'10px 14px', background:'rgba(255,255,255,0.03)', borderLeft:'2px solid rgba(255,255,255,0.15)' }}>
-          <span style={{ color:'var(--t1)', opacity:0.5, flexShrink:0, fontFamily:'var(--f-mono)', fontSize:'12px', marginTop:'2px' }}>→</span>
-          <span style={{ color:'var(--t2)', lineHeight:1.8 }}>{parseBold(t.slice(1).trim())}</span>
-        </div>
-      )
-      i++; continue
-    }
-
-    // • 불릿
-    if (t.startsWith('•')) {
-      elements.push(
-        <div key={i} style={{ display:'flex', gap:'10px', marginBottom:'10px', paddingLeft:'4px' }}>
-          <span style={{ color:'var(--t3)', flexShrink:0, marginTop:'5px', fontSize:'8px' }}>■</span>
-          <span style={{ color:'var(--t2)', lineHeight:1.8 }}>{parseBold(t.slice(1).trim())}</span>
-        </div>
-      )
-      i++; continue
-    }
-
-    // *이탤릭* 메타 라인 (ai: ...) — 숨김 처리
+    // *이탤릭* 메타 태그 (insightship-nlp · ...) → 작게 표시
     if (t.startsWith('*') && t.endsWith('*') && !t.startsWith('**')) {
+      const meta = t.slice(1, -1)
+      if (meta.includes('insightship') || meta.includes(' · ')) {
+        elements.push(
+          <div key={`meta-${i}`} style={{
+            fontFamily:'var(--f-mono)', fontSize:'10px',
+            color:'var(--t4, var(--t3))', marginTop:'32px',
+            letterSpacing:'0.08em', opacity:0.5,
+          }}>
+            {meta}
+          </div>
+        )
+        i++; continue
+      }
+      // 일반 이탤릭 → 작은 안내 문구
       elements.push(
-        <div key={i} style={{ fontFamily:'var(--f-mono)', fontSize:'10px', color:'var(--t3)', marginTop:'20px', letterSpacing:'0.08em' }}>
-          {t.slice(1,-1)}
-        </div>
+        <p key={`italic-${i}`} style={{
+          margin:'0 0 16px', lineHeight:1.85,
+          color:'var(--t3)', fontSize:'13px', fontStyle:'italic',
+        }}>
+          {t.slice(1, -1)}
+        </p>
       )
       i++; continue
     }
 
     // 일반 단락
     elements.push(
-      <p key={i} style={{ marginBottom:'16px', lineHeight:1.95, color:'var(--t2)' }}>
+      <p key={`p-${i}`} style={{
+        margin:'0 0 18px', lineHeight:2.0,
+        color:'var(--t2)', fontSize:'15px', letterSpacing:'-0.01em',
+      }}>
         {parseBold(t)}
       </p>
     )
@@ -132,6 +185,9 @@ function renderV7Summary(text) {
   }
   return elements
 }
+
+// 하위 호환 alias
+const renderV7Summary = renderLongformSummary
 
 
 function renderMarkdown(text) {
