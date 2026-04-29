@@ -1,15 +1,17 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════╗
- * ║   PACM-AI 지속 학습 엔진 v2.0                                       ║
- * ║   /api/ai-mentor-learn                                               ║
+ * ║   INSIGHTSHIP AI 지속 학습 엔진 v3.0                                ║
+ * ║   담당 AI: LEARN (런) — 학습 매니저                                 ║
  * ║                                                                      ║
- * ║   학습 파이프라인:                                                   ║
- * ║   A. 피드백 학습  — 👍/👎 → 응답 품질 가중치 갱신                  ║
- * ║   B. 패턴 학습    — 자주 묻는 질문 → 자동 지식 블록 생성            ║
- * ║   C. 기사 학습    — 최신 뉴스/아티클 → 지식베이스 자동 보강        ║
- * ║   D. 취약점 탐지  — 부정 피드백 많은 의도 → 지식 강화 표시         ║
- * ║   E. 자기 진화    — 사용 패턴 기반 가중치 자동 조정                ║
- * ║   F. 지식 정리    — 오래되고 낮은 품질 지식 자동 삭제              ║
+ * ║   v3 업그레이드:                                                     ║
+ * ║   - NaN 표시 완전 제거 (safeNum 헬퍼 전역 적용)                    ║
+ * ║   - 피드백 학습 정밀화 (bad 피드백 → 즉시 보강 지식 생성)          ║
+ * ║   - 패턴 학습 강화 (7일 → 3일 + 상위 intent 자동 지식 블록 생성)  ║
+ * ║   - 기사 학습 품질 향상 (BM25 랭킹 + 중복 방지 강화)              ║
+ * ║   - 취약점 자동 복구 (weak intent → 지식 자동 보강)                ║
+ * ║   - 자기진화 강화 (가중치 자동 재조정)                             ║
+ * ║   - 지식 통계 NaN 완전 방지                                        ║
+ * ║   G. 인터뷰 인사이트 학습 (유명 기업 인터뷰 → 지식베이스 자동 내재화) ║
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
 export const config = { runtime: 'edge' }
@@ -25,73 +27,33 @@ const H = () => ({
 })
 
 // ══════════════════════════════════════════════════════════════════════
-// §A. 피드백 학습 — 👍/👎 반영 + 가중치 갱신
+// §0. 안전 수치 헬퍼 — NaN/null/undefined 완전 방지
 // ══════════════════════════════════════════════════════════════════════
 
-async function processFeedback(logId, rating) {
-  // 1. chat_log 레코드에 피드백 기록
-  const patchRes = await fetch(`${SB_URL}/rest/v1/mentor_chat_logs?id=eq.${logId}`, {
-    method: 'PATCH',
-    headers: { ...H(), Prefer: 'return=minimal' },
-    body: JSON.stringify({ feedback: rating, feedback_at: new Date().toISOString() }),
-  })
-  if (!patchRes.ok) throw new Error(`feedback patch failed: ${patchRes.status}`)
+function safeNum(v, fallback = 0) {
+  const n = Number(v)
+  return isFinite(n) ? n : fallback
+}
 
-  // 2. 해당 대화의 intent + 사용된 지식 조회
-  const logRes = await fetch(
-    `${SB_URL}/rest/v1/mentor_chat_logs?id=eq.${logId}&select=intent_classified,user_message,ai_response`,
-    { headers: H() }
-  )
-  const logs = await logRes.json()
-  const log = logs?.[0]
-  if (!log) return { ok: true }
+function safePct(num, den, digits = 1) {
+  const n = safeNum(num), d = safeNum(den)
+  if (d === 0) return '0.0%'
+  return ((n / d) * 100).toFixed(digits) + '%'
+}
 
-  // 3. 의도 통계 업데이트
-  await fetch(`${SB_URL}/rest/v1/mentor_intent_stats`, {
-    method: 'POST',
-    headers: { ...H(), Prefer: 'return=minimal' },
-    body: JSON.stringify({
-      intent: log.intent_classified || 'general',
-      sample_query: log.user_message?.slice(0, 200),
-      needs_improvement: rating === 'bad',
-      created_at: new Date().toISOString(),
-    }),
-  })
+function safeAvg(arr, key, digits = 1) {
+  if (!Array.isArray(arr) || arr.length === 0) return (0).toFixed(digits)
+  const sum = arr.reduce((s, item) => s + safeNum(item?.[key] ?? item), 0)
+  return (sum / arr.length).toFixed(digits)
+}
 
-  // 4. 긍정 피드백이면 → 관련 지식 품질 점수 상승
-  if (rating === 'good' && log.intent_classified) {
-    const catMap = {
-      lean_canvas: 'guide', mvp: 'guide', revenue_model: 'guide',
-      idea_validation: 'guide', pitch_deck: 'guide', team_building: 'guide',
-      market_analysis: 'market', funding: 'market', government_support: 'policy',
-      startup_basics: 'guide', marketing: 'guide', legal_tax: 'legal',
-      failure_lesson: 'insight', simulation: 'guide', research_request: 'trend',
-    }
-    const cat = catMap[log.intent_classified]
-    if (cat) {
-      // 해당 카테고리 상위 지식 품질 소폭 상승 (최대 10)
-      const knRes = await fetch(
-        `${SB_URL}/rest/v1/ai_knowledge?category=eq.${cat}&order=use_count.desc&limit=3`,
-        { headers: H() }
-      )
-      const knList = await knRes.json()
-      for (const kn of (knList || [])) {
-        if ((kn.quality || 5) < 10) {
-          fetch(`${SB_URL}/rest/v1/ai_knowledge?id=eq.${kn.id}`, {
-            method: 'PATCH',
-            headers: { ...H(), Prefer: 'return=minimal' },
-            body: JSON.stringify({ quality: Math.min(10, (kn.quality || 5) + 1) }),
-          }).catch(() => {})
-        }
-      }
-    }
-  }
-
-  return { ok: true, feedback: rating, intent: log.intent_classified }
+function safeInt(v) {
+  const n = parseInt(v, 10)
+  return isNaN(n) ? 0 : n
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §B. 패턴 학습 — 자주 묻는 질문 클러스터링 → 자동 지식 생성
+// §1. NLP 코어
 // ══════════════════════════════════════════════════════════════════════
 
 const STOPS = new Set([
@@ -112,23 +74,115 @@ function extractKeywords(text, n = 10) {
 }
 
 function detectCategory(text) {
-  const lc = text.toLowerCase()
+  const lc = (text||'').toLowerCase()
   if (/투자|vc|펀딩|시리즈|유니콘/.test(lc)) return 'market'
   if (/정책|지원|공모전|창진원|중기부/.test(lc)) return 'policy'
   if (/법인|세금|특허|계약|지분/.test(lc)) return 'legal'
   if (/트렌드|동향|시장|성장|통계/.test(lc)) return 'trend'
   if (/에듀테크|교육|학습/.test(lc)) return 'insight'
+  if (/인터뷰|대표|ceo|창업자|스토리/.test(lc)) return 'insight'
   return 'guide'
 }
 
-// 자주 묻는 질문 → 새 지식 블록 자동 생성
+// ══════════════════════════════════════════════════════════════════════
+// §A. 피드백 학습 — 👍/👎 반영 + 가중치 갱신 + bad 시 즉시 보강
+// ══════════════════════════════════════════════════════════════════════
+
+async function processFeedback(logId, rating) {
+  // 1. chat_log 레코드에 피드백 기록
+  const patchRes = await fetch(`${SB_URL}/rest/v1/mentor_chat_logs?id=eq.${logId}`, {
+    method: 'PATCH',
+    headers: { ...H(), Prefer: 'return=minimal' },
+    body: JSON.stringify({ feedback: rating, feedback_at: new Date().toISOString() }),
+  })
+  if (!patchRes.ok) throw new Error(`feedback patch failed: ${patchRes.status}`)
+
+  // 2. 해당 대화의 intent + 사용된 지식 조회
+  const logRes = await fetch(
+    `${SB_URL}/rest/v1/mentor_chat_logs?id=eq.${logId}&select=intent_classified,user_message,ai_response`,
+    { headers: H() }
+  )
+  const logs = await logRes.json()
+  const log = logs?.[0]
+  if (!log) return { ok: true }
+
+  const intent = log.intent_classified || 'general'
+
+  // 3. 의도 통계 업데이트
+  await fetch(`${SB_URL}/rest/v1/mentor_intent_stats`, {
+    method: 'POST',
+    headers: { ...H(), Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      intent,
+      sample_query: (log.user_message||'').slice(0, 200),
+      needs_improvement: rating === 'bad',
+      created_at: new Date().toISOString(),
+    }),
+  }).catch(()=>{})
+
+  const catMap = {
+    lean_canvas: 'guide', mvp: 'guide', revenue_model: 'guide',
+    idea_validation: 'guide', pitch_deck: 'guide', team_building: 'guide',
+    market_analysis: 'market', funding: 'market', government_support: 'policy',
+    startup_basics: 'guide', marketing: 'guide', legal_tax: 'legal',
+    failure_lesson: 'insight', simulation: 'guide', research_request: 'trend',
+    interview_insight: 'insight',
+  }
+  const cat = catMap[intent]
+
+  if (rating === 'good' && cat) {
+    // 긍정 피드백 → 관련 지식 품질 소폭 상승
+    const knRes = await fetch(
+      `${SB_URL}/rest/v1/ai_knowledge?category=eq.${cat}&order=use_count.desc&limit=3`,
+      { headers: H() }
+    )
+    const knList = await knRes.json().catch(() => [])
+    for (const kn of (Array.isArray(knList) ? knList : [])) {
+      const cur = safeNum(kn.quality, 5)
+      if (cur < 10) {
+        fetch(`${SB_URL}/rest/v1/ai_knowledge?id=eq.${kn.id}`, {
+          method: 'PATCH',
+          headers: { ...H(), Prefer: 'return=minimal' },
+          body: JSON.stringify({ quality: Math.min(10, cur + 1) }),
+        }).catch(()=>{})
+      }
+    }
+  }
+
+  if (rating === 'bad' && log.user_message) {
+    // 부정 피드백 → 즉시 보강 지식 블록 생성 (개선 표시)
+    const keywords = extractKeywords(log.user_message + ' ' + (log.ai_response||''))
+    const newKnowledge = {
+      content: `[피드백 보강] ${intent} — 사용자 질문: ${(log.user_message||'').slice(0,200)}\n응답 품질 개선 필요. 추가 학습 필요 분야.`,
+      category: cat || 'guide',
+      source: `feedback:bad:${logId}`,
+      keywords: keywords.slice(0, 6),
+      quality: 4,
+      use_count: 0,
+      needs_improvement: true,
+      created_at: new Date().toISOString(),
+    }
+    fetch(`${SB_URL}/rest/v1/ai_knowledge`, {
+      method: 'POST',
+      headers: { ...H(), Prefer: 'return=minimal' },
+      body: JSON.stringify(newKnowledge),
+    }).catch(()=>{})
+  }
+
+  return { ok: true, feedback: rating, intent }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// §B. 패턴 학습 — 자주 묻는 질문 클러스터링 → 자동 지식 생성
+// ══════════════════════════════════════════════════════════════════════
+
 async function learnFromFrequentQueries() {
   const since = new Date(Date.now() - 3 * 86400_000).toISOString()
   const res = await fetch(
-    `${SB_URL}/rest/v1/mentor_chat_logs?created_at=gte.${since}&select=intent_classified,user_message,ai_response&limit=200`,
+    `${SB_URL}/rest/v1/mentor_chat_logs?created_at=gte.${since}&select=intent_classified,user_message,ai_response&limit=300`,
     { headers: H() }
   )
-  const logs = await res.json()
+  const logs = await res.json().catch(() => [])
   if (!Array.isArray(logs) || !logs.length) return { learned: 0 }
 
   // 의도별 클러스터링
@@ -141,31 +195,42 @@ async function learnFromFrequentQueries() {
 
   let learned = 0
   for (const [intent, queries] of Object.entries(clusters)) {
-    if (queries.length < 3) continue // 3번 이상 질문된 의도만
+    if (queries.length < 2) continue // v3: 2번 이상으로 낮춤 (더 빠른 학습)
 
-    // 공통 패턴 추출
     const allText = queries.join(' ')
     const keywords = extractKeywords(allText)
     const category = detectCategory(allText)
 
     // 이미 유사한 지식이 있는지 확인
-    const existRes = await fetch(
-      `${SB_URL}/rest/v1/ai_knowledge?category=eq.${category}&keywords=cs.{${keywords.slice(0,3).join(',')}}}&limit=1`,
-      { headers: H() }
-    )
-    const exist = await existRes.json()
-    if (Array.isArray(exist) && exist.length > 0) continue
+    if (keywords.length >= 2) {
+      const existRes = await fetch(
+        `${SB_URL}/rest/v1/ai_knowledge?category=eq.${category}&limit=20&select=keywords`,
+        { headers: H() }
+      )
+      const exist = await existRes.json().catch(() => [])
+      if (Array.isArray(exist)) {
+        const alreadyExists = exist.some(kn => {
+          const knKws = Array.isArray(kn.keywords) ? kn.keywords : []
+          const overlap = keywords.slice(0,3).filter(k => knKws.includes(k)).length
+          return overlap >= 2
+        })
+        if (alreadyExists) continue
+      }
+    }
 
-    // 새 지식 블록 생성 — 가장 대표적인 질문 기반
     const repQuery = queries.sort((a,b)=>b.length-a.length)[0]
-    if (repQuery.length < 20) continue
+    if ((repQuery||'').length < 15) continue
+
+    // 대표 응답이 있는 경우 포함
+    const repLog = logs.find(l => (l.intent_classified||'general') === intent && (l.ai_response||'').length > 50)
+    const repAnswer = repLog ? (repLog.ai_response||'').slice(0, 300) : ''
 
     const newKnowledge = {
-      content: `[자동학습] ${intent} 관련 자주 묻는 질문 패턴: ${repQuery.slice(0, 300)}`,
+      content: `[패턴학습] ${intent} — 자주 묻는 질문(${queries.length}회): ${repQuery.slice(0, 250)}${repAnswer ? '\n\n대표 답변 패턴: ' + repAnswer : ''}`,
       category,
       source: `auto:pattern:${intent}:${Date.now()}`,
       keywords: keywords.slice(0, 8),
-      quality: 6,
+      quality: Math.min(8, 5 + Math.floor(queries.length / 3)),
       use_count: queries.length,
       created_at: new Date().toISOString(),
     }
@@ -181,34 +246,39 @@ async function learnFromFrequentQueries() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §C. 기사 학습 — 최신 아티클 → 지식베이스 자동 보강
+// §C. 기사 학습 — 최신 아티클 → 지식베이스 자동 보강 (BM25 강화)
 // ══════════════════════════════════════════════════════════════════════
 
 function extractKnowledgeFromArticle(article) {
-  const text = `${article.title}\n${article.ai_summary || article.excerpt || ''}`
+  const text = `${article.title||''}\n${article.ai_summary || article.excerpt || ''}`
+  if (text.trim().length < 30) return null
+
   const keywords = extractKeywords(text)
   const category = detectCategory(text)
 
-  // 핵심 문장 추출
+  // 핵심 문장 추출 (BM25 기반 스코어링)
   const sentences = text
     .replace(/([다요])\s/g, '$1\n')
     .split('\n')
     .map(s => s.trim())
-    .filter(s => s.length >= 30 && s.length <= 400)
+    .filter(s => s.length >= 25 && s.length <= 400)
 
   if (!sentences.length) return null
 
-  // BM25 간이 스코어링
   const scored = sentences.map(s => {
     const toks = new Set(tokenize(s))
     const overlap = keywords.filter(k => toks.has(k)).length
-    return { s, score: overlap / Math.max(1, Math.sqrt(s.length)) }
+    const score = overlap / Math.max(1, Math.sqrt(s.length / 30))
+    return { s, score }
   }).sort((a,b) => b.score - a.score)
 
   const content = scored.slice(0,3).map(x=>x.s).join(' ').slice(0, 600)
-  if (content.length < 40) return null
+  if (content.length < 30) return null
 
-  const quality = Math.min(9, Math.max(5, Math.round(keywords.length * 0.7 + content.length / 120)))
+  // NaN 방지: quality 계산 시 safeNum 사용
+  const quality = Math.min(9, Math.max(5, safeInt(
+    Math.round(keywords.length * 0.7 + content.length / 120)
+  )))
 
   return {
     content,
@@ -224,20 +294,19 @@ function extractKnowledgeFromArticle(article) {
 async function ingestRecentArticles() {
   const since = new Date(Date.now() - 7 * 86400_000).toISOString()
   const res = await fetch(
-    `${SB_URL}/rest/v1/articles?status=eq.published&published_at=gte.${since}&select=id,title,ai_summary,excerpt,tags,category&order=published_at.desc&limit=50`,
+    `${SB_URL}/rest/v1/articles?status=eq.published&published_at=gte.${since}&select=id,title,ai_summary,excerpt,tags,category&order=published_at.desc&limit=60`,
     { headers: H() }
   )
-  const articles = await res.json()
+  const articles = await res.json().catch(() => [])
   if (!Array.isArray(articles) || !articles.length) return { ingested: 0 }
 
   let ingested = 0
   for (const art of articles) {
-    // 이미 처리된 기사인지 확인
     const existRes = await fetch(
-      `${SB_URL}/rest/v1/ai_knowledge?source=eq.article:${art.id}&limit=1`,
+      `${SB_URL}/rest/v1/ai_knowledge?source=eq.article:${art.id}&limit=1&select=id`,
       { headers: H() }
     )
-    const exist = await existRes.json()
+    const exist = await existRes.json().catch(() => [])
     if (Array.isArray(exist) && exist.length > 0) continue
 
     const block = extractKnowledgeFromArticle(art)
@@ -254,35 +323,87 @@ async function ingestRecentArticles() {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §D. 취약점 탐지 — 부정 피드백 많은 의도 분석
+// §D. 취약점 탐지 & 자동 보강 — 부정 피드백 많은 의도 → 지식 즉시 생성
 // ══════════════════════════════════════════════════════════════════════
 
-async function analyzeWeakPoints() {
+// weak intent별 자동 보강 지식 템플릿
+const BOOST_TEMPLATES = {
+  lean_canvas: '린 캔버스는 9블록으로 사업 아이디어를 정리하는 도구입니다. 1.문제 2.고객 3.고유가치제안 4.해결책 5.채널 6.수익모델 7.비용구조 8.핵심지표 9.경쟁우위로 구성됩니다.',
+  mvp: 'MVP(최소 기능 제품)는 가장 핵심 기능 하나만 가진 첫 제품입니다. 노션 페이지, 구글폼, 카카오채널로도 MVP를 만들 수 있습니다. 완벽한 앱보다 빠른 검증이 중요합니다.',
+  funding: '스타트업 투자 단계: 시드(초기 아이디어 검증) → 시리즈 A(제품-시장 적합성 검증) → 시리즈 B 이후(확장). 한국 평균 시드 투자 규모는 1~5억원, 시리즈 A는 10~50억원 수준입니다.',
+  government_support: '청소년 창업 주요 지원: 비즈쿨(초중고 창업교육), 청소년 창업경진대회, 예비창업패키지(19세 이상, 최대 1억), 대학 창업지원단. 창업진흥원(tips.go.kr)에서 전체 목록 확인 가능.',
+  market_analysis: '시장 분석 3단계: ① TAM(전체 시장 규모) ② SAM(서비스 가능 시장) ③ SOM(현실적 점유율 목표). 경쟁사 분석: 1-star 리뷰에서 기회를 찾으세요.',
+  pitch_deck: '피치덱 핵심 10페이지: 문제→솔루션→시장규모→제품→비즈니스모델→트랙션→팀→경쟁분석→재무계획→투자 요청. 첫 1페이지가 가장 중요합니다.',
+  marketing: '창업 초기 마케팅: 오가닉 콘텐츠(SNS)로 시작하세요. 인스타그램, 틱톡에서 문제 해결 과정을 공유하면 자연스러운 커뮤니티가 형성됩니다.',
+  failure_lesson: '실패는 데이터입니다. 피봇의 70%는 초기 가정이 틀렸을 때 발생합니다. 에어비앤비, 유튜브, 슬랙 모두 처음과 전혀 다른 아이디어로 시작했습니다.',
+  general: 'Insightship AI 멘토는 창업 아이디어 검증, 린 캔버스, MVP 설계, 투자/정부지원 정보, 시장 분석 등을 지원합니다. 구체적인 질문일수록 더 좋은 답변을 드립니다.',
+}
+
+async function analyzeAndBoostWeakPoints() {
   const since = new Date(Date.now() - 7 * 86400_000).toISOString()
   const res = await fetch(
     `${SB_URL}/rest/v1/mentor_intent_stats?created_at=gte.${since}&select=intent,needs_improvement`,
     { headers: H() }
   )
-  const stats = await res.json()
-  if (!Array.isArray(stats) || !stats.length) return { weakPoints: [] }
+  const stats = await res.json().catch(() => [])
+  if (!Array.isArray(stats) || !stats.length) return { weakPoints: [], boosted: 0 }
 
   const total = {}, bad = {}
   for (const s of stats) {
-    total[s.intent] = (total[s.intent] || 0) + 1
-    if (s.needs_improvement) bad[s.intent] = (bad[s.intent] || 0) + 1
+    const intent = s.intent || 'general'
+    total[intent] = (total[intent] || 0) + 1
+    if (s.needs_improvement) bad[intent] = (bad[intent] || 0) + 1
   }
 
   const weakPoints = Object.entries(total)
     .map(([intent, count]) => ({
       intent,
-      count,
-      badRate: ((bad[intent]||0) / count),
-      needsBoost: count >= 3 && ((bad[intent]||0) / count) > 0.2,
+      count: safeNum(count),
+      badCount: safeNum(bad[intent]),
+      badRate: safeNum(count) > 0 ? (safeNum(bad[intent]) / safeNum(count)) : 0,
+      needsBoost: safeNum(count) >= 2 && (safeNum(bad[intent]) / safeNum(count)) > 0.15,
     }))
     .filter(x => x.needsBoost)
     .sort((a,b) => b.badRate - a.badRate)
 
-  return { weakPoints }
+  // 취약 의도에 자동 보강 지식 생성
+  let boosted = 0
+  for (const wp of weakPoints.slice(0, 3)) {
+    const tpl = BOOST_TEMPLATES[wp.intent] || BOOST_TEMPLATES.general
+    const category = detectCategory(tpl + ' ' + wp.intent)
+
+    // 이미 boost 지식이 있으면 스킵
+    const existRes = await fetch(
+      `${SB_URL}/rest/v1/ai_knowledge?source=eq.boost:${wp.intent}&limit=1&select=id`,
+      { headers: H() }
+    )
+    const exist = await existRes.json().catch(() => [])
+    if (Array.isArray(exist) && exist.length > 0) continue
+
+    const insertRes = await fetch(`${SB_URL}/rest/v1/ai_knowledge`, {
+      method: 'POST',
+      headers: { ...H(), Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        content: `[자동보강] ${tpl}`,
+        category,
+        source: `boost:${wp.intent}`,
+        keywords: extractKeywords(tpl + ' ' + wp.intent).slice(0, 8),
+        quality: 8,
+        use_count: 0,
+        created_at: new Date().toISOString(),
+      }),
+    })
+    if (insertRes.ok) boosted++
+  }
+
+  return {
+    weakPoints: weakPoints.map(w => ({
+      intent: w.intent,
+      count: w.count,
+      badRate: (w.badRate * 100).toFixed(1) + '%',
+    })),
+    boosted,
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -290,24 +411,24 @@ async function analyzeWeakPoints() {
 // ══════════════════════════════════════════════════════════════════════
 
 async function selfEvolve() {
-  // 최근 30일 의도 분포 분석
   const since = new Date(Date.now() - 30 * 86400_000).toISOString()
   const res = await fetch(
     `${SB_URL}/rest/v1/mentor_intent_stats?created_at=gte.${since}&select=intent`,
     { headers: H() }
   )
-  const stats = await res.json()
+  const stats = await res.json().catch(() => [])
   if (!Array.isArray(stats) || !stats.length) return { evolved: false }
 
-  // 의도 빈도 계산
   const freq = {}
-  for (const s of stats) freq[s.intent] = (freq[s.intent]||0) + 1
+  for (const s of stats) {
+    const intent = s.intent || 'general'
+    freq[intent] = (freq[intent]||0) + 1
+  }
   const total = Object.values(freq).reduce((a,b)=>a+b, 0)
 
-  // 자주 쓰이는 의도의 지식 품질 자동 향상
   const topIntents = Object.entries(freq)
     .sort((a,b)=>b[1]-a[1])
-    .slice(0, 3)
+    .slice(0, 5)
     .map(([intent]) => intent)
 
   let evolved = 0
@@ -316,27 +437,34 @@ async function selfEvolve() {
       lean_canvas:'guide', mvp:'guide', revenue_model:'guide',
       idea_validation:'guide', pitch_deck:'guide', funding:'market',
       government_support:'policy', marketing:'guide', simulation:'guide',
+      interview_insight:'insight', failure_lesson:'insight',
     }
     const cat = catMap[intent]
     if (!cat) continue
 
-    // 해당 카테고리 지식 중 use_count 낮은 것들 boost
     const knRes = await fetch(
-      `${SB_URL}/rest/v1/ai_knowledge?category=eq.${cat}&quality=gte.7&order=use_count.asc&limit=5`,
+      `${SB_URL}/rest/v1/ai_knowledge?category=eq.${cat}&quality=gte.6&order=use_count.asc&limit=5&select=id,use_count`,
       { headers: H() }
     )
-    const kns = await knRes.json()
-    for (const kn of (kns||[])) {
+    const kns = await knRes.json().catch(() => [])
+    for (const kn of (Array.isArray(kns) ? kns : [])) {
       fetch(`${SB_URL}/rest/v1/ai_knowledge?id=eq.${kn.id}`, {
         method: 'PATCH',
         headers: { ...H(), Prefer: 'return=minimal' },
-        body: JSON.stringify({ use_count: (kn.use_count||0) + 1 }),
+        body: JSON.stringify({ use_count: safeNum(kn.use_count) + 1 }),
       }).catch(()=>{})
       evolved++
     }
   }
 
-  return { evolved, topIntents, distribution: freq }
+  return {
+    evolved,
+    topIntents,
+    total_queries: safeNum(total),
+    distribution: Object.fromEntries(
+      Object.entries(freq).map(([k,v]) => [k, safeNum(v)])
+    ),
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -344,13 +472,12 @@ async function selfEvolve() {
 // ══════════════════════════════════════════════════════════════════════
 
 async function pruneStaleKnowledge() {
-  // 90일 이상 + 품질 낮음 + 사용 안 된 지식 삭제
   const cutoff = new Date(Date.now() - 90 * 86400_000).toISOString()
   const res = await fetch(
-    `${SB_URL}/rest/v1/ai_knowledge?quality=lt.5&use_count=lt.2&created_at=lt.${cutoff}&source=neq.seed`,
+    `${SB_URL}/rest/v1/ai_knowledge?quality=lt.4&use_count=lt.2&created_at=lt.${cutoff}&source=neq.seed`,
     { method: 'DELETE', headers: { ...H(), Prefer: 'return=representation' } }
   )
-  const deleted = res.ok ? (await res.json().catch(()=>[])) : []
+  const deleted = res.ok ? await res.json().catch(()=>[]) : []
 
   // 30일 이상 + 자동학습 패턴 + 사용 0회 정리
   const cutoff30 = new Date(Date.now() - 30 * 86400_000).toISOString()
@@ -359,11 +486,68 @@ async function pruneStaleKnowledge() {
     { method: 'DELETE', headers: { ...H(), Prefer: 'return=minimal' } }
   )
 
-  return { pruned: Array.isArray(deleted) ? deleted.length : 0, patternPruned: res2.ok }
+  return {
+    pruned: safeInt(Array.isArray(deleted) ? deleted.length : 0),
+    patternPruned: res2.ok,
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §G. 지식 통계 요약
+// §G. 인터뷰 인사이트 학습 — 유명 기업 인터뷰 아티클 → 지식베이스 내재화
+// ══════════════════════════════════════════════════════════════════════
+
+async function ingestInterviewInsights() {
+  // insight 카테고리 + 인터뷰 관련 아티클 수집
+  const since = new Date(Date.now() - 14 * 86400_000).toISOString()
+  const res = await fetch(
+    `${SB_URL}/rest/v1/articles?status=eq.published&category=eq.insight&published_at=gte.${since}` +
+    `&select=id,title,ai_summary,excerpt,tags&order=published_at.desc&limit=30`,
+    { headers: H() }
+  )
+  const articles = await res.json().catch(() => [])
+  if (!Array.isArray(articles)) return { ingested: 0 }
+
+  // 인터뷰 관련 필터
+  const interviewArticles = articles.filter(a => {
+    const t = ((a.title||'') + ' ' + (a.ai_summary||'')).toLowerCase()
+    return /인터뷰|대표|ceo|창업자|설립자|스토리|interview|founder/.test(t)
+  })
+
+  let ingested = 0
+  for (const art of interviewArticles) {
+    const existRes = await fetch(
+      `${SB_URL}/rest/v1/ai_knowledge?source=eq.interview:${art.id}&limit=1&select=id`,
+      { headers: H() }
+    )
+    const exist = await existRes.json().catch(() => [])
+    if (Array.isArray(exist) && exist.length > 0) continue
+
+    const text = `${art.title}\n${art.ai_summary || art.excerpt || ''}`
+    const keywords = extractKeywords(text)
+    if (keywords.length < 3) continue
+
+    const content = (art.ai_summary || art.excerpt || art.title).replace(/\*\*/g,'').trim().slice(0, 500)
+
+    const insertRes = await fetch(`${SB_URL}/rest/v1/ai_knowledge`, {
+      method: 'POST',
+      headers: { ...H(), Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        content: `[인터뷰인사이트] ${art.title}: ${content}`,
+        category: 'insight',
+        source: `interview:${art.id}`,
+        keywords: keywords.slice(0, 10),
+        quality: 8,
+        use_count: 0,
+        created_at: new Date().toISOString(),
+      }),
+    })
+    if (insertRes.ok) ingested++
+  }
+  return { ingested, candidates: interviewArticles.length }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// §H. 지식 통계 — NaN 완전 방지
 // ══════════════════════════════════════════════════════════════════════
 
 async function getKnowledgeStats() {
@@ -378,24 +562,46 @@ async function getKnowledgeStats() {
   const byCategory = {}
   for (const k of all) {
     const cat = k.category || 'unknown'
-    if (!byCategory[cat]) byCategory[cat] = { count: 0, avgQuality: 0, totalUse: 0 }
+    if (!byCategory[cat]) byCategory[cat] = { count: 0, totalQuality: 0, totalUse: 0 }
     byCategory[cat].count++
-    byCategory[cat].avgQuality += k.quality || 5
-    byCategory[cat].totalUse += k.use_count || 0
-  }
-  for (const cat of Object.keys(byCategory)) {
-    byCategory[cat].avgQuality = (byCategory[cat].avgQuality / byCategory[cat].count).toFixed(1)
+    byCategory[cat].totalQuality += safeNum(k.quality, 5)
+    byCategory[cat].totalUse    += safeNum(k.use_count, 0)
   }
 
+  // avgQuality를 NaN 없이 계산
+  const byCategoryOut = {}
+  for (const [cat, d] of Object.entries(byCategory)) {
+    byCategoryOut[cat] = {
+      count:      d.count,
+      avgQuality: d.count > 0 ? parseFloat((d.totalQuality / d.count).toFixed(1)) : 0,
+      totalUse:   d.totalUse,
+    }
+  }
+
+  const recentRes = await fetch(
+    `${SB_URL}/rest/v1/ai_knowledge?order=created_at.desc&limit=5&select=source,category,created_at`,
+    { headers: H() }
+  )
+  const recent = await recentRes.json().catch(() => [])
+
   return {
-    total: all.length,
-    byCategory,
-    topUsed: top.map(k => ({ content: k.content?.slice(0, 80), category: k.category, uses: k.use_count })),
+    total: safeInt(all.length),
+    byCategory: byCategoryOut,
+    topUsed: top.map(k => ({
+      content:  (k.content||'').slice(0, 80),
+      category: k.category || 'unknown',
+      uses:     safeInt(k.use_count),
+    })),
+    recentlyAdded: Array.isArray(recent) ? recent.slice(0,5).map(k => ({
+      source:   k.source || '',
+      category: k.category || '',
+      added_at: k.created_at || '',
+    })) : [],
   }
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §H. 메인 핸들러
+// §I. 메인 핸들러
 // ══════════════════════════════════════════════════════════════════════
 
 export default async function handler(req) {
@@ -404,6 +610,9 @@ export default async function handler(req) {
     'Access-Control-Allow-Methods': 'POST,GET,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type,Authorization',
   }
+  const json = (d, s=200) => new Response(JSON.stringify(d), {
+    status: s, headers: { 'Content-Type': 'application/json', ...CORS },
+  })
 
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS })
 
@@ -411,72 +620,74 @@ export default async function handler(req) {
   if (req.method === 'POST') {
     let body
     try { body = await req.json() } catch {
-      return new Response(JSON.stringify({ error: 'invalid json' }), { status: 400, headers: { 'Content-Type': 'application/json', ...CORS } })
+      return json({ error: 'invalid json' }, 400)
     }
 
     const { action, logId, rating } = body
 
     if (action === 'feedback') {
       if (!logId || !['good', 'bad'].includes(rating)) {
-        return new Response(JSON.stringify({ error: 'logId and rating(good|bad) required' }), {
-          status: 400, headers: { 'Content-Type': 'application/json', ...CORS },
-        })
+        return json({ error: 'logId and rating(good|bad) required' }, 400)
       }
       try {
         const result = await processFeedback(logId, rating)
-        return new Response(JSON.stringify(result), {
-          headers: { 'Content-Type': 'application/json', ...CORS },
-        })
+        return json(result)
       } catch (e) {
-        return new Response(JSON.stringify({ error: e.message }), {
-          status: 500, headers: { 'Content-Type': 'application/json', ...CORS },
-        })
+        return json({ error: e.message }, 500)
       }
     }
 
-    return new Response(JSON.stringify({ error: 'unknown action' }), {
-      status: 400, headers: { 'Content-Type': 'application/json', ...CORS },
-    })
+    return json({ error: 'unknown action' }, 400)
   }
 
-  // ── GET: CRON / 관리자 전용 ──────────────────────────────────────
+  // ── GET: 상태 조회 (미인증) / CRON 전체 학습 (인증) ─────────────
   if (req.method === 'GET') {
     const isAuthed = req.headers.get('x-vercel-cron') === '1'
       || req.headers.get('authorization') === `Bearer ${CRON_SECRET}`
+      || req.headers.get('x-cron-secret') === CRON_SECRET
+
     if (!isAuthed) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { 'Content-Type': 'application/json', ...CORS },
+      // 미인증: 상태만 반환
+      return json({
+        status: 'ok',
+        engine: 'LEARN-v3',
+        agent: 'LEARN (런) — AI 학습 매니저',
+        description: 'AI 지속 학습 엔진 v3 — NaN 완전 방지 + 피드백 보강 + 인터뷰 인사이트 학습',
+        schedule: '매일 12:00 KST',
       })
     }
 
-    const startTime = Date.now()
-    const results = {}
+    if (!SB_URL || !SB_KEY) return json({ error: 'Missing Supabase env' }, 500)
 
-    // 병렬 실행
-    const [ingest, pattern, weak, evolve, prune, stats] = await Promise.allSettled([
+    const startTime = Date.now()
+
+    // 모든 학습 파이프라인 병렬 실행
+    const [ingest, interview, pattern, weak, evolve, prune, stats] = await Promise.allSettled([
       ingestRecentArticles(),
+      ingestInterviewInsights(),
       learnFromFrequentQueries(),
-      analyzeWeakPoints(),
+      analyzeAndBoostWeakPoints(),
       selfEvolve(),
       pruneStaleKnowledge(),
       getKnowledgeStats(),
     ])
 
-    results.ingest   = ingest.status   === 'fulfilled' ? ingest.value   : { error: ingest.reason?.message }
-    results.pattern  = pattern.status  === 'fulfilled' ? pattern.value  : { error: pattern.reason?.message }
-    results.weak     = weak.status     === 'fulfilled' ? weak.value     : { error: weak.reason?.message }
-    results.evolve   = evolve.status   === 'fulfilled' ? evolve.value   : { error: evolve.reason?.message }
-    results.prune    = prune.status    === 'fulfilled' ? prune.value    : { error: prune.reason?.message }
-    results.stats    = stats.status    === 'fulfilled' ? stats.value    : { error: stats.reason?.message }
-
-    return new Response(JSON.stringify({
+    const results = {
       ok: true,
       timestamp: new Date().toISOString(),
-      engine: 'LEARN-v2',
+      engine: 'LEARN-v3',
       agent: 'LEARN',
-      elapsed_ms: Date.now() - startTime,
-      ...results,
-    }), { headers: { 'Content-Type': 'application/json', ...CORS } })
+      elapsed_ms: safeInt(Date.now() - startTime),
+      ingest:    ingest.status   === 'fulfilled' ? ingest.value   : { error: String(ingest.reason?.message||'failed') },
+      interview: interview.status=== 'fulfilled' ? interview.value: { error: String(interview.reason?.message||'failed') },
+      pattern:   pattern.status  === 'fulfilled' ? pattern.value  : { error: String(pattern.reason?.message||'failed') },
+      weak:      weak.status     === 'fulfilled' ? weak.value     : { error: String(weak.reason?.message||'failed') },
+      evolve:    evolve.status   === 'fulfilled' ? evolve.value   : { error: String(evolve.reason?.message||'failed') },
+      prune:     prune.status    === 'fulfilled' ? prune.value    : { error: String(prune.reason?.message||'failed') },
+      stats:     stats.status    === 'fulfilled' ? stats.value    : { error: String(stats.reason?.message||'failed') },
+    }
+
+    return json(results)
   }
 
   return new Response('Method Not Allowed', { status: 405 })

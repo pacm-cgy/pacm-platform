@@ -1,0 +1,237 @@
+name: AI 운영팀 공지글 게시
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: '실행 확인 (yes 입력)'
+        required: true
+        default: 'no'
+      notice_type:
+        description: '공지 유형 (intro=팀소개, patch=패치노트, custom=직접입력)'
+        required: false
+        default: 'intro'
+      custom_title:
+        description: '커스텀 제목 (notice_type=custom 시 사용)'
+        required: false
+        default: ''
+      custom_body:
+        description: '커스텀 본문 (notice_type=custom 시 사용)'
+        required: false
+        default: ''
+      is_pinned:
+        description: '상단 고정 여부 (true/false)'
+        required: false
+        default: 'true'
+
+jobs:
+  post-notice:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.confirm == 'yes' }}
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "📢 ARIA 공지글 게시"
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ vars.SUPABASE_SERVICE_ROLE_KEY }}
+          ADMIN_PROFILE_ID: ${{ vars.ADMIN_PROFILE_ID }}
+          NOTICE_TYPE: ${{ github.event.inputs.notice_type }}
+          CUSTOM_TITLE: ${{ github.event.inputs.custom_title }}
+          CUSTOM_BODY: ${{ github.event.inputs.custom_body }}
+          IS_PINNED: ${{ github.event.inputs.is_pinned }}
+        run: |
+          python3 - <<'PYEOF'
+          import os, urllib.request, json, urllib.error
+          from datetime import datetime, timezone, timedelta
+
+          SB_URL      = os.environ.get('SUPABASE_URL', '').rstrip('/')
+          SB_KEY      = os.environ.get('SUPABASE_SERVICE_KEY', '')
+          ADMIN_ID    = os.environ.get('ADMIN_PROFILE_ID', '')
+          NOTICE_TYPE = os.environ.get('NOTICE_TYPE', 'intro')
+          CUSTOM_TITLE= os.environ.get('CUSTOM_TITLE', '')
+          CUSTOM_BODY = os.environ.get('CUSTOM_BODY', '')
+          IS_PINNED   = os.environ.get('IS_PINNED', 'true').lower() == 'true'
+
+          if not SB_URL or not SB_KEY:
+              print("❌ 환경변수 없음 (SUPABASE_URL, SUPABASE_SERVICE_KEY 필요)")
+              exit(1)
+
+          headers = {
+              'apikey': SB_KEY,
+              'Authorization': f'Bearer {SB_KEY}',
+              'Content-Type': 'application/json',
+              'Prefer': 'return=representation',
+          }
+
+          # ── admin ID 조회 ────────────────────────────────────────────
+          admin_id = ADMIN_ID
+          if not admin_id:
+              for query in [
+                  'role=eq.admin',
+                  'or=(username.eq.insightship,username.eq.ai_aria,username.eq.pacm)',
+              ]:
+                  try:
+                      req = urllib.request.Request(
+                          f"{SB_URL}/rest/v1/profiles?{query}&select=id&limit=1",
+                          headers=headers
+                      )
+                      with urllib.request.urlopen(req) as r:
+                          data = json.loads(r.read())
+                          if data:
+                              admin_id = data[0]['id']
+                              break
+                  except Exception:
+                      pass
+              # 최후 fallback: 가장 오래된 계정
+              if not admin_id:
+                  try:
+                      req = urllib.request.Request(
+                          f"{SB_URL}/rest/v1/profiles?select=id&order=created_at.asc&limit=1",
+                          headers=headers
+                      )
+                      with urllib.request.urlopen(req) as r:
+                          data = json.loads(r.read())
+                          if data:
+                              admin_id = data[0]['id']
+                  except Exception:
+                      pass
+          if not admin_id:
+              print("❌ admin 프로필 없음")
+              exit(1)
+          print(f"✅ Admin ID: {admin_id}")
+
+          # ── KST 날짜 ─────────────────────────────────────────────────
+          kst = datetime.now(timezone(timedelta(hours=9)))
+          date_str = kst.strftime('%Y년 %-m월 %-d일')
+
+          # ── 공지 내용 선택 ───────────────────────────────────────────
+          if NOTICE_TYPE == 'patch':
+              title = f"🆕 [패치노트] Insightship v12 업데이트 — {date_str}"
+              body = f"""안녕하세요, Insightship 커뮤니티 여러분!
+
+플랫폼 운영 매니저 **ARIA**입니다. 오늘 배포된 v12 업데이트 내용을 안내드립니다. 🚀
+
+---
+
+## 🔧 주요 변경사항
+
+### 🐛 버그 수정
+- **AI 멘토 채팅 스크롤 버그 수정**: 스트리밍 응답 중 채팅창이 페이지 전체를 스크롤하던 문제를 고쳤습니다. 이제 채팅 컨테이너 내에서만 부드럽게 스크롤됩니다.
+- **신고 기능 텍스트 슬라이싱 오류 수정**: 신고 사유 텍스트가 일부 잘려나가던 버그를 수정했습니다.
+- **프로젝트 목록 중복 정렬 쿼리 제거**: 불필요한 중복 order-by 쿼리를 제거해 성능을 개선했습니다.
+
+### ✨ 기능 개선
+- **AI 운영팀 이벤트 테이블 수정**: `events` 테이블 대신 `community_posts` 테이블을 사용하도록 변경했습니다.
+- **뉴스 수집기 에러 처리 강화**: Naver API 미설정 시 에러 대신 경고로 처리하고, RSS 피드 실패 사유를 반환 결과에 포함합니다.
+- **이벤트 페이지 SEO 개선**: Open Graph / Twitter Card 메타 태그를 추가했습니다.
+- **트렌드 페이지 키워드 중복 제거 및 반응형 레이아웃 개선**.
+- **Footer 반응형 그리드 모바일 최적화**.
+
+### 📱 UI/UX
+- **프로필 페이지 모바일 반응형 개선**: 900px 이하에서 사이드바가 상단으로 이동하고, 640px 이하에서 배지/활동 그리드가 2열로 조정됩니다.
+- **탭 바 가로 스크롤 추가**: 모바일에서 프로필 탭이 넘칠 경우 가로 스크롤로 탐색할 수 있습니다.
+- **홈 페이지 CSS 클래스 기반 반응형 그리드 적용**.
+
+### ⚙️ 인프라
+- **GitHub Actions 공지글 게시 워크플로우 개선**: 팀 소개 / 패치노트 / 커스텀 공지 유형을 선택할 수 있습니다.
+
+---
+
+궁금한 점은 커뮤니티에 남겨주세요! 😊
+
+— **ARIA** (Insightship 운영 매니저)"""
+              tags = ['공지', '패치노트', 'v12']
+
+          elif NOTICE_TYPE == 'custom':
+              if not CUSTOM_TITLE or not CUSTOM_BODY:
+                  print("❌ custom_title 과 custom_body 가 필요합니다")
+                  exit(1)
+              title = CUSTOM_TITLE
+              body  = CUSTOM_BODY
+              tags  = ['공지']
+
+          else:  # intro (기본)
+              title = "🤖 [공지] Insightship AI 운영팀을 소개합니다"
+              body = """안녕하세요, Insightship 커뮤니티 여러분!
+
+저는 플랫폼 운영 매니저 **ARIA**입니다. 오늘은 Insightship을 함께 운영하는 AI 운영팀 8명을 소개해드리려 합니다. 💫
+
+---
+
+## 🤖 Insightship AI 운영팀 소개
+
+Insightship에는 각자 역할을 맡은 8명의 AI 매니저가 24시간 플랫폼을 운영합니다.
+
+---
+
+### 🤖 ARIA — 플랫폼 운영 매니저
+Insightship의 전체 운영을 총괄합니다. 커뮤니티 공지, 토론 주제 제안, 월간 이벤트 기획을 담당합니다.
+
+### ✍️ NOVA — 콘텐츠 편집 매니저
+스타트업 뉴스를 깊이 분석해 인사이트 아티클, 창업 가이드, 매거진 칼럼을 작성합니다.
+
+### 💡 LUMI — 멘토링 매니저
+창업 아이디어 검증, 린 캔버스 작성, MVP 설계, 시장 분석 등 창업의 모든 과정을 함께합니다.
+
+### 📡 PULSE — 뉴스 큐레이션 매니저
+매일 국내외 스타트업·창업 뉴스를 수집하고 AI 요약을 붙입니다.
+
+### 📊 TREND — 트렌드 분석 매니저
+매일 뉴스 카테고리별 흐름을 집계하고 스타트업 시장의 온도를 측정합니다.
+
+### 📋 SAGE — 리포트 매니저
+매주 금요일, 한 주간 스타트업 생태계를 종합 분석한 AI 리포트를 발행합니다.
+
+### 📬 ECHO — 뉴스레터 매니저
+매주 월요일 아침, 지난 한 주의 창업·투자·시장 인사이트를 이메일로 전합니다.
+
+### 🧠 LEARN — AI 학습 매니저
+매일 사용자 피드백과 대화 패턴을 분석해 멘토링 매니저 LUMI를 학습시킵니다.
+
+---
+
+## 📌 앞으로의 계획
+
+함께 성장해요! 🚀
+
+— 플랫폼 운영 매니저 **ARIA** 드림"""
+              tags = ['공지', 'AI운영팀', '소개']
+
+          # ── 공지 게시 ────────────────────────────────────────────────
+          post_data = json.dumps({
+              'title':      title,
+              'body':       body,
+              'content':    body,
+              'post_type':  'notice',
+              'author_id':  admin_id,
+              'tags':       tags,
+              'is_pinned':  IS_PINNED,
+              'is_deleted': False,
+          }).encode('utf-8')
+
+          req = urllib.request.Request(
+              f"{SB_URL}/rest/v1/community_posts",
+              data=post_data,
+              headers=headers,
+              method='POST'
+          )
+
+          try:
+              with urllib.request.urlopen(req) as resp:
+                  result = json.loads(resp.read())
+                  post_id = result[0].get('id', '?') if result else '?'
+                  print(f"✅ 공지글 게시 성공!")
+                  print(f"   ID    : {post_id}")
+                  print(f"   유형  : {NOTICE_TYPE}")
+                  print(f"   고정  : {IS_PINNED}")
+                  print(f"   제목  : {title}")
+          except urllib.error.HTTPError as e:
+              body_err = e.read().decode()
+              print(f"❌ 게시 실패: HTTP {e.code}")
+              print(f"   응답: {body_err}")
+              exit(1)
+
+          PYEOF
