@@ -1131,7 +1131,11 @@ function WorkersTab() {
         },
         body: JSON.stringify(body),
       })
-      const d = await r.json()
+      // ★ BUG FIX: 서버가 HTML/텍스트 에러 반환 시 JSON 파싱 실패 방지
+      const text = await r.text()
+      let d
+      try { d = JSON.parse(text) }
+      catch { d = { error: `서버 응답 오류 (HTTP ${r.status}): ${text.slice(0, 120)}` } }
       setResult(d)
       setTimeout(loadLogs, 1500)
     } catch(e) { setResult({ error: e.message }) }

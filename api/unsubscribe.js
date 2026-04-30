@@ -1,4 +1,5 @@
 // 뉴스레터 수신 거부
+// ★ SECURITY PATCH: 이메일 인젝션 방어, 토큰/이메일 형식 검증
 export const config = { runtime: 'edge' }
 
 const SB_URL = process.env.SUPABASE_URL
