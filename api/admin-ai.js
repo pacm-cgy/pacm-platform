@@ -214,18 +214,24 @@ async function saveFeedback(type, prompt, result) {
   } catch {}
 }
 
-// ── 관리자 JWT 인증 확인 ─────────────────────────────────────────
+// ── 관리자 JWT 인증 확인 — user.id로 profiles WHERE 절 포함
 async function isAdminJWT(token) {
   if (!token || !SB_URL || !SB_KEY) return false
   try {
-    const r = await fetch(`${SB_URL}/rest/v1/profiles?select=role&limit=1`, {
-      headers: {
-        apikey: SB_KEY,
-        Authorization: `Bearer ${token}`,
-      },
+    // 1) token → user.id 조회
+    const r1 = await fetch(`${SB_URL}/auth/v1/user`, {
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` },
     })
-    if (!r.ok) return false
-    const rows = await r.json().catch(() => [])
+    if (!r1.ok) return false
+    const user = await r1.json().catch(() => null)
+    if (!user?.id) return false
+    // 2) service_role 키로 해당 user.id의 role 확인 (WHERE 절 필수)
+    const r2 = await fetch(
+      `${SB_URL}/rest/v1/profiles?id=eq.${user.id}&select=role&limit=1`,
+      { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
+    )
+    if (!r2.ok) return false
+    const rows = await r2.json().catch(() => [])
     return Array.isArray(rows) && rows[0]?.role === 'admin'
   } catch { return false }
 }
