@@ -6,10 +6,10 @@
  * /api/feedback-reply, /api/generate-report, /api/generate-images
  * /api/analyze-trend, /api/report
  */
-export const config = { maxDuration: 60 }
-
 import { generateReport, generateCommunityPost, generateChat, generateText } from './_ai-engine.js'
 import { generateFeedbackReply } from './staff-brain.js'
+export const config = { maxDuration: 60 }
+
 // (_auth.js imports moved to top of file)
 
 
