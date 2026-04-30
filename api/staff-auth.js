@@ -129,25 +129,42 @@ async function lockAccount(username) {
 
 // ── GET: 상태 조회 ────────────────────────────────────────────────
 async function getStatus() {
-  const orStr = AI_USERNAMES.map(u => `username.eq.${u}`).join(',')
-  const r = await fetch(
-    `${SB_URL}/rest/v1/profiles?or=(${orStr})&select=username,role,is_verified,is_ai_account,admin_locked&limit=200`,
-    { headers: H() }
-  )
-  const rows = await r.json().catch(() => [])
-  const map  = {}
-  if (Array.isArray(rows)) for (const row of rows) map[row.username] = row
+  // ★ SB_URL 미설정 시 undefined/null 안전 처리 — try/catch 필수
+  if (!SB_URL || !SB_KEY) {
+    return AI_USERNAMES.map(u => ({
+      username: u, exists: false, role: null,
+      is_admin: false, is_verified: false, is_ai_account: false,
+      admin_locked: false, needs_lock: true,
+    }))
+  }
+  try {
+    const orStr = AI_USERNAMES.map(u => `username.eq.${u}`).join(',')
+    const r = await fetch(
+      `${SB_URL}/rest/v1/profiles?or=(${orStr})&select=username,role,is_verified,is_ai_account,admin_locked&limit=200`,
+      { headers: H() }
+    )
+    const rows = await r.json().catch(() => [])
+    const map  = {}
+    if (Array.isArray(rows)) for (const row of rows) map[row.username] = row
 
-  return AI_USERNAMES.map(u => ({
-    username:       u,
-    exists:         !!map[u],
-    role:           map[u]?.role || null,
-    is_admin:       map[u]?.role === 'admin',
-    is_verified:    map[u]?.is_verified || false,
-    is_ai_account:  map[u]?.is_ai_account || false,
-    admin_locked:   map[u]?.admin_locked || false,
-    needs_lock:     !map[u] || map[u]?.role !== 'admin' || !map[u]?.admin_locked,
-  }))
+    return AI_USERNAMES.map(u => ({
+      username:       u,
+      exists:         !!map[u],
+      role:           map[u]?.role || null,
+      is_admin:       map[u]?.role === 'admin',
+      is_verified:    map[u]?.is_verified || false,
+      is_ai_account:  map[u]?.is_ai_account || false,
+      admin_locked:   map[u]?.admin_locked || false,
+      needs_lock:     !map[u] || map[u]?.role !== 'admin' || !map[u]?.admin_locked,
+    }))
+  } catch (_e) {
+    // 네트워크 오류 / URL 파싱 오류 → 빈 상태 반환 (FUNCTION_INVOCATION_FAILED 방지)
+    return AI_USERNAMES.map(u => ({
+      username: u, exists: false, role: null,
+      is_admin: false, is_verified: false, is_ai_account: false,
+      admin_locked: false, needs_lock: true,
+    }))
+  }
 }
 
 // ── 메인 핸들러 ───────────────────────────────────────────────────
