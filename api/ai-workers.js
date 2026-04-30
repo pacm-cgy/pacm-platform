@@ -39,15 +39,24 @@ const H = () => ({
   'Content-Type': 'application/json',
 })
 
-// 관리자 JWT 인증 확인
+// 관리자 JWT 인증 확인 — user.id로 profiles WHERE 절 포함
 async function checkAdminJWT(token) {
   if (!token || !SB_URL || !SB_KEY) return false
   try {
-    const r = await fetch(`${SB_URL}/rest/v1/profiles?select=role&limit=1`, {
+    // 1) token → user.id 조회
+    const r1 = await fetch(`${SB_URL}/auth/v1/user`, {
       headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` },
     })
-    if (!r.ok) return false
-    const rows = await r.json().catch(() => [])
+    if (!r1.ok) return false
+    const user = await r1.json().catch(() => null)
+    if (!user?.id) return false
+    // 2) service_role 키로 해당 user.id의 role 확인 (WHERE 절 필수)
+    const r2 = await fetch(
+      `${SB_URL}/rest/v1/profiles?id=eq.${user.id}&select=role&limit=1`,
+      { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
+    )
+    if (!r2.ok) return false
+    const rows = await r2.json().catch(() => [])
     return Array.isArray(rows) && rows[0]?.role === 'admin'
   } catch { return false }
 }
@@ -648,26 +657,25 @@ async function actionWeeklyDiscussion(member) {
   const authorId = await getProfileId(member.username)
   if (!authorId) return { skip: 'no_profile' }
 
+  // 실제 트렌드 기반 토론 주제 동적 생성
+  const { hotKeyword, trendKeywords } = await thinkBeforeAct(member, 'weekly_discussion')
+  const kw  = hotKeyword || '창업'
+  const kw2 = trendKeywords[1] || '스타트업'
+
   const discussions = [
-    '여러분이 생각하는 "좋은 창업 아이디어"의 조건은?',
-    '학생 신분으로 창업할 때 가장 어려운 점은?',
-    '투자를 받아야 할까요, 자체 수익으로 키워야 할까요?',
-    'AI 스타트업, 지금이 기회인가 위기인가?',
-    '공동창업자를 찾을 때 가장 중요한 요소는?',
-    '실패를 경험한 후 다시 도전하는 방법은?',
-    '스타트업과 대기업 취업, 여러분의 선택은?',
-  ]
-  const topic = discussions[Math.floor(Math.random() * discussions.length)]
+    `여러분이 생각하는"${kw} 창업 아이디어"의 조건은?`,
+    `학생 신분으로 ${kw2} 창업할 때 가장 어려운 점은?`,
+    `${kw} 분야, 투자 vs 자체 수익 — 여러분의 선택은?`,
+    `${kw} 스타트업, 지금이 기회인가 위기인가?`,
+    `공동창업자를 찾을 때 ${kw2} 관점에서 가장 중요한 요소는?`,
+    `${kw} 분야 실패 후 재도전: 여러분의 경험을 나눠주세요`,
+    `${kw2} 스타트업 vs 대기업 취업, 어떻게 생각하나요?`,
+  ].filter(t => !_isDuplicateTopic(member.key, t))
 
-  const prompt = `당신은 Insightship 커뮤니티팀 ${member.title} ${member.display_name}입니다.
-역할: ${member.bio?.slice(0,80)}
-
-"${topic}" 이 주제로 커뮤니티 주간 토론 오픈 게시글을 작성하세요.
-- 100~180자
-- 참여 독려
-- 다양한 의견 환영하는 톤
-
-내용만 출력:`.trim()
+  const allDiscussions = discussions.length > 0 ? discussions :
+    [`${kw} 창업에 대해 여러분의 생각을 나눠주세요`]
+  const topic = allDiscussions[Math.floor(Math.random() * allDiscussions.length)]
+  _rememberTopic(member.key, topic)
 
   // 자체 AI 엔진으로 주간 토론 게시글 생성
   const body = generateReport(member.username, {}, 'event')

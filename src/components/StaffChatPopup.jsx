@@ -122,11 +122,14 @@ export default function StaffChatPopup() {
   const [tableSetup,  setTableSetup]  = useState(false)    // 테이블 초기화 중 표시
   const [tableNotReady, setTableNotReady] = useState(false) // 테이블 없음 — 안내 표시
 
-  const bottomRef     = useRef(null)
-  const pollRef       = useRef(null)
-  const prevCountRef  = useRef(0)
-  const roomRef       = useRef(room)   // 폴링에서 최신 room 참조
-  const openRef       = useRef(open)   // 폴링에서 최신 open 참조
+  const bottomRef       = useRef(null)
+  const msgListRef      = useRef(null)   // 스크롤 컨테이너 ref
+  const pollRef         = useRef(null)
+  const prevCountRef    = useRef(0)
+  const roomRef         = useRef(room)   // 폴링에서 최신 room 참조
+  const openRef         = useRef(open)   // 폴링에서 최신 open 참조
+  const userScrolledRef = useRef(false)  // 사용자가 위로 스크롤했는지 (강제 스크롤 방지)
+  const prevMsgLen      = useRef(0)      // 이전 메시지 수 (새 메시지 감지용)
   // 테이블 초기화 상태 추적 — 컴포넌트 생명주기 동안 1회만 ensureTable 실행
   const tableInitRef    = useRef(false)   // ensureTable 실행 중
   const tableMissingRef = useRef(false)   // 테이블 없음 확정 (반복 ensureTable 방지)
@@ -237,11 +240,27 @@ export default function StaffChatPopup() {
     return () => clearInterval(pollRef.current)
   }, [open, fetchMessages])
 
-  // 새 메시지 시 자동 스크롤
+  // 새 메시지 시 자동 스크롤 — 사용자가 위로 스크롤 중이면 강제 이동하지 않음
   useEffect(() => {
-    if (open && !minimized && messages.length > 0) {
+    if (!open || minimized) return
+    const newLen = messages.length
+    if (newLen === 0) return
+
+    // 사용자 스크롤 위치 확인 (하단 80px 이내면 팔로우, 아니면 유지)
+    const container = msgListRef.current
+    if (container) {
+      const { scrollTop, scrollHeight, clientHeight } = container
+      const distFromBottom = scrollHeight - scrollTop - clientHeight
+      const isNearBottom = distFromBottom < 80
+      // 새 메시지가 실제로 추가됐을 때만 스크롤
+      if (newLen > prevMsgLen.current && isNearBottom) {
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 60)
+      }
+    } else if (newLen > prevMsgLen.current) {
+      // 컨테이너 ref 없으면 처음 로드 시에만
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 60)
     }
+    prevMsgLen.current = newLen
   }, [messages, open, minimized])
 
   // 열면 읽음 처리
@@ -304,7 +323,8 @@ export default function StaffChatPopup() {
       // 2) staff-chat-auto API로 직원 자동 반응 트리거
       setAiTyping(true)
       const cronSecret = import.meta.env.VITE_CRON_SECRET
-      const autoHeaders = { 'Content-Type': 'application/json' }
+      const authH2 = await getAuthHeader()
+      const autoHeaders = { 'Content-Type': 'application/json', ...authH2 }
       if (cronSecret) autoHeaders['x-cron-secret'] = cronSecret
 
       fetch('/api/staff-chat-auto', {
@@ -336,7 +356,8 @@ export default function StaffChatPopup() {
     setAiTyping(true)
     try {
       const cronSecret = import.meta.env.VITE_CRON_SECRET
-      const h = { 'Content-Type': 'application/json' }
+      const authH3 = await getAuthHeader()
+      const h = { 'Content-Type': 'application/json', ...authH3 }
       if (cronSecret) h['x-cron-secret'] = cronSecret
       const r = await fetch('/api/staff-chat-auto', {
         method: 'POST', headers: h,
@@ -545,11 +566,13 @@ export default function StaffChatPopup() {
               )}
 
               {/* ── 메시지 목록 ────────────────────────────────── */}
-              <div style={{
-                flex: 1, overflowY: 'auto', padding: '10px 12px',
-                display: 'flex', flexDirection: 'column', gap: 9,
-                scrollbarWidth: 'thin', scrollbarColor: '#222 transparent',
-              }}>
+              <div
+                ref={msgListRef}
+                style={{
+                  flex: 1, overflowY: 'auto', padding: '10px 12px',
+                  display: 'flex', flexDirection: 'column', gap: 9,
+                  scrollbarWidth: 'thin', scrollbarColor: '#222 transparent',
+                }}>
                 {loading && (
                   <div style={{ textAlign:'center', color:'#333', fontFamily:'var(--f-mono)', fontSize:10, padding:20 }}>
                     로딩 중…

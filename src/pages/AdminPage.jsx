@@ -1940,7 +1940,9 @@ function StaffChatTab() {
   const [topic, setTopic]       = useState('')
   const [triggering, setTriggering] = useState(false)
   const [msg, setMsg]           = useState('')
-  const bottomRef = useRef(null)
+  const bottomRef   = useRef(null)
+  const msgListRef  = useRef(null)   // 스크롤 컨테이너 ref
+  const prevMsgLen  = useRef(0)      // 이전 메시지 수 (새 메시지 감지용)
 
   const fetchMsgs = useCallback(async () => {
     setLoading(true)
@@ -1952,9 +1954,26 @@ function StaffChatTab() {
     setLoading(false)
   }, [room])
 
-  useEffect(() => { setMessages([]); fetchMsgs() }, [room])
+  useEffect(() => { setMessages([]); prevMsgLen.current = 0; fetchMsgs() }, [room])
   useEffect(() => { const t = setInterval(() => fetchMsgs(), 6000); return () => clearInterval(t) }, [fetchMsgs])
-  useEffect(() => { setTimeout(() => bottomRef.current?.scrollIntoView({ behavior:'smooth' }), 80) }, [messages])
+
+  // 새 메시지 시 자동 스크롤 — 사용자가 위로 스크롤 중이면 강제 이동하지 않음
+  useEffect(() => {
+    const newLen = messages.length
+    if (newLen === 0) return
+    const container = msgListRef.current
+    if (container) {
+      const { scrollTop, scrollHeight, clientHeight } = container
+      const distFromBottom = scrollHeight - scrollTop - clientHeight
+      const isNearBottom = distFromBottom < 80
+      if (newLen > prevMsgLen.current && isNearBottom) {
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 80)
+      }
+    } else if (newLen > prevMsgLen.current) {
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 80)
+    }
+    prevMsgLen.current = newLen
+  }, [messages])
 
   const sendMsg = async () => {
     if (!input.trim() || sending) return
@@ -2044,7 +2063,7 @@ function StaffChatTab() {
         </div>
 
         {/* 메시지 */}
-        <div style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:10 }}>
+        <div ref={msgListRef} style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:10 }}>
           {loading && <div style={{ textAlign:'center', color:'#444', fontFamily:'var(--f-mono)', fontSize:11, padding:20 }}>로딩 중…</div>}
           {!loading && messages.length === 0 && (
             <div style={{ textAlign:'center', color:'#333', fontFamily:'var(--f-mono)', fontSize:11, padding:40 }}>
