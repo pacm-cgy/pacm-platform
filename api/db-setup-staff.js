@@ -121,11 +121,20 @@ async function tableExists() {
 async function checkAdminJWT(token) {
   if (!token || !SB_URL || !SB_KEY) return false
   try {
-    const r = await fetch(`${SB_URL}/rest/v1/profiles?select=role&limit=1`, {
+    // 1) token으로 user.id 조회 (Supabase Auth)
+    const r1 = await fetch(`${SB_URL}/auth/v1/user`, {
       headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` },
     })
-    if (!r.ok) return false
-    const rows = await r.json().catch(() => [])
+    if (!r1.ok) return false
+    const user = await r1.json().catch(() => null)
+    if (!user?.id) return false
+    // 2) service_role 키로 해당 user.id의 role 확인 (RLS 우회)
+    const r2 = await fetch(
+      `${SB_URL}/rest/v1/profiles?id=eq.${user.id}&select=role&limit=1`,
+      { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
+    )
+    if (!r2.ok) return false
+    const rows = await r2.json().catch(() => [])
     return Array.isArray(rows) && rows[0]?.role === 'admin'
   } catch { return false }
 }
