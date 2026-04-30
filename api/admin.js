@@ -10,8 +10,8 @@ import { generateReport, generateCommunityPost, generateChat, generateText } fro
 import { generateFeedbackReply } from './staff-brain.js'
 import {
   requireAdmin, isCronAuth,
-  json, ok, forbidden, unauthorized, serverError, badRequest,
-  handleOptions, serviceH, CORS,
+  json as authJson, ok as authOk, forbidden, unauthorized, serverError, badRequest,
+  handleOptions, serviceH, CORS as authCORS,
 } from './_auth.js'
 export const config = { maxDuration: 60 }
 
