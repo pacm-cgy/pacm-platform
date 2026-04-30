@@ -305,26 +305,10 @@ const handleAutoOps = (() => {
 
 // (generateReport, generateCommunityPost imported at top)
 
-const SB_URL      = process.env.SUPABASE_URL
-const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
-const CRON_SECRET = process.env.CRON_SECRET
 // 외부 AI API 제거 — 자체 AI 엔진 사용
 
-const CORS = {
-  'Access-Control-Allow-Origin':  '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-}
 
-const json = (d, s = 200) =>
-  new Response(JSON.stringify(d, null, 2), {
-    status: s, headers: { 'Content-Type': 'application/json', ...CORS },
-  })
 
-const H = () => ({
-  apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`,
-  'Content-Type': 'application/json',
-})
 
 // 관리자 JWT 인증 확인 — user.id로 profiles WHERE 절 포함
 async function checkAdminJWT(token) {
@@ -950,9 +934,6 @@ const handleDevPermissions = (() => {
 
 
 // ── 환경변수 ──────────────────────────────────────────────────────────
-const SB_URL        = process.env.SUPABASE_URL         || ''
-const SB_KEY        = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || ''
-const CRON_SECRET   = process.env.CRON_SECRET          || ''
 const DEV_MASTER_KEY = process.env.DEV_MASTER_KEY      || ''   // 기술팀 전용 마스터 키
 const DEV_ALLOWED_IPS = (process.env.DEV_ALLOWED_IPS || '').split(',').map(s => s.trim()).filter(Boolean)
 
@@ -971,21 +952,8 @@ const PERMISSION_LEVELS = {
 const HIGH_TIER_THRESHOLD = 4
 
 // ── CORS / 응답 헬퍼 ─────────────────────────────────────────────────
-const CORS = {
-  'Access-Control-Allow-Origin':  '*',
-  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Dev-Master-Key, X-Cron-Secret',
-}
-const json = (d, s = 200) => new Response(JSON.stringify(d),
-  { status: s, headers: { 'Content-Type': 'application/json', ...CORS } })
 
 // ── Supabase 인증 헤더 ────────────────────────────────────────────────
-const SBH = () => ({
-  'Content-Type':  'application/json',
-  'apikey':        SB_KEY,
-  'Authorization': `Bearer ${SB_KEY}`,
-  'Prefer':        'return=representation',
-})
 
 // ── 관리자 JWT 검증 ───────────────────────────────────────────────────
 async function verifyAdminJWT(token) {
@@ -1292,10 +1260,6 @@ const handleIncidentResponse = (() => {
 
 
 
-const SB_URL      = process.env.SUPABASE_URL
-const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
-const CRON_SECRET = process.env.CRON_SECRET
-const RESEND_KEY  = process.env.RESEND_API_KEY
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@insightship.kr'
 
 // ── 비상 상태 저장소 (Edge 런타임 — 영속성 없음, Supabase에도 기록) ──────
@@ -1303,11 +1267,6 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@insightship.kr'
 const EMERGENCY_KEY = 'emergency_lock_active'
 
 // ── Supabase 헬퍼 ─────────────────────────────────────────────────────────
-const H = () => ({
-  apikey:         SB_KEY,
-  Authorization:  `Bearer ${SB_KEY}`,
-  'Content-Type': 'application/json',
-})
 
 const Hmin = () => ({ ...H(), Prefer: 'return=minimal' })
 const Hrep = () => ({ ...H(), Prefer: 'return=representation' })
@@ -1978,9 +1937,6 @@ const handleSecurityAudit = (() => {
 
 
 
-const SB_URL      = process.env.SUPABASE_URL
-const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
-const CRON_SECRET = process.env.CRON_SECRET
 
 // ── 보안 이벤트 타입 정의 ────────────────────────────────────────────────
 const SEVERITY_LEVELS = ['critical', 'high', 'medium', 'low', 'info']
@@ -2331,24 +2287,8 @@ const handlePatchNotes = (() => {
 
 
 
-const SB_URL      = process.env.SUPABASE_URL         || ''
-const SB_KEY      = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || ''
-const CRON_SECRET = process.env.CRON_SECRET          || ''
 
-const CORS = {
-  'Access-Control-Allow-Origin':  '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Cron-Secret',
-}
-const json = (d, s = 200) => new Response(JSON.stringify(d),
-  { status: s, headers: { 'Content-Type': 'application/json', ...CORS } })
 
-const SBH = () => ({
-  'Content-Type':  'application/json',
-  'apikey':        SB_KEY,
-  'Authorization': `Bearer ${SB_KEY}`,
-  'Prefer':        'return=representation',
-})
 
 // ── 관리자 JWT 검증 ───────────────────────────────────────────────────
 async function verifyAdmin(token) {
@@ -2703,21 +2643,8 @@ const handleOffice = (() => {
 
 // (generateChat, generateText imported at top)
 
-const SB_URL = process.env.SUPABASE_URL          // ← 서버사이드 env (VITE_ 제거)
-const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey',
-}
 
-const H = () => ({
-  apikey: SB_KEY,
-  Authorization: `Bearer ${SB_KEY}`,
-  'Content-Type': 'application/json',
-  Prefer: 'return=representation',
-})
 
 const DEPT_KO = {
   management:'경영부', planning:'기획부', dev:'개발부',
@@ -3099,27 +3026,9 @@ const handleSyncAiAccounts = (() => {
  */
 
 
-const SB_URL      = process.env.SUPABASE_URL
-const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
-const CRON_SECRET = process.env.CRON_SECRET
 
-const H = () => ({
-  apikey:         SB_KEY,
-  Authorization:  `Bearer ${SB_KEY}`,
-  'Content-Type': 'application/json',
-})
 
-const CORS = {
-  'Access-Control-Allow-Origin':  '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-}
 
-const json = (d, s = 200) =>
-  new Response(JSON.stringify(d, null, 2), {
-    status: s,
-    headers: { 'Content-Type': 'application/json', ...CORS },
-  })
 
 // ══════════════════════════════════════════════════════════════════════
 // DiceBear 아바타 URL 생성
@@ -3780,19 +3689,8 @@ const handleCommunityEngine = (() => {
  */
 
 
-const SB_URL = process.env.SUPABASE_URL
-const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-const CRON_SECRET = process.env.CRON_SECRET
 
-const H = () => ({
-  apikey: SB_KEY,
-  Authorization: `Bearer ${SB_KEY}`,
-  'Content-Type': 'application/json',
-})
 
-const json = (d, s = 200) => new Response(JSON.stringify(d), {
-  status: s, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
-})
 
 async function sbGet(path) {
   try {
@@ -4129,24 +4027,7 @@ const handleFeedbackReply = (() => {
 
 // (generateFeedbackReply imported at top from staff-brain.js)
 
-const SB_URL      = process.env.SUPABASE_URL
-const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
-const CRON_SECRET = process.env.CRON_SECRET
 
-const H = () => ({
-  apikey:         SB_KEY,
-  Authorization:  `Bearer ${SB_KEY}`,
-  'Content-Type': 'application/json',
-})
-const CORS = {
-  'Access-Control-Allow-Origin':  '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-}
-const json = (d, s = 200) =>
-  new Response(JSON.stringify(d, null, 2), {
-    status: s, headers: { 'Content-Type': 'application/json', ...CORS },
-  })
 
 // 관리자 JWT 인증 확인
 async function checkAdminJWT(token) {
@@ -4446,9 +4327,6 @@ const handleGenerateReport = (() => {
  */
 
 
-const SB_URL      = process.env.SUPABASE_URL
-const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
-const CRON_SECRET = process.env.CRON_SECRET
 
 const SH = () => ({
   apikey: SB_KEY,
@@ -4976,7 +4854,6 @@ const handleGenerateImages = (() => {
 
 const SUPABASE_URL      = process.env.SUPABASE_URL
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-const CRON_SECRET       = process.env.CRON_SECRET
 
 // 카테고리별 기본 이미지 프롬프트 (외부 AI 없이 직접 매핑)
 const CAT_PROMPTS = {
@@ -5088,8 +4965,6 @@ const handleAnalyzeTrend = (() => {
 // system_instruction 분리로 응답 끊김 완전 방지
 
 
-const SB_URL     = process.env.SUPABASE_URL
-const SB_KEY     = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 // ── RAG 검색 ─────────────────────────────────────────────────────
 async function searchKnowledge(query, category) {
@@ -5258,14 +5133,7 @@ const handleReport = (() => {
  */
 
 
-const SB_URL = process.env.SUPABASE_URL
-const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-}
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -5308,11 +5176,6 @@ async function isAdmin(userId) {
   return Array.isArray(d) && d[0]?.role === 'admin'
 }
 
-const H = () => ({
-  apikey: SB_KEY,
-  Authorization: `Bearer ${SB_KEY}`,
-  'Content-Type': 'application/json',
-})
 
 async function _handleReport_impl(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })

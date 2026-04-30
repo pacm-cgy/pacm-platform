@@ -187,9 +187,6 @@ const handlePartnerInquiry = (() => {
 // 파트너십 문의 접수 + contact@pacm.kr 이메일 발송
 
 
-const RESEND_KEY = process.env.RESEND_API_KEY
-const SB_URL     = process.env.SUPABASE_URL
-const SB_KEY     = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 async function _handlePartnerInquiry_impl(req) {
   if (req.method !== 'POST') {
@@ -336,13 +333,7 @@ const handleSendNewsletter = (() => {
 // runtime: Node.js serverless
 
 
-const SB_URL      = process.env.SUPABASE_URL
-const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
-const RESEND_KEY  = process.env.RESEND_API_KEY
-const CRON_SECRET = process.env.CRON_SECRET
 
-const SH = () => ({ apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` })
-const json = (d, s=200) => new Response(JSON.stringify(d), { status: s, headers: { 'Content-Type': 'application/json' } })
 
 // ══════════════════════════════════════════════════════════════════════
 // §1. 날짜 유틸
@@ -760,11 +751,6 @@ body{margin:0;padding:0;background:#080808}
 // ══════════════════════════════════════════════════════════════════════
 
 // ── CORS 헤더 ──────────────────────────────────────────────────────
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-}
 function jsonRes(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status, headers: { 'Content-Type': 'application/json', ...CORS },
@@ -982,9 +968,6 @@ const handleUnsubscribe = (() => {
 // ★ SECURITY PATCH: 이메일 인젝션 방어, 토큰/이메일 형식 검증
 
 
-const SB_URL = process.env.SUPABASE_URL
-const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-const SH = () => ({ apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` })
 
 const page = (title, msg, isError=false) => new Response(`<!DOCTYPE html>
 <html lang="ko">
