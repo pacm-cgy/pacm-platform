@@ -8,6 +8,10 @@
  */
 export const config = { maxDuration: 60 }
 
+import { generateReport, generateCommunityPost, generateChat, generateText } from './_ai-engine.js'
+import { generateFeedbackReply } from './staff-brain.js'
+// (_auth.js imports moved to top of file)
+
 
 const handleAdminAction = (() => {
 // 어드민 전용 작업 API - service_role 키 사용 (RLS 우회)
@@ -296,7 +300,7 @@ const handleAutoOps = (() => {
 
 
 
-import { generateReport, generateCommunityPost } from './ai-engine.js'
+// (generateReport, generateCommunityPost imported at top)
 
 const SB_URL      = process.env.SUPABASE_URL
 const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -1281,11 +1285,7 @@ const handleIncidentResponse = (() => {
  * ║  인증: CRON_SECRET 또는 admin JWT 필수                                  ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
-import {
-  requireAdmin, isCronAuth,
-  json, ok, forbidden, unauthorized, serverError, badRequest,
-  handleOptions, serviceH, CORS,
-} from './_auth.js'
+// (_auth.js imports moved to top of file)
 
 
 
@@ -1971,11 +1971,7 @@ const handleSecurityAudit = (() => {
  * ║  - 설계도 §8 DevSecOps — 보안 상태 헬스체크                            ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
-import {
-  requireAdmin, isCronAuth,
-  json, ok, forbidden, unauthorized, serverError, badRequest,
-  handleOptions, serviceH, CORS,
-} from './_auth.js'
+// (_auth.js imports moved to top of file)
 
 
 
@@ -2702,7 +2698,7 @@ const handleOffice = (() => {
  */
 // runtime: Node.js serverless
 
-import { generateChat, generateText } from './ai-engine.js'
+// (generateChat, generateText imported at top)
 
 const SB_URL = process.env.SUPABASE_URL          // ← 서버사이드 env (VITE_ 제거)
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -4128,7 +4124,7 @@ const handleFeedbackReply = (() => {
  */
 // runtime: Node.js serverless
 
-import { generateFeedbackReply } from './ai-engine.js'
+// (generateFeedbackReply imported at top from staff-brain.js)
 
 const SB_URL      = process.env.SUPABASE_URL
 const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
