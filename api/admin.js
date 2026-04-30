@@ -8,9 +8,12 @@
  */
 import { generateReport, generateCommunityPost, generateChat, generateText } from './_ai-engine.js'
 import { generateFeedbackReply } from './staff-brain.js'
+import {
+  requireAdmin, isCronAuth,
+  json, ok, forbidden, unauthorized, serverError, badRequest,
+  handleOptions, serviceH, CORS,
+} from './_auth.js'
 export const config = { maxDuration: 60 }
-
-// (_auth.js imports moved to top of file)
 
 
 const handleAdminAction = (() => {
