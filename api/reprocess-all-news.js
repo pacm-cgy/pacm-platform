@@ -221,79 +221,177 @@ function parseTitle(title) {
 // 고정 문구 절대 없음 — 모든 문장이 제목 NER에서 동적 생성
 // ══════════════════════════════════════════════════════════════════════
 
+// buildContextLines — 배경·맥락 섹션
+// 이벤트·도메인·NER에서 완전 동적으로 생성 (고정 문구 없음)
 function buildContextLines(evt, dom, ner) {
-  const { tech, geo, stage } = ner
+  const { tech, geo, stage, orgs, amounts } = ner
   const domKo = DOM[dom]?.ko || '창업·비즈니스'
   const lines = []
 
+  const who     = orgs[0] || null
+  const techStr = tech.length > 0 ? `**${tech[0]}**` : null
+  const geoStr  = geo.length > 0 && geo[0] !== '한국' && geo[0] !== '국내' ? geo[0] : null
+
   if (evt === 'funding') {
+    // 투자 단계별 맥락 — 기업명·기술·금액 조합으로 완전 동적
     if (stage) {
-      const stageCtx = {
-        '시드':    '시드 투자는 아이디어 검증 단계의 첫 번째 외부 자금입니다. 이 시점에서 투자자들은 팀의 역량과 문제 해결 방향성을 가장 중요하게 봅니다.',
-        'Pre-A':   'Pre-A 투자는 초기 제품·서비스를 시장에서 검증하기 직전 단계입니다. MVP를 고도화하는 데 활용됩니다.',
-        '시리즈A': '시리즈A는 제품·시장 적합성(PMF)이 검증된 후 팀·마케팅 확장을 위한 첫 번째 대규모 투자입니다. 보통 수십억~수백억 원 규모로 진행됩니다.',
-        '시리즈B': '시리즈B는 검증된 수익 모델을 바탕으로 빠른 성장을 추진하는 단계입니다. 인력 채용·해외 확장·신사업 투자에 활용됩니다.',
-        '시리즈C': '시리즈C 이상은 이미 규모 있는 매출을 가진 기업이 IPO 또는 글로벌 확장을 준비하는 단계입니다.',
+      const stageMap = {
+        '시드':    `아이디어 검증 단계`,
+        'Pre-A':   `초기 제품 검증 단계`,
+        '시리즈A': `PMF 검증 후 스케일업 단계`,
+        '시리즈B': `성장 가속화 단계`,
+        '시리즈C': `IPO·글로벌 확장 준비 단계`,
       }
-      if (stageCtx[stage]) lines.push(stageCtx[stage])
+      const stageDesc = stageMap[stage] || `${stage} 투자 단계`
+      const whoStr = who ? `**${who}**의 이번 투자는` : '이번 투자는'
+      const amtStr = amounts[0] ? ` **${amounts[0]}** 규모로` : ''
+      lines.push(`${whoStr}${amtStr} ${stageDesc}에 해당하며, ${domKo} 생태계에서 주목할 움직임입니다.`)
     }
-    if (tech.length > 0) {
-      lines.push(`현재 글로벌 VC 시장에서 **${tech[0]}** 분야는 집중 투자 대상 중 하나입니다. 실질 수익 모델이 있는 기업에 자금이 몰리는 추세입니다.`)
-    } else {
-      lines.push(`${domKo} 투자 생태계는 선별적 투자 기조 속에서도 실질적인 성과를 낸 기업에게는 자금 접근 기회가 열려 있습니다.`)
+    if (techStr) {
+      const amtPart = amounts[0] ? ` ${amounts[0]} 수준의` : ''
+      lines.push(`${techStr} 분야에${amtPart} 자금이 집중되고 있어, ${domKo} 내 기술 경쟁이 더욱 치열해질 전망입니다.`)
+    } else if (!stage) {
+      lines.push(`${domKo} 투자 시장은 실질적인 성과를 낸 기업 중심으로 재편되고 있으며, 이번 사례가 그 흐름을 반영합니다.`)
+    }
+    if (geoStr) {
+      lines.push(`${geoStr} 시장으로의 확장 가능성도 이번 투자 배경 중 하나로 분석됩니다.`)
     }
   } else if (evt === 'acquisition') {
-    lines.push('M&A는 스타트업에게 IPO와 함께 대표적인 엑싯(Exit) 경로입니다. 대기업이 기술·인재·시장 점유율을 빠르게 확보하기 위한 수단으로 활용됩니다.')
-    if (tech.length > 0) {
-      lines.push(`특히 **${tech[0]}** 분야의 M&A는 기술 역량 내재화를 목적으로 하는 경우가 많아, 인수 이후에도 팀·기술의 독립성이 유지되는 사례가 늘고 있습니다.`)
+    const buyer = who ? `**${who}**` : '인수 주체'
+    if (techStr) {
+      lines.push(`${buyer}의 이번 인수는 ${techStr} 기술 역량 내재화가 핵심 목적으로, ${domKo} 분야 경쟁 구도에 영향을 줄 것으로 보입니다.`)
+    } else {
+      lines.push(`${buyer}의 인수·합병은 ${domKo} 시장 내 포지셔닝 강화를 위한 전략적 선택으로 풀이됩니다.`)
+    }
+    if (amounts[0]) {
+      lines.push(`거래 규모 **${amounts[0]}**는 최근 ${domKo} 업계 M&A 사례와 비교할 때 시장 기대치를 반영한 수치입니다.`)
     }
   } else if (evt === 'product') {
-    if (tech.length > 0) {
-      lines.push(`**${tech.slice(0, 2).join('·')}** 기술을 활용한 신규 서비스 출시는 기존 시장에 새로운 기준을 제시할 수 있습니다. 초기 시장 반응과 사용자 피드백이 이후 방향성을 결정합니다.`)
+    if (techStr) {
+      lines.push(`${techStr} 기반 신규 서비스는 ${domKo} 분야 기존 제품과의 차별화 포인트가 초기 시장 반응을 결정합니다.`)
     }
-    if (geo.length > 0 && geo[0] !== '한국' && geo[0] !== '국내') {
-      lines.push(`${geo[0]} 시장 진출을 병행한다면, 현지 규제 환경과 사용자 니즈 파악이 초기 성패를 좌우합니다.`)
+    if (geoStr) {
+      lines.push(`${geoStr} 시장 진출은 현지 규제·경쟁 구도 파악이 선행되어야 하며, 이번 출시가 그 첫 번째 테스트가 될 전망입니다.`)
+    } else if (!techStr) {
+      lines.push(`새 서비스의 사용자 경험(UX)과 온보딩 전략이 ${domKo} 시장에서 초기 성패를 좌우하는 핵심 변수입니다.`)
     }
   } else if (evt === 'policy') {
-    lines.push(`정부 및 공공기관의 ${domKo} 지원 프로그램은 초기 스타트업에게 자금·네트워크·검증의 기회를 제공합니다. 선발 기준과 지원 혜택을 꼼꼼히 확인하고 적극적으로 활용하는 것이 중요합니다.`)
-    if (geo.length > 0 && geo[0] !== '한국' && geo[0] !== '국내') {
-      lines.push(`${geo[0]} 지역 기반 스타트업에게는 지역 특화 지원 트랙이 별도로 운영되는 경우가 많아 추가 기회를 탐색할 만합니다.`)
+    const org = who ? `**${who}**` : '관련 기관'
+    lines.push(`${org}의 지원 프로그램은 ${domKo} 분야 스타트업에게 자금 외에도 네트워크·멘토링·검증 기회를 제공합니다.`)
+    if (geoStr) {
+      lines.push(`${geoStr} 지역 특화 트랙 여부도 확인할 필요가 있어, 지역 기반 창업가에게 추가 기회가 있을 수 있습니다.`)
+    }
+    if (amounts[0]) {
+      lines.push(`지원 규모 **${amounts[0]}**는 ${domKo} 분야 공모 기준으로 볼 때 경쟁률이 높을 것으로 예상됩니다.`)
     }
   } else if (evt === 'research') {
-    lines.push(`${domKo} 분야의 연구·분석 결과는 투자자·창업가·정책 입안자 모두에게 중요한 의사결정 근거가 됩니다. 데이터 기반 인사이트를 빠르게 파악하고 전략에 반영하는 능력이 경쟁력으로 이어집니다.`)
+    if (techStr) {
+      lines.push(`${techStr} 관련 연구·분석 데이터는 ${domKo} 분야 의사결정의 핵심 근거로 활용됩니다.`)
+    } else {
+      lines.push(`이번 연구·분석은 ${domKo} 트렌드의 방향성을 숫자로 확인할 수 있는 드문 자료입니다.`)
+    }
+    if (amounts[0]) {
+      lines.push(`**${amounts[0]}** 등 핵심 지표는 시장 규모 또는 성장률 관련 주요 수치로 해석됩니다.`)
+    }
   } else if (evt === 'market') {
-    const techStr = tech.length > 0 ? `**${tech[0]}**` : domKo
-    lines.push(`${techStr} 시장은 기술 발전과 수요 변화가 맞물려 빠르게 재편되고 있습니다. 성장 곡선의 초기에 진입한 플레이어가 장기적으로 유리한 고지를 선점할 가능성이 높습니다.`)
+    if (techStr) {
+      lines.push(`${techStr} 시장 재편은 ${domKo} 전반의 비즈니스 모델 혁신을 가속하고 있습니다.`)
+    } else {
+      lines.push(`${domKo} 시장 변화는 기술·규제·소비자 행동 세 가지 축이 동시에 움직이며 만들어지고 있습니다.`)
+    }
+    if (amounts[0]) {
+      lines.push(`시장 규모 **${amounts[0]}**는 진입 기회와 경쟁 강도를 가늠하는 핵심 벤치마크가 됩니다.`)
+    }
+    if (geoStr) {
+      lines.push(`${geoStr} 시장 동향이 국내 ${domKo} 트렌드에 선행 지표로 작용할 가능성이 있습니다.`)
+    }
+  } else if (evt === 'ipo') {
+    const name = who ? `**${who}**` : '해당 기업'
+    lines.push(`${name}의 IPO·상장 추진은 ${domKo} 생태계 투자 심리 회복의 신호로 읽힙니다.`)
+    if (amounts[0]) {
+      lines.push(`예상 기업가치 **${amounts[0]}**는 유사 기업 밸류에이션 대비 적정성 논의가 이어질 전망입니다.`)
+    }
+  } else if (evt === 'person') {
+    const name = who ? `**${who}**` : '이 인물'
+    if (techStr) {
+      lines.push(`${name}의 ${techStr} 분야 경험은 ${domKo} 창업가에게 실질적인 레퍼런스가 됩니다.`)
+    } else {
+      lines.push(`${name}의 커리어 경로와 의사결정 방식이 ${domKo} 분야에 갖는 시사점이 주목받고 있습니다.`)
+    }
   }
 
   return lines
 }
 
+// buildOpportunityLines — 창업가 시각 섹션
+// NER 기반 완전 동적 생성, 섹션별 반복 없도록 coreLines와 차별화
 function buildOpportunityLines(evt, dom, ner) {
-  const { tech, stage } = ner
+  const { tech, stage, orgs, amounts, geo } = ner
   const domKo = DOM[dom]?.ko || '창업·비즈니스'
   const lines = []
 
+  const who    = orgs[0] || null
+  const techKw = tech.length > 0 ? tech[0] : null
+  const geoKw  = geo.length > 0 && geo[0] !== '한국' && geo[0] !== '국내' ? geo[0] : null
+
   if (evt === 'funding') {
-    lines.push(`투자를 받은 기업의 행보를 주목하세요. 어떤 문제를 해결하려는지, 자금을 어떤 우선순위에 쓰는지 관찰하면 ${domKo} 분야의 핵심 병목이 보입니다.`)
+    if (who) {
+      lines.push(`**${who}**이(가) 투자금을 어느 분야에 먼저 집행하는지 추적하면 ${domKo} 시장의 다음 핵심 병목이 보입니다.`)
+    }
     if (stage === '시드' || stage === 'Pre-A') {
-      lines.push('초기 투자 유치 기업과의 파트너십·협업 가능성을 탐색해보세요. 성장 초기 단계의 기업은 새로운 파트너에게 열려 있는 경우가 많습니다.')
+      lines.push(`초기 단계 투자 기업은 파트너십에 열려 있는 경우가 많습니다. ${domKo} 분야에서 협업 가능한 접점을 먼저 찾아보세요.`)
+    } else if (stage === '시리즈A' || stage === '시리즈B') {
+      lines.push(`스케일업 단계 기업의 채용·공급망·파트너 확장 수요를 공략하면 비즈니스 기회로 연결될 수 있습니다.`)
+    } else if (!who) {
+      lines.push(`이 투자 사례에서 투자자가 어떤 문제 해결력을 핵심 가치로 봤는지 역으로 분석하면 ${domKo} 시장의 핵심 결핍이 드러납니다.`)
     }
   } else if (evt === 'acquisition') {
-    lines.push('인수된 기업이 해결하던 문제 중 아직 미완성인 부분이 있다면, 그것이 새로운 창업 기회가 될 수 있습니다. 대기업 M&A 이후 남겨진 틈새 시장을 주목하세요.')
+    lines.push(`인수 이후 ${domKo} 시장에서 공백이 생길 수 있습니다. 기존 고객·파트너 니즈를 흡수할 대안 서비스가 틈새 기회입니다.`)
+    if (techKw) {
+      lines.push(`**${techKw}** 분야 M&A가 활발하다는 것은 이 기술을 보유한 스타트업의 엑싯 경로가 열려 있다는 의미이기도 합니다.`)
+    }
   } else if (evt === 'product') {
-    lines.push("새로운 서비스 출시는 경쟁사 분석의 좋은 기회입니다. 직접 써보고 '아직 해결하지 못한 불편함'을 찾아보세요. 그 불편함이 다음 창업 아이디어의 출발점입니다.")
+    if (techKw) {
+      lines.push(`**${techKw}** 기반 서비스를 직접 사용해보고 '아직 해결되지 않은 마찰'을 발견하면 그것이 다음 창업 아이디어의 씨앗입니다.`)
+    } else {
+      lines.push(`새로운 서비스 출시 이후 사용자 반응과 불만 데이터를 분석하면 후속 기회가 보입니다.`)
+    }
+    if (geoKw) {
+      lines.push(`${geoKw} 시장 진출 타이밍에 맞춰 현지 파트너십이나 로컬라이제이션 기회를 탐색할 수 있습니다.`)
+    }
   } else if (evt === 'policy') {
-    lines.push('지원 프로그램 신청 기간과 조건을 확인하고, 팀 빌딩·멘토링·네트워크 기회까지 최대한 활용하는 전략을 세우세요. 단순 자금 지원 이상의 가치를 놓치지 마세요.')
+    lines.push(`지원 자금뿐 아니라 프로그램이 제공하는 네트워크·멘토·검증 기회를 최대한 활용하는 전략을 설계하세요.`)
+    if (amounts[0]) {
+      lines.push(`**${amounts[0]}** 규모 지원 프로그램은 경쟁률이 높을 수 있으니 차별화된 지원서 전략이 중요합니다.`)
+    }
   } else if (evt === 'research') {
-    lines.push("연구 결과에서 '아직 해결되지 않은 문제'를 찾는 연습을 하세요. 데이터가 보여주는 갭(gap)이 바로 창업 기회입니다.")
+    if (techKw) {
+      lines.push(`**${techKw}** 관련 데이터의 갭(gap)이 아직 해결되지 않은 문제를 가리킵니다. 그 갭이 창업 기회입니다.`)
+    } else {
+      lines.push(`연구에서 드러난 미해결 과제나 예외 케이스에 집중하면 ${domKo} 분야의 숨겨진 기회가 보입니다.`)
+    }
   } else if (evt === 'market') {
-    const techStr = tech.length > 0 ? tech[0] : domKo
-    lines.push(`${techStr} 시장이 성장한다는 것은, 그 시장에서 해결해야 할 문제도 함께 커진다는 뜻입니다. 성장하는 시장의 '불편한 부분'을 먼저 찾는 사람이 기회를 잡습니다.`)
+    const mktKw = techKw ? `**${techKw}**` : domKo
+    lines.push(`${mktKw} 시장이 성장하면 그 안의 인프라·도구·서비스 수요도 함께 늘어납니다. 시장 자체보다 시장 성장의 수혜 레이어를 노리세요.`)
+    if (geoKw) {
+      lines.push(`${geoKw} 시장 트렌드가 국내에 유입되는 타이밍을 예측해 선점하는 전략이 유효합니다.`)
+    }
   } else if (evt === 'person') {
-    lines.push('성공한 창업가의 스토리에서 패턴을 찾아보세요. 문제를 인식한 시점, 첫 번째 행동, 실패를 극복한 방식. 이 세 가지에서 나만의 교훈을 추출하는 것이 중요합니다.')
+    const name = who ? `**${who}**` : '이 창업가'
+    lines.push(`${name}의 스토리에서 '문제 인식 → 첫 행동 → 피벗 결정' 세 가지 순간에 어떤 선택을 했는지 추출하면 실전 레슨이 됩니다.`)
+    if (techKw) {
+      lines.push(`**${techKw}** 분야 전문성이 창업 배경이 되었다면, 비슷한 도메인 지식을 가진 창업가에게 직접 적용 가능한 인사이트입니다.`)
+    }
+  } else if (evt === 'ipo') {
+    lines.push(`IPO·상장 과정에서 공개되는 사업 구조·재무 데이터는 ${domKo} 분야 경쟁 벤치마크로 활용할 수 있습니다.`)
+    if (amounts[0]) {
+      lines.push(`**${amounts[0]}** 기업가치를 역산하면 투자자가 평가한 시장 포텐셜 규모를 가늠할 수 있습니다.`)
+    }
+  } else if (evt === 'acquisition') {
+    lines.push(`인수 후 통합 과정에서 발생하는 고객 이탈을 흡수할 수 있는 대안 서비스 기회를 탐색하세요.`)
   } else {
-    lines.push(`이 소식이 ${domKo} 분야에 만드는 변화를 세 가지 관점으로 분석해보세요: ① 기회 ② 위협 ③ 아직 해결 안 된 문제. 창업가의 눈으로 읽으면 모든 뉴스가 인사이트가 됩니다.`)
+    const kw = techKw ? `**${techKw}**` : domKo
+    lines.push(`이 소식을 '내 비즈니스 관점'으로 다시 읽으면, ${kw} 분야에서 아직 해결되지 않은 구체적인 문제가 보입니다.`)
   }
 
   return lines

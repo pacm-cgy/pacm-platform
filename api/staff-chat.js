@@ -117,20 +117,39 @@ function generateStaffMessage(staff, topic, room, recentMessages = []) {
 // DB 헬퍼 — staff_chat_messages 테이블
 // ══════════════════════════════════════════════════════════════════════
 
+// 테이블 존재 여부 확인 (HEAD 요청으로 스키마 캐시 비용 최소화)
+async function tableExists() {
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/staff_chat_messages?limit=0&select=id`,
+      { method: 'HEAD', headers: H() }
+    )
+    // 200 or 206 → 테이블 존재, 404/400/PGRST205 → 없음
+    if (r.status === 200 || r.status === 204 || r.status === 206) return true
+    const errText = await r.text().catch(() => '')
+    // 4xx 이지만 관계없는 에러일 수 있으므로 body 재확인
+    if (errText.includes('PGRST205') || errText.includes('relation') ||
+        errText.includes('does not exist')) return false
+    return r.ok
+  } catch { return false }
+}
+
+function _isMissingTable(status, body) {
+  return (status === 404 || status === 400) && (
+    body.includes('PGRST205') || body.includes('relation') ||
+    body.includes('does not exist') || body.includes('schema cache')
+  )
+}
+
 async function getMessages(room, limit = 60) {
   const r = await fetch(
     `${SB_URL}/rest/v1/staff_chat_messages?room=eq.${room}&is_deleted=eq.false&order=created_at.desc&limit=${limit}&select=id,room,sender_key,sender_name,sender_emoji,sender_color,sender_team,message,msg_type,reply_to,created_at`,
     { headers: H() }
   )
-  // 테이블 없음(404/400 + PGRST205) → 자동 생성 트리거 후 null 반환
-  // ★ null 반환: 프론트에서 null과 []를 구분해 기존 메시지를 유지할 수 있게 함
   if (r.status === 404 || r.status === 400) {
     const errBody = await r.text().catch(() => '')
-    const isMissing = errBody.includes('PGRST205') || errBody.includes('relation') ||
-      errBody.includes('does not exist') || errBody.includes('schema cache')
-    if (isMissing) {
-      setupTable()   // fire-and-forget (응답 기다리지 않음)
-      return null    // null → 프론트가 기존 메시지 유지
+    if (_isMissingTable(r.status, errBody)) {
+      return null   // null → 프론트가 테이블 없음 감지, 기존 메시지 유지
     }
     return null
   }
@@ -140,13 +159,9 @@ async function getMessages(room, limit = 60) {
   return rows.reverse()   // desc 정렬 → asc로
 }
 
-// 테이블 생성 완료 여부 캐시 (Edge 워커 생명주기 내)
-let _tableReady = false
-let _setupInProgress = false   // 중복 동시 호출 방지
-
-function _getProjectRef() {
-  return SB_URL?.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || null
-}
+// Edge 런타임 모듈 스코프 캐시 (동일 워커 인스턴스 내 중복 호출만 방지)
+// ★ Edge는 요청마다 새 인스턴스일 수 있으므로 이 캐시에 의존하지 말 것
+let _setupInProgress = false
 
 const TABLE_DDL = `
 CREATE TABLE IF NOT EXISTS public.staff_chat_messages (
@@ -176,22 +191,21 @@ CREATE POLICY scm_admin_all ON public.staff_chat_messages
 `
 
 async function setupTable() {
-  if (_tableReady) return true
-  if (_setupInProgress) return false   // 동시 중복 호출 스킵
+  if (_setupInProgress) return false
   _setupInProgress = true
   try {
-    // exec_sql RPC — Supabase에 미리 생성한 경우만 동작
-    // Management API는 service_role 키로 항상 401이므로 시도하지 않음
+    // 먼저 실제 존재 여부 확인 — 이미 존재하면 즉시 true 반환
+    const exists = await tableExists()
+    if (exists) return true
+
+    // exec_sql RPC 시도 (Supabase에 미리 등록된 경우만 동작)
     try {
       const r = await fetch(`${SB_URL}/rest/v1/rpc/exec_sql`, {
         method:  'POST',
         headers: { ...H(), Prefer: 'return=minimal' },
         body:    JSON.stringify({ sql: TABLE_DDL }),
       })
-      if (r.ok || r.status === 204) {
-        _tableReady = true
-        return true
-      }
+      if (r.ok || r.status === 204) return true
     } catch (_) { /* exec_sql 없음 → fallthrough */ }
 
     // 모든 방법 실패 → AdminPage 시스템 탭에서 SQL 직접 실행 필요
@@ -291,14 +305,19 @@ export default async function handler(req) {
     const limit    = parseInt(url.searchParams.get('limit') || '60', 10)
     const messages = await getMessages(room, Math.min(limit, 100))
 
+    // table_ready: messages===null 이면 테이블 없음 확정
+    // 단, 프론트가 매 폴링마다 ensureTable을 호출하지 않도록
+    // table_ready=false 일 때 table_missing=true 플래그를 별도 전달
+    const tblMissing = messages === null
     return json({
-      ok:        true,
+      ok:          true,
       room,
-      room_info: ROOMS[room],
-      count:     messages ? messages.length : -1,   // -1: 테이블 없음 신호
-      messages:  messages ?? [],                    // null → 빈 배열로 직렬화
-      table_ready: messages !== null,               // 프론트가 테이블 상태 파악
-      rooms:     Object.entries(ROOMS).map(([id, r]) => ({ id, ...r })),
+      room_info:   ROOMS[room],
+      count:       tblMissing ? -1 : messages.length,
+      messages:    messages ?? [],
+      table_ready: !tblMissing,
+      table_missing: tblMissing,   // 프론트에서 1회만 ensureTable 호출하는 데 사용
+      rooms:       Object.entries(ROOMS).map(([id, r]) => ({ id, ...r })),
     })
   }
 

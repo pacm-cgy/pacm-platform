@@ -588,8 +588,8 @@ export function useNotifications(userId) {
       return data || []
     },
     enabled: !!userId,
-    staleTime: 60 * 1000,
-    refetchInterval: 60 * 1000, // 1분마다 실시간 갱신
+    staleTime: 2 * 60 * 1000,
+    refetchInterval: 3 * 60 * 1000, // 3분마다 갱신 (Supabase Realtime이 실시간 커버)
   })
 }
 

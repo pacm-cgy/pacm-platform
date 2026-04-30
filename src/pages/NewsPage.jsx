@@ -391,14 +391,19 @@ export default function NewsPage() {
   const searchRef  = useRef(null)
   const debounceRef = useRef(null)
 
+  // isLoadingRef: useCallback 내부에서 stale closure 없이 최신 isLoading 참조
+  const isLoadingRef = useRef(false)
+
   const fetchNews = useCallback(async (pageNum, filter, search, reset = false) => {
-    if (isLoading) return
+    // isLoadingRef 로 중복 호출 방지 (isLoading state를 deps에서 제거 → 루프 해소)
+    if (isLoadingRef.current) return
+    isLoadingRef.current = true
     setIsLoading(true)
     try {
       let q = supabase
         .from('articles')
         .select(
-          'id,title,slug,ai_category,source_name,published_at,ai_summary,cover_image,read_time,view_count',
+          'id,title,slug,ai_category,source_name,published_at,cover_image,read_time,view_count',
           { count: 'exact' }
         )
         .eq('status', 'published')
@@ -420,8 +425,8 @@ export default function NewsPage() {
       const dedup = arr => {
         const seen = new Set()
         return arr.filter(a => {
-          if (seen.has(a.title)) return false
-          seen.add(a.title); return true
+          if (seen.has(a.id)) return false
+          seen.add(a.id); return true
         })
       }
 
@@ -435,28 +440,31 @@ export default function NewsPage() {
     } catch (e) {
       console.error(e)
     } finally {
+      isLoadingRef.current = false
       setIsLoading(false)
     }
-  }, [isLoading])
+  }, [])  // deps 비움 — isLoading 제거로 stale closure 루프 해소
 
   // 필터·검색 변경 시 리셋
   useEffect(() => {
     setPage(0); setArticles([])
     fetchNews(0, activeFilter, searchQuery, true)
-  }, [activeFilter, searchQuery])
+  }, [activeFilter, searchQuery, fetchNews])
 
   // 무한 스크롤
   useEffect(() => {
     const obs = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore && !isLoading) {
-        const next = page + 1
-        setPage(next)
-        fetchNews(next, activeFilter, searchQuery, false)
+      if (entries[0].isIntersecting && hasMore && !isLoadingRef.current) {
+        setPage(prev => {
+          const next = prev + 1
+          fetchNews(next, activeFilter, searchQuery, false)
+          return next
+        })
       }
     }, { threshold: 0.1 })
     if (loaderRef.current) obs.observe(loaderRef.current)
     return () => obs.disconnect()
-  }, [hasMore, isLoading, page, activeFilter, searchQuery])
+  }, [hasMore, activeFilter, searchQuery, fetchNews])
 
   // 검색 입력 변경 → 디바운스 300ms
   const handleInputChange = e => {
