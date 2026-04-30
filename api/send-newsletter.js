@@ -12,7 +12,8 @@
  * ║  - 발송 로그 상세화                                                  ║
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
-export const config = { runtime: 'edge', maxDuration: 60 }
+// runtime: Node.js serverless
+export const config = { maxDuration: 60 }
 
 const SB_URL      = process.env.SUPABASE_URL
 const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
