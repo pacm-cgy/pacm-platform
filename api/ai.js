@@ -7,6 +7,24 @@
  */
 export const config = { runtime: 'edge', maxDuration: 60 }
 
+import {
+  getKSTHour,
+  getActivityLevel,
+  getActiveWorkerCount,
+  isWorkerActive,
+  getPersona,
+  pickChatMessage,
+  generateConversationStarter,
+  generateReactionToAdmin,
+  generateDiscussionMessage,
+  generateFeedbackReply as brainFeedbackReply,
+  generateComment,
+  generatePostContent,
+  generateWeeklyDiscussion,
+  generateMentoringTip,
+  generateInsightArticle,
+} from './staff-brain.js'
+
 
 const handleAdminAi = (() => {
 // 어드민 AI 작성 보조 — 자체 AI 엔진 (외부 API 없음)
@@ -65,7 +83,7 @@ async function getNewsContext(type) {
 }
 
 // ── 자체 AI 엔진 콘텐츠 생성 ─────────────────────────────────────
-import { generateReport, getAllPersonas } from './ai-engine.js'
+// generateReport, getAllPersonas are defined below in this file
 
 function buildInternalResult(type, prompt, ragContext, newsContext) {
   // 타입에 따른 대표 페르소나 매핑
@@ -344,20 +362,7 @@ const handleAiEngine = (() => {
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
 
-import {
-  getKSTHour,
-  getActivityLevel,
-  getActiveWorkerCount,
-  isWorkerActive,
-  getPersona,
-  pickChatMessage,
-  generateConversationStarter,
-  generateReactionToAdmin,
-  generateDiscussionMessage,
-  generateFeedbackReply as brainFeedbackReply,
-  generateComment,
-  generatePostContent,
-} from './staff-brain.js'
+// (staff-brain imports moved to top of file)
 
 // ══════════════════════════════════════════════════════════════════════
 // 채팅 다양성 가드 — 페르소나별 최근 메시지 지문 추적
@@ -458,7 +463,7 @@ function getBrainKey(senderUsername) {
 // staff-brain.js의 사고 엔진에 위임
 // ══════════════════════════════════════════════════════════════════════
 
-export function generateChat(senderUsername, topic, room = 'general', recentMessages = []) {
+function generateChat(senderUsername, topic, room = 'general', recentMessages = []) {
   const brainKey = getBrainKey(senderUsername)
   if (!brainKey) return null
 
@@ -516,7 +521,7 @@ export function generateChat(senderUsername, topic, room = 'general', recentMess
 // generateFeedbackReply — 피드백 댓글 생성
 // ══════════════════════════════════════════════════════════════════════
 
-export function generateFeedbackReply(senderUsername, post) {
+function generateFeedbackReply(senderUsername, post) {
   const brainKey = getBrainKey(senderUsername)
   const meta = PERSONA_META[senderUsername]
   if (!brainKey || !meta) return null
@@ -542,7 +547,7 @@ export function generateFeedbackReply(senderUsername, post) {
 // generateCommunityPost — 커뮤니티 게시글 생성
 // ══════════════════════════════════════════════════════════════════════
 
-export function generateCommunityPost(senderUsername, topic) {
+function generateCommunityPost(senderUsername, topic) {
   const brainKey = getBrainKey(senderUsername)
   const meta = PERSONA_META[senderUsername]
   if (!brainKey || !meta) return null
@@ -562,7 +567,7 @@ export function generateCommunityPost(senderUsername, topic) {
 // generateReport — 리포트/분석글 생성 (Supabase 통계 데이터 기반)
 // ══════════════════════════════════════════════════════════════════════
 
-export function generateReport(senderUsername, stats = {}, type = 'weekly') {
+function generateReport(senderUsername, stats = {}, type = 'weekly') {
   const meta = PERSONA_META[senderUsername]
   if (!meta) return null
 
@@ -759,7 +764,7 @@ ${ev.desc}
 // 범용 텍스트 생성 — 라우터
 // ══════════════════════════════════════════════════════════════════════
 
-export function generateText(senderUsername, context = '', options = {}) {
+function generateText(senderUsername, context = '', options = {}) {
   const { type = 'chat', topic = '', stats = {}, post = null, recentMessages = [] } = options
   switch (type) {
     case 'chat':     return generateChat(senderUsername, topic || context, options.room || 'general', recentMessages)
@@ -771,11 +776,11 @@ export function generateText(senderUsername, context = '', options = {}) {
 }
 
 // 페르소나 조회 (외부용)
-export function getPersonaMeta(username) {
+function getPersonaMeta(username) {
   return PERSONA_META[username] || null
 }
 
-export function getAllPersonas() {
+function getAllPersonas() {
   return Object.entries(PERSONA_META).map(([username, p]) => ({ username, ...p }))
 }
 
@@ -3079,7 +3084,7 @@ const CRON_SECRET = process.env.CRON_SECRET
 // 팀 메타데이터
 // ══════════════════════════════════════════════════════════════════════
 
-export const PLATFORM_TEAMS = {
+const PLATFORM_TEAMS = {
   operations: {
     id: 'operations', name: '운영팀', name_en: 'Operations',
     emoji: '⚙️', color: '#818CF8',
@@ -3754,7 +3759,7 @@ function buildTeamMap(members, teamId) {
   return map
 }
 
-export const AI_TEAM = {
+const AI_TEAM = {
   ...buildTeamMap(OPERATIONS_MEMBERS,  'operations'),
   ...buildTeamMap(CONTENT_MEMBERS,     'content'),
   ...buildTeamMap(MENTORING_MEMBERS,   'mentoring'),
@@ -3790,7 +3795,7 @@ for (const [teamId, members] of Object.entries(ALL_MEMBER_LISTS)) {
 // 헬퍼 함수들
 // ══════════════════════════════════════════════════════════════════════
 
-export function getTeamProfileData(memberKey) {
+function getTeamProfileData(memberKey) {
   const m = AI_TEAM[memberKey]
   if (!m) return null
   return {
@@ -3803,7 +3808,7 @@ export function getTeamProfileData(memberKey) {
   }
 }
 
-export async function syncTeamAccounts(sbUrl, sbKey) {
+async function syncTeamAccounts(sbUrl, sbKey) {
   const H = {
     apikey:         sbKey,
     Authorization:  `Bearer ${sbKey}`,
@@ -3854,27 +3859,27 @@ export async function syncTeamAccounts(sbUrl, sbKey) {
   return results
 }
 
-export function teamSignature(memberKey, extraNote = '') {
+function teamSignature(memberKey, extraNote = '') {
   const m = AI_TEAM[memberKey]
   if (!m) return ''
   return `\n\n---\n*${m.emoji} **${m.display_name}** (${m.role_ko}) | Insightship ${PLATFORM_TEAMS[m.team]?.name || '팀'}${extraNote ? ' — ' + extraNote : ''}*`
 }
 
-export function teamGreeting(memberKey) {
+function teamGreeting(memberKey) {
   return AI_TEAM[memberKey]?.greeting || 'Insightship 운영팀입니다.'
 }
 
-export function teamSelfIntro(memberKey) {
+function teamSelfIntro(memberKey) {
   return AI_TEAM[memberKey]?.persona?.self_intro || AI_TEAM[memberKey]?.bio || ''
 }
 
-export function canHandleIntent(memberKey, intent) {
+function canHandleIntent(memberKey, intent) {
   const m = AI_TEAM[memberKey]
   if (!m) return false
   return m.duties?.includes(intent) || false
 }
 
-export function getCommunityReplyStyle(memberKey) {
+function getCommunityReplyStyle(memberKey) {
   const m = AI_TEAM[memberKey]
   if (!m) return {}
   return {
@@ -3888,7 +3893,7 @@ export function getCommunityReplyStyle(memberKey) {
   }
 }
 
-export function getEscalationTarget(issue) {
+function getEscalationTarget(issue) {
   const ESCALATION = {
     policy_violation: 'MAX', harassment: 'MAX', spam: 'MAX',
     fake_account: 'MAX', legal_issue: 'MAX', team_conflict: 'MAX',
@@ -3901,14 +3906,14 @@ export function getEscalationTarget(issue) {
   return ESCALATION[issue] || 'MAX'
 }
 
-export const TEAM_MEMBERS   = Object.values(AI_TEAM)
-export const TEAM_USERNAMES = Object.values(AI_TEAM).map(m => m.account.username)
+const TEAM_MEMBERS   = Object.values(AI_TEAM)
+const TEAM_USERNAMES = Object.values(AI_TEAM).map(m => m.account.username)
 
-export function getTeamMembers(teamId) {
+function getTeamMembers(teamId) {
   return TEAM_MEMBERS.filter(m => m.team === teamId)
 }
 
-export function getTeamInfo(teamId) {
+function getTeamInfo(teamId) {
   const team = PLATFORM_TEAMS[teamId]
   if (!team) return null
   return {
@@ -3917,13 +3922,13 @@ export function getTeamInfo(teamId) {
   }
 }
 
-export function getTeamLead(teamId) {
+function getTeamLead(teamId) {
   const team = PLATFORM_TEAMS[teamId]
   if (!team?.manager) return null
   return AI_TEAM[team.manager] || null
 }
 
-export function getAllLeads() {
+function getAllLeads() {
   return Object.values(PLATFORM_TEAMS)
     .map(t => t.manager ? AI_TEAM[t.manager] : null)
     .filter(Boolean)
@@ -4114,20 +4119,7 @@ function getWorkersCount(level) {
 // 자체 AI 엔진 — 외부 API 없음
 // ══════════════════════════════════════════════════════════════════════
 
-import { generateCommunityPost, generateReport, generateChat } from './ai-engine.js'
-import {
-  getActivityLevel    as brainGetActivityLevel,
-  getActiveWorkerCount,
-  isWorkerActive,
-  getPersona          as brainGetPersona,
-  pickChatMessage,
-  generateConversationStarter,
-  generateReactionToAdmin,
-  generateDiscussionMessage,
-  generateWeeklyDiscussion,
-  generateMentoringTip,
-  generateInsightArticle,
-} from './staff-brain.js'
+// (staff-brain imports moved to top of file)
 
 
 // ══════════════════════════════════════════════════════════════════════
