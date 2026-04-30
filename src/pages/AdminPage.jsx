@@ -1948,103 +1948,113 @@ function StaffChatTab() {
   const [triggering, setTriggering] = useState(false)
   const [msg, setMsg]               = useState('')
 
-  const bottomRef        = useRef(null)
-  const msgListRef       = useRef(null)
-  const prevMsgLen       = useRef(0)
-  const roomRef          = useRef('general')
-  const fetchingRef      = useRef(false)
-  const pollTimerRef     = useRef(null)
-  const fetchTokenRef    = useRef(0)
-  const aiTypingTimerRef = useRef(null)   // v6: aiTyping 자동 해제 타이머
+  const bottomRef       = useRef(null)
+  const msgListRef      = useRef(null)
+  const prevMsgLen      = useRef(0)
+  const roomRef         = useRef('general')
+  const fetchingRef     = useRef(false)   // ★ 단일 잠금
+  const fetchTokenRef   = useRef(0)       // ★ 방 전환 시 증가
+  const pollTimerRef    = useRef(null)    // setTimeout 체인
+  const aiTimerRef      = useRef(null)    // aiTyping 자동 해제
 
-  // ── fetchMsgs v6 ──────────────────────────────────────────────────
-  // ★ 버그FIX-1(JSON 오류): 중첩 try-return → 단일 try-finally 로 재작성
-  //   어떤 경로(return/throw)로 종료돼도 finally 가 반드시 실행되어 fetchingRef 해제
-  // ★ 버그FIX-2(방 전환 초기화): resetFlag 파라미터 추가
-  //   방 전환 직후엔 빈 배열도 그대로 적용 → 이전 방 메시지 복원 방지
-  // ★ 버그FIX-3(AI 중단): fetchMsgs 는 메시지만 담당, aiTyping 은 sendMsg 에서 별도 관리
-  const fetchMsgs = useCallback(async (targetRoom, opts = {}) => {
-    const { silent = false, token = null, resetFlag = false } = opts
-
+  // ── fetchMsgs v7 ──────────────────────────────────────────────────
+  // silent=true  → fetchingRef 잠금 없이 실행 (폴링/AI응답후)
+  // silent=false → 잠금 확인 (방전환/초기로드)
+  // reset=true   → 빈배열도 그대로 적용 (방전환)
+  const fetchMsgs = useCallback(async (silent = false, reset = false) => {
     if (!silent && fetchingRef.current) return
     if (!silent) { fetchingRef.current = true; setLoading(true) }
 
-    const fetchRoom = targetRoom != null ? targetRoom : roomRef.current
+    const tokenSnap = fetchTokenRef.current
+    const roomSnap  = roomRef.current
 
     try {
       let r
-      try { r = await fetch('/api/staff-chat?room=' + fetchRoom + '&limit=80') }
-      catch (_) { return }         // 네트워크 오류 → 기존 메시지 유지
+      try { r = await fetch('/api/staff-chat?room=' + roomSnap + '&limit=80') }
+      catch (_) { return }
 
-      if (!r.ok) return            // HTML 에러 페이지 → JSON 파싱 안 함
+      // 방 전환됐거나 토큰이 증가했으면 무효
+      if (tokenSnap !== fetchTokenRef.current) return
+      if (roomSnap  !== roomRef.current)       return
+      if (!r.ok) return
 
       let d
-      try { d = await r.json() }
-      catch (_) { return }         // JSON 파싱 실패 → 기존 메시지 유지
+      try { d = await r.json() } catch (_) { return }
 
-      if (token !== null && token !== fetchTokenRef.current) return
-      if (fetchRoom !== roomRef.current) return
+      // json() 완료 후 재확인
+      if (tokenSnap !== fetchTokenRef.current) return
+      if (roomSnap  !== roomRef.current)       return
 
       if (Array.isArray(d.messages)) {
         setMessages(prev => {
-          // ★ resetFlag=true(방 전환): 빈 배열도 그대로 적용
-          // ★ resetFlag=false(일반 폴링): 빈 배열이면 기존 메시지 유지 (일시 오류 방어)
-          if (!resetFlag && d.messages.length === 0 && prev.length > 0) return prev
+          // reset=false: 빈배열이면 기존 유지 (일시 서버 오류 방어)
+          // reset=true : 빈배열도 적용 (새 방에 메시지 없을 수 있음)
+          if (!reset && d.messages.length === 0 && prev.length > 0) return prev
           return d.messages
         })
       }
     } finally {
-      // ★ 핵심: 모든 return 경로를 커버 — finally 는 반드시 실행됨
-      if (!silent) { setLoading(false); fetchingRef.current = false }
+      if (!silent) { fetchingRef.current = false; setLoading(false) }
     }
   }, [])
 
-  // ── 방 변경 v6 ────────────────────────────────────────────────────
+  // ── 방 전환 ─────────────────────────────────────────────────────
   const changeRoom = useCallback((newRoom) => {
     if (newRoom === roomRef.current) return
+    // ★ 토큰 증가 → 진행 중인 모든 이전 fetch 무효화
     fetchTokenRef.current += 1
-    const token = fetchTokenRef.current
-    roomRef.current = newRoom          // ref 먼저 갱신 (fetchMsgs 클로저 참조용)
+    fetchingRef.current = false   // 이전 non-silent 잠금 강제 해제
+    roomRef.current = newRoom
     setRoom(newRoom)
     setMessages([])
     prevMsgLen.current = 0
-    fetchingRef.current = false        // 이전 non-silent 잠금 강제 해제
-    fetchMsgs(newRoom, { token, resetFlag: true })
+    setLoading(false)
+
+    // 폴링 타이머 리셋
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+
+    // 즉시 새 방 로드
+    fetchMsgs(false, true)
   }, [fetchMsgs])
 
-  // ── 최초 로드 ──────────────────────────────────────────────────────
+  // ── 최초 로드 ──────────────────────────────────────────────────
   useEffect(() => {
     fetchTokenRef.current += 1
-    fetchMsgs('general', { token: fetchTokenRef.current, resetFlag: true })
-  }, [fetchMsgs])
+    fetchMsgs(false, true)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── 폴링 5초 ───────────────────────────────────────────────────────
+  // ── 폴링: setTimeout 체인 (누적 방지) ─────────────────────────
   useEffect(() => {
-    pollTimerRef.current = setInterval(() => {
-      fetchMsgs(roomRef.current, { silent: true, token: fetchTokenRef.current })
-    }, 5000)
-    return () => clearInterval(pollTimerRef.current)
+    const scheduleNext = () => {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+      pollTimerRef.current = setTimeout(async () => {
+        await fetchMsgs(true, false)
+        scheduleNext()
+      }, 5000)
+    }
+    scheduleNext()
+    return () => { if (pollTimerRef.current) clearTimeout(pollTimerRef.current) }
   }, [fetchMsgs])
 
-  // ── 자동 스크롤 ────────────────────────────────────────────────────
+  // ── 자동 스크롤 ────────────────────────────────────────────────
   useEffect(() => {
     const newLen = messages.length
     if (newLen === 0) return
     const container = msgListRef.current
-    const nearBottom = container
-      ? container.scrollHeight - container.scrollTop - container.clientHeight < 80
-      : true
+    const nearBottom = !container ||
+      container.scrollHeight - container.scrollTop - container.clientHeight < 80
     if (newLen > prevMsgLen.current && nearBottom) {
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 80)
     }
     prevMsgLen.current = newLen
   }, [messages])
 
-  // ── 메시지 전송 v6 ─────────────────────────────────────────────────
+  // ── 메시지 전송 v7 ────────────────────────────────────────────
   const sendMsg = async () => {
     if (!input.trim() || sending) return
     const msgText  = input.trim()
     const sendRoom = roomRef.current
+    const tokenSnap = fetchTokenRef.current
     setSending(true)
     setInput('')
     try {
@@ -2073,16 +2083,14 @@ function StaffChatTab() {
 
       // silent=true → fetchingRef 잠금 없이 즉시 반영
       if (postOk) {
-        await fetchMsgs(sendRoom, { silent: true, token: fetchTokenRef.current })
+        await fetchMsgs(true, false)
       }
 
-      // 2) AI 자동 반응 — fire-and-forget
-      // ★ 버그FIX-3: aiTyping 을 30초 타임아웃으로 보호 (응답 유실 시 자동 해제)
+      // 2) AI 자동 반응 (fire-and-forget)
       setAiTyping(true)
-      clearTimeout(aiTypingTimerRef.current)
-      aiTypingTimerRef.current = setTimeout(() => setAiTyping(false), 30000)
+      clearTimeout(aiTimerRef.current)
+      aiTimerRef.current = setTimeout(() => setAiTyping(false), 25000)
 
-      const t = fetchTokenRef.current
       fetch('/api/staff-chat-auto', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...auth },
@@ -2090,20 +2098,24 @@ function StaffChatTab() {
       })
         .then(r => r.ok ? r.json().catch(() => ({})) : {})
         .then(() => {
-          clearTimeout(aiTypingTimerRef.current)
+          clearTimeout(aiTimerRef.current)
           setAiTyping(false)
-          // staff-chat-auto 완료 직후, 3초, 6초 — AI 순차 메시지 수집
-          fetchMsgs(sendRoom, { silent: true, token: t })
-          setTimeout(() => fetchMsgs(sendRoom, { silent: true, token: t }), 3000)
-          setTimeout(() => fetchMsgs(sendRoom, { silent: true, token: t }), 6000)
+          // AI 응답 완료 직후 + 3.5초 후 조회 (silent → 잠금 없음)
+          fetchMsgs(true, false)
+          setTimeout(() => {
+            if (tokenSnap === fetchTokenRef.current) fetchMsgs(true, false)
+          }, 3500)
         })
-        .catch(() => { clearTimeout(aiTypingTimerRef.current); setAiTyping(false) })
+        .catch(() => {
+          clearTimeout(aiTimerRef.current)
+          setAiTyping(false)
+        })
 
     } catch (_) {}
     setSending(false)
   }
 
-  // ── AI 토론 트리거 ─────────────────────────────────────────────────
+  // ── AI 토론 트리거 ────────────────────────────────────────────
   const triggerDiscussion = async () => {
     if (!topic.trim() || triggering) return
     setTriggering(true)
@@ -2128,9 +2140,8 @@ function StaffChatTab() {
       if (d.ok) {
         setMsg('✅ AI 직원 ' + d.created + '명 토론 생성 완료')
         setTopic('')
-        const t = fetchTokenRef.current
-        setTimeout(() => fetchMsgs(roomRef.current, { silent: true, token: t }), 1000)
-        setTimeout(() => fetchMsgs(roomRef.current, { silent: true, token: t }), 4000)
+        setTimeout(() => fetchMsgs(true, false), 1000)
+        setTimeout(() => fetchMsgs(true, false), 4000)
       } else {
         setMsg('❌ ' + (d.error || '실패'))
       }
@@ -2164,7 +2175,7 @@ function StaffChatTab() {
             </span>
           )}
           <button
-            onClick={() => { fetchTokenRef.current += 1; fetchMsgs(roomRef.current, { token: fetchTokenRef.current, resetFlag: true }) }}
+            onClick={() => { fetchTokenRef.current += 1; fetchingRef.current = false; fetchMsgs(false, true) }}
             style={{ marginLeft:'auto', background:'none', border:'none', color:'#444', cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
             <RefreshCw size={12}/><span style={{ fontFamily:'var(--f-mono)', fontSize:9 }}>새로고침</span>
           </button>
@@ -2185,7 +2196,9 @@ function StaffChatTab() {
         </div>
 
         <div ref={msgListRef} style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:10 }}>
-          {loading && <div style={{ textAlign:'center', color:'#444', fontFamily:'var(--f-mono)', fontSize:11, padding:20 }}>로딩 중…</div>}
+          {loading && messages.length === 0 && (
+            <div style={{ textAlign:'center', color:'#444', fontFamily:'var(--f-mono)', fontSize:11, padding:20 }}>로딩 중…</div>
+          )}
           {!loading && messages.length === 0 && (
             <div style={{ textAlign:'center', color:'#333', fontFamily:'var(--f-mono)', fontSize:11, padding:40 }}>
               <MessageCircle size={24} color="#333" style={{ marginBottom:8 }}/><br/>
@@ -2224,6 +2237,21 @@ function StaffChatTab() {
               </div>
             )
           })}
+          {aiTyping && (
+            <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+              <div style={{ width:32, height:32, borderRadius:'50%', background:'rgba(129,140,248,0.15)',
+                border:'1px solid rgba(129,140,248,0.3)',
+                display:'flex', alignItems:'center', justifyContent:'center', fontSize:15 }}>⚙️</div>
+              <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:8, padding:'8px 12px',
+                borderLeft:'2px solid rgba(129,140,248,0.3)', display:'flex', gap:4, alignItems:'center' }}>
+                <span style={{ fontSize:11, color:'#818CF8', fontFamily:'var(--f-mono)' }}>직원이 작성 중</span>
+                {[0,1,2].map(i => (
+                  <span key={i} style={{ width:4, height:4, borderRadius:'50%', background:'#818CF8',
+                    animation:`typingBounce 1.2s ${i*0.2}s ease-in-out infinite` }}/>
+                ))}
+              </div>
+            </div>
+          )}
           <div ref={bottomRef}/>
         </div>
 
@@ -2284,10 +2312,10 @@ function StaffChatTab() {
         <Panel>
           <SectionHeader icon={Terminal} label="빠른 업무 지시" color="#F59E0B"/>
           {[
-            { label:'피드백 검토 지시',         msg:'📋 전팀 공지: 오늘 들어온 유저 피드백을 각 팀별로 검토하고 개선 사항을 ops 채널에 보고해주세요.', room:'ops' },
-            { label:'주간 전략 브리핑',          msg:'🎯 이번 주 플랫폼 전략 방향을 논의합니다. 각 팀 선임 매니저분들 의견 부탁드립니다.',              room:'strategy' },
-            { label:'피드백 처리 완료 보고 요청', msg:'📥 피드백 채널: 오늘 수신된 피드백 처리 현황을 공유해주세요.',                                   room:'feedback' },
-            { label:'전체 공지: 이번 주 목표 공유', msg:'📢 전팀 공지: 이번 주 각 팀별 목표와 우선순위를 general 채널에 공유해주세요.',                 room:'general' },
+            { label:'피드백 검토 지시',          msg:'📋 전팀 공지: 오늘 들어온 유저 피드백을 각 팀별로 검토하고 개선 사항을 ops 채널에 보고해주세요.', room:'ops' },
+            { label:'주간 전략 브리핑',           msg:'🎯 이번 주 플랫폼 전략 방향을 논의합니다. 각 팀 선임 매니저분들 의견 부탁드립니다.', room:'strategy' },
+            { label:'피드백 처리 완료 보고 요청', msg:'📥 피드백 채널: 오늘 수신된 피드백 처리 현황을 공유해주세요.', room:'feedback' },
+            { label:'전체 공지: 이번 주 목표 공유',msg:'📢 전팀 공지: 이번 주 각 팀별 목표와 우선순위를 general 채널에 공유해주세요.', room:'general' },
           ].map(item => (
             <button key={item.label} onClick={async () => {
               const { data: { session } } = await supabase.auth.getSession()
@@ -2303,22 +2331,23 @@ function StaffChatTab() {
               } catch (_) {}
               changeRoom(item.room)
               if (postOk) {
-                const t = fetchTokenRef.current
+                const tokenSnap = fetchTokenRef.current
                 setAiTyping(true)
-                clearTimeout(aiTypingTimerRef.current)
-                aiTypingTimerRef.current = setTimeout(() => setAiTyping(false), 30000)
+                clearTimeout(aiTimerRef.current)
+                aiTimerRef.current = setTimeout(() => setAiTyping(false), 25000)
                 fetch('/api/staff-chat-auto', {
                   method:'POST', headers:{'Content-Type':'application/json', ...auth},
                   body: JSON.stringify({ action:'admin_message', room: item.room, message: item.msg }),
                 })
                   .then(r => r.ok ? r.json().catch(() => ({})) : {})
                   .then(() => {
-                    clearTimeout(aiTypingTimerRef.current); setAiTyping(false)
-                    fetchMsgs(item.room, { silent:true, token:t })
-                    setTimeout(() => fetchMsgs(item.room, { silent:true, token:t }), 3000)
-                    setTimeout(() => fetchMsgs(item.room, { silent:true, token:t }), 6000)
+                    clearTimeout(aiTimerRef.current); setAiTyping(false)
+                    fetchMsgs(true, false)
+                    setTimeout(() => {
+                      if (tokenSnap === fetchTokenRef.current) fetchMsgs(true, false)
+                    }, 3500)
                   })
-                  .catch(() => { clearTimeout(aiTypingTimerRef.current); setAiTyping(false) })
+                  .catch(() => { clearTimeout(aiTimerRef.current); setAiTyping(false) })
               }
             }}
               style={{ width:'100%', background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.2)',

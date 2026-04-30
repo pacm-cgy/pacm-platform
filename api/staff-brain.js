@@ -536,12 +536,12 @@ function thinkAsPersona(persona, analysis, context = {}) {
   const { topics, sentiment, intent, urgency, keywords } = analysis
   const { recentMessages = [], roomId = 'general', adminMessage = null } = context
 
-  // 1. 감정 반응 결정 (성격에 따라 다름)
+  // 1. 감정 반응 결정 (성격에 따라 다름) — 더 풍부한 표현으로 확장
   const emotionIntensity = {
-    very_high: () => ['정말 ', '완전히 ', '엄청 '],
-    high:      () => ['진짜 ', '너무 ', ''],
-    medium:    () => ['', '꽤 ', ''],
-    low:       () => ['', '', ''],
+    very_high: () => ['정말 ', '완전히 ', '엄청 ', '진짜 너무 ', '와, '],
+    high:      () => ['진짜 ', '너무 ', '', '꽤나 ', '상당히 '],
+    medium:    () => ['', '꽤 ', '', '좀 ', '어느 정도 '],
+    low:       () => ['', '', '', '다소 '],
     very_low:  () => ['', '', ''],
   }[persona.emotion_range || 'medium']()
 
@@ -670,14 +670,16 @@ function buildSentence(persona, thought, analysis, context = {}) {
   const useRef = referencePoint && Math.random() > 0.7
   const refPhrase = useRef ? `"${referencePoint}" 말씀하신 것처럼, ` : ''
 
-  // 스탠스(입장)에 따른 문장 구조
+  // 스탠스(입장)에 따른 문장 구조 — 인간적인 필러·망설임 표현 추가
+  const fillers = ['그러니까... ', '음, ', '아, ', '사실 ', '솔직히 ', '']
+  const filler = Math.random() < 0.2 ? fillers[Math.floor(Math.random() * fillers.length)] : ''
   const stanceOpeners = {
-    agree:     [voiceWord + ' ', `${emotionIntensity}공감해요. `, `맞는 것 같아요. `, `저도 같은 생각이에요. `],
-    add:       [`${lensInterpretation}, `, `덧붙이면 `, `추가로 말씀드리면 `, `${coreValue} 관점에서도 `],
-    analyze:   [`${lensInterpretation}, `, `분석해보면 `, `자세히 보면 `, `데이터로 보면 `],
-    disagree:  [`${persona.disagree_style} — `, `조금 다른 시각에서는 `, `한 가지 질문이 있는데요, `],
-    challenge: [`${lensInterpretation}, 그런데 `, `전략적으로 다시 보면 `, `잠깐, `],
-    question:  [`${mainKeyword} 관련해서 궁금한 게 있어요. `, `혹시 `, `생각해봤는데, `],
+    agree:     [voiceWord + ' ', `${emotionIntensity}공감해요. `, `맞는 것 같아요. `, `저도 같은 생각이에요. `, `${filler}저도 그렇게 봐요. `, `맞아요, `],
+    add:       [`${lensInterpretation}, `, `덧붙이면 `, `추가로 말씀드리면 `, `${coreValue} 관점에서도 `, `한 가지 더 말하면 `, `아, 그리고 `],
+    analyze:   [`${lensInterpretation}, `, `분석해보면 `, `자세히 보면 `, `데이터로 보면 `, `${filler}살펴보니까 `, `따져보면 `],
+    disagree:  [`${persona.disagree_style} — `, `조금 다른 시각에서는 `, `한 가지 질문이 있는데요, `, `${filler}다른 관점에서 보면 `, `음... 저는 좀 달리 봐요. `],
+    challenge: [`${lensInterpretation}, 그런데 `, `전략적으로 다시 보면 `, `잠깐, `, `그런데 한편으로는 `, `${filler}이 부분은 좀 다시 봐야 할 것 같아요. `],
+    question:  [`${mainKeyword} 관련해서 궁금한 게 있어요. `, `혹시 `, `생각해봤는데, `, `${filler}${mainKeyword}이 어떻게 되는 건가요? `, `잠깐, `],
   }
 
   const openers = stanceOpeners[stance] || stanceOpeners['add']
@@ -1029,19 +1031,32 @@ function buildBody(persona, thought, analysis, mainKeyword) {
 
 function buildCloser(persona, stance, intent, urgency) {
   if (urgency === 'urgent') {
-    return persona.style === 'formal' || persona.style === 'formal_warm' ? ' 신속히 처리하겠습니다.' : ' 빨리 해결해봐요!'
+    const urgentMap = {
+      formal:      ' 신속히 처리하겠습니다.',
+      formal_warm: ' 빠르게 확인하고 처리하겠습니다.',
+      formal_wise: ' 긴급 사항 즉시 검토하겠습니다.',
+    }
+    return urgentMap[persona.style] || ' 지금 바로 처리해볼게요!'
   }
   if (intent === 'discussion') {
     const closers = {
-      agree:     ['다들 어떻게 생각하세요?', '동의하시나요?', ''],
-      add:       ['다른 의견도 들어볼게요!', '추가 의견 있으시면요?', ''],
-      analyze:   ['더 분석해볼까요?', '데이터 더 있으면 공유해주세요.', ''],
-      disagree:  ['한 번 더 생각해봐요.', '이 부분 논의가 필요할 것 같아요.', ''],
+      agree:     ['다들 어떻게 생각하세요?', '동의하시나요?', '의견 있으면 편하게 말해요~', ''],
+      add:       ['다른 의견도 들어볼게요!', '추가 의견 있으시면요?', '더 있으면 공유해봐요!', ''],
+      analyze:   ['더 분석해볼까요?', '데이터 더 있으면 공유해주세요.', '같이 살펴봐요.', ''],
+      disagree:  ['한 번 더 생각해봐요.', '이 부분 논의가 필요할 것 같아요.', '어떻게 보세요?', ''],
       challenge: ['한 번 도전해봐요!', '이 방향도 고려해보면 어떨까요?', ''],
-      question:  ['어떻게 생각하세요?', '의견 주시면 좋겠어요!', ''],
+      question:  ['어떻게 생각하세요?', '의견 주시면 좋겠어요!', '궁금해요!', ''],
     }
     const pool = closers[stance] || ['']
     return ' ' + pool[Math.floor(Math.random() * pool.length)]
+  }
+  // ★ 인간적인 자연스러운 마무리 (25% 확률로 짧은 후기 추가)
+  if (Math.random() < 0.25) {
+    const naturalEndings = [
+      ' 좀 더 지켜봐야겠어요.', ' 계속 업데이트할게요.', ' 잘 됐으면 좋겠네요.',
+      ' 나중에 공유해드릴게요.', ' 참고해두겠습니다.', ' 감사해요!',
+    ]
+    return naturalEndings[Math.floor(Math.random() * naturalEndings.length)]
   }
   return ''
 }
@@ -1063,29 +1078,88 @@ export function generateConversationStarter(memberKey, team, roomId) {
   const persona = getPersona(memberKey)
   const h = getKSTHour()
   const level = getActivityLevel()
+  const em = pickEmoji(team, persona.emoji_freq)
+  const cv = persona.values[Math.floor(Math.random() * persona.values.length)]
+  const cv2 = persona.values[(Math.floor(Math.random() * persona.values.length) + 1) % persona.values.length]
+  const vw = persona.voice[Math.floor(Math.random() * persona.voice.length)]
 
-  // 시간과 방 맥락으로 주제 결정
-  const topicByRoom = {
-    general: h < 10 ? '오늘 업무 시작' : h < 14 ? '오전 업무 결과' : h < 18 ? '오후 진행 상황' : '하루 마무리',
-    ops: '운영 현황',
-    feedback: '최근 유저 피드백',
-    strategy: '이번 주 전략',
+  // 시간+방 맥락으로 다양한 주제 결정 (방별로 더 풍부한 주제)
+  const topicsByRoom = {
+    general: [
+      h < 10 ? '오늘 업무 시작' : h < 12 ? '오전 진행 현황' : h < 14 ? '점심 전 업무 점검' : h < 17 ? '오후 작업 상황' : h < 20 ? '저녁 마무리 준비' : '오늘 마무리',
+      '이번 주 팀 상황',
+      h < 12 ? '아침 루틴과 업무 준비' : h < 18 ? '오늘의 작은 성과들' : '하루 돌아보기',
+      '팀 분위기와 최근 이슈',
+      '플랫폼 최근 소식',
+      '이번 달 우리 팀 목표',
+      h < 14 ? '오늘 점심은 어떻게들 하셨어요' : '퇴근 전 점검 사항',
+      '요즘 관심 있는 스타트업 트렌드',
+      '팀원 칭찬하기',
+      '이번 주 배운 것 공유',
+    ],
+    ops: ['운영 현황 체크', '오늘 운영 이슈', '사용자 온보딩 상태', '주요 공지 준비', '운영 개선 아이디어',
+          '이번 주 유저 반응', '온보딩 퍼널 어디서 막히나', '공지 템플릿 개선'],
+    feedback: ['최근 유저 피드백', '주요 개선 요청', '긍정 반응 공유', '부정 피드백 대응', '피드백 트렌드',
+               '유저 NPS 분석', '최근 별 1개짜리 리뷰 패턴', '감사 피드백 공유'],
+    strategy: ['이번 주 전략 방향', '플랫폼 성장 목표', '경쟁사 동향', '신규 기능 기획', '분기 목표 점검',
+               '다음 달 집중 과제', '핵심 KPI 현황', '새로운 수익 모델 아이디어'],
   }
-  const topic = topicByRoom[roomId] || '업무'
+  const topics = topicsByRoom[roomId] || topicsByRoom.general
+  const topic = topics[Math.floor(Math.random() * topics.length)]
   const analysis = analyzeMessage(topic)
   const thought = thinkAsPersona(persona, analysis, { roomId })
 
-  // starter는 대화를 여는 역할이므로 질문형 또는 공유형
-  const starterStyles = [
-    () => `${pickEmoji(team, persona.emoji_freq)}${h < 10 ? '좋은 아침이에요! ' : h < 14 ? '' : h < 18 ? '' : '수고 많으셨어요! '}${persona.lens}에서 보면 ${topic} 어떻게 진행되고 있는지 궁금하네요.`,
-    () => `${pickEmoji(team, persona.emoji_freq)}${persona.voice[Math.floor(Math.random() * persona.voice.length)]} ${topic} 관련해서 ${persona.values[0]} 관점으로 이야기해봐요.`,
-    () => {
-      const thought2 = thinkAsPersona(persona, analyzeMessage(topic), { roomId })
-      return buildSentence(persona, thought2, analyzeMessage(topic), { roomId })
-    },
-  ]
+  // ★ 12가지 다양한 오프너 패턴 — 인간적인 표현 다양화
+  const r = Math.random()
+  const greeting = h < 10 ? '좋은 아침이에요! ' : h >= 22 ? '늦게까지 수고예요. ' : h >= 18 ? '수고 많으셨어요! ' : h >= 13 && h < 14 ? '점심 맛있게 드셨어요? ' : ''
 
-  return starterStyles[Math.floor(Math.random() * starterStyles.length)]()
+  if (r < 0.10) {
+    // 패턴1: 인사 + lens + 질문
+    return `${em}${greeting}${persona.lens} 관점에서 ${topic} 어떻게 진행되고 있는지 궁금해요. ${cv} 기준으로 공유해봐요!`
+  } else if (r < 0.20) {
+    // 패턴2: voice + topic + coreValue
+    return `${em}${vw} ${topic} 관련해서 ${cv} 관점으로 잠깐 이야기해봐요. 여러분 의견이 궁금해요.`
+  } else if (r < 0.30) {
+    // 패턴3: buildSentence 직접 활용
+    const thought2 = thinkAsPersona(persona, analyzeMessage(topic), { roomId })
+    return buildSentence(persona, thought2, analyzeMessage(topic), { roomId })
+  } else if (r < 0.40) {
+    // 패턴4: 도전적 질문
+    return `${em}${topic} 관련해서 한 가지 생각이 있어요. ${persona.lens} 기준으로 보면 ${cv}이 핵심인데, 다들 어떻게 생각하세요?`
+  } else if (r < 0.50) {
+    // 패턴5: 시간 맥락 + 개인 의견 공유
+    const timeNote = h < 12 ? `${h < 10 ? '아침' : '오전'} 업무 시작하면서` : h < 18 ? '오후 작업 중에' : '오늘 일 마무리하면서'
+    return `${em}${timeNote} ${topic}에 대해 생각해봤는데요. ${persona.values[0]} 측면에서 ${persona.values[1] || cv}도 함께 보면 어떨까요?`
+  } else if (r < 0.58) {
+    // 패턴6: catchphrase + 업무 공유
+    return `${em}${persona.catchphrase}! ${topic} 업무 현황 간단히 공유드릴게요. ${cv}을 중심으로 진행 중이에요.`
+  } else if (r < 0.66) {
+    // 패턴7: 팀 간 소통 유도
+    return `${em}${topic}에 대해 각 팀 의견 들어보고 싶어요. ${persona.lens} 관점에서 먼저 말씀드리면 — ${cv}이 제일 중요하다고 생각해요.`
+  } else if (r < 0.74) {
+    // 패턴8: 완전 자유형 문장
+    const thought3 = thinkAsPersona(persona, analyzeMessage(topic), { roomId })
+    const base = buildSentence(persona, thought3, analyzeMessage(topic + ' ' + cv), { roomId })
+    return base.startsWith(em) ? base : `${em}${base}`
+  } else if (r < 0.82) {
+    // 패턴9: 짧은 공유 + 반응 유도 (구어체)
+    const shortOpeners = ['참고로', '근데', '아, 그리고', '방금 생각났는데', '혹시 들으셨어요?']
+    const so = shortOpeners[Math.floor(Math.random() * shortOpeners.length)]
+    return `${em}${so} — ${topic}이 요즘 화제더라고요. ${persona.lens} 기준으로 보면 ${cv}이 핵심이 될 것 같아요. 여러분은 어떻게 보세요?`
+  } else if (r < 0.89) {
+    // 패턴10: 개인 경험/관점 공유
+    return `${em}${greeting}${topic} 얘기 잠깐 해도 될까요? ${cv}이 요즘 저한테 좀 더 와닿는 것 같아서요. ${cv2}이랑도 연결이 되더라고요.`
+  } else if (r < 0.95) {
+    // 패턴11: 가볍고 자연스러운 말걸기
+    const casualStarts = ['요즘', '최근에', '이번 주', '오늘 보니까', '생각해보면']
+    const cs = casualStarts[Math.floor(Math.random() * casualStarts.length)]
+    return `${em}${cs} ${topic} 어떻게들 느끼고 계세요? ${persona.catchphrase}로서 ${persona.lens} 입장에서 좀 나눠보고 싶어서요.`
+  } else {
+    // 패턴12: 팀 내 소소한 칭찬 or 감사
+    const warmStarts = ['오늘 팀 분위기 너무 좋은 것 같아요! 그리고', '다들 수고 많으세요! 그나저나', '오늘도 열심히들 하시네요. 그런데']
+    const ws = warmStarts[Math.floor(Math.random() * warmStarts.length)]
+    return `${em}${ws} ${topic}에 대해서 ${cv} 관점으로 한마디 해도 될까요? 짧게 공유드릴게요.`
+  }
 }
 
 export function generateReactionToAdmin(memberKey, team, adminMessage) {
@@ -1104,30 +1178,173 @@ export function generateReactionToAdmin(memberKey, team, adminMessage) {
 
   const thought = thinkAsPersona(persona, analysis, { recentMessages: [], adminMessage })
 
-  // 관리자 메시지에 대한 반응 — 성격별로 다름
-  const reactionStyles = {
-    formal_warm:    () => `${pickEmoji(team, persona.emoji_freq)}${thought.voiceWord} ${analysis.keywords[0] || '말씀하신 부분'} 바로 검토하겠습니다.`,
-    cheerful:       () => `${pickEmoji(team, persona.emoji_freq)}${thought.voiceWord} ${analysis.keywords[0] || '내용'} 확인했어요! 팀이랑 바로 공유할게요!`,
-    casual:         () => `${pickEmoji(team, persona.emoji_freq)}오케이, ${analysis.keywords[0] || '이 부분'} 파악했어요. 처리할게요.`,
-    warm:           () => `${pickEmoji(team, persona.emoji_freq)}${analysis.keywords[0] || '말씀'} 잘 들었어요. ${thought.coreValue} 생각하면서 진행할게요.`,
-    creative:       () => `${pickEmoji(team, persona.emoji_freq)}${analysis.keywords[0] || '내용'} 흥미롭네요! 콘텐츠 관점에서 어떻게 풀어낼지 생각해볼게요.`,
-    expressive:     () => `${pickEmoji(team, persona.emoji_freq)}와, ${analysis.keywords[0] || '이 내용'} 진짜 중요한 것 같아요! 바로 움직일게요!`,
-    intellectual:   () => `${pickEmoji(team, persona.emoji_freq)}${analysis.keywords[0] || '내용'} 분석해보겠습니다. 근거 기반으로 접근할게요.`,
-    wise:           () => `${pickEmoji(team, persona.emoji_freq)}${analysis.keywords[0] || '말씀하신 것'} — ${thought.coreValue} 관점에서 보면 방향이 맞는 것 같아요. 진행하겠습니다.`,
-    fast_news:      () => `${pickEmoji(team, persona.emoji_freq)}최신 동향과 연결해서 ${analysis.keywords[0] || '이 부분'} 빠르게 확인해볼게요.`,
-    brief:          () => `${pickEmoji(team, persona.emoji_freq)}${analysis.keywords[0] || '확인'}. 처리하겠습니다.`,
-    analytical:     () => `${pickEmoji(team, persona.emoji_freq)}데이터로 ${analysis.keywords[0] || '이 부분'} 확인해볼게요. 수치 기반으로 접근하겠습니다.`,
-    formal:         () => `${pickEmoji(team, persona.emoji_freq)}${analysis.keywords[0] || '지시사항'} 확인했습니다. 프로세스에 따라 처리하겠습니다.`,
-    formal_wise:    () => `${pickEmoji(team, persona.emoji_freq)}전체적으로 보면 ${analysis.keywords[0] || '이 사안'} 중요한 포인트예요. 종합해서 보고드릴게요.`,
-    technical:      () => `${pickEmoji(team, persona.emoji_freq)}기술적으로 ${analysis.keywords[0] || '이 부분'} 점검해볼게요. 시스템 영향 확인하겠습니다.`,
-    community_warm: () => `${pickEmoji(team, persona.emoji_freq)}${analysis.keywords[0] || '말씀'} 커뮤니티 멤버들도 신경 쓰고 있을 것 같아요. 잘 처리할게요!`,
-    leader:         () => `${pickEmoji(team, persona.emoji_freq)}전략적으로 중요한 포인트예요. 팀 전체와 공유해서 방향 잡겠습니다.`,
-    pr_style:       () => `${pickEmoji(team, persona.emoji_freq)}외부 관점에서도 중요한 이슈네요. 브랜드 차원에서 접근할게요.`,
-    friendly_media: () => `${pickEmoji(team, persona.emoji_freq)}${analysis.keywords[0] || '내용'} 독자분들한테도 영향 있을 것 같아요. 뉴스레터로 잘 전달할게요.`,
+  // ── 완전 동적 생성: seed 고정 제거 ─────────────────────────────
+  // 각 호출마다 persona × keywords × intent × sentiment × coreValue × voiceWord 를
+  // 실시간 조합해서 문장을 직접 만든다 — 같은 내용도 호출할 때마다 다른 표현
+  const kw  = analysis.keywords[0] || '말씀하신 내용'
+  const kw2 = analysis.keywords[1] || analysis.keywords[0] || '이 부분'
+  const kw3 = analysis.keywords[2] || kw
+  const cv  = thought.coreValue
+  const cv2 = persona.values[(persona.values.indexOf(cv) + 1) % persona.values.length] || cv
+  const vw  = thought.voiceWord
+  const em  = pickEmoji(team, persona.emoji_freq)
+  // ★ h는 함수 상단(line 1127)에서 이미 선언됨 — 재선언 제거(버그 수정)
+  const timeCtx = h < 9 ? '아침 업무 시작하면서' : h < 12 ? '오전 중에' : h < 14 ? '오후 들어서' : h < 18 ? '이번 오후에' : '저녁 내로'
+  const intent  = analysis.intent
+  const sentiment = analysis.sentiment
+  const urgency   = analysis.urgency
+
+  // 직원별 개성 있는 오프너 (완전 동적 — persona.voice + coreValue + keyword 조합)
+  function makeOpener(style) {
+    const r = Math.random()
+    const openers = {
+      formal_warm: r < 0.25
+        ? `${vw} ${kw} 건 바로 확인하겠습니다.`
+        : r < 0.5
+        ? `${em}${kw} 관련 사항 파악했어요. ${cv} 기준으로 접근할게요.`
+        : r < 0.75
+        ? `${em}${timeCtx} ${kw} 건 팀과 공유하고 처리하겠습니다.`
+        : `${em}${kw}과 ${kw2} 모두 확인했습니다. 운영 안정성 우선으로 진행하겠습니다.`,
+      cheerful: r < 0.25
+        ? `${em}${vw} ${kw} 바로 챙길게요!`
+        : r < 0.5
+        ? `${em}넵! ${kw}이랑 ${kw2} 다 처리할게요! 파이팅!`
+        : r < 0.75
+        ? `${em}오케이! ${kw} 팀이랑 확인해서 금방 처리해드릴게요!`
+        : `${em}알겠어요! ${kw} 건은 ${cv} 중심으로 빠르게 움직일게요!`,
+      casual: r < 0.25
+        ? `${em}${kw} 확인했어요. ${cv} 관점에서 처리해볼게요.`
+        : r < 0.5
+        ? `${em}그렇죠, ${kw}은 좀 정리가 필요했는데 잘 됐네요. 할게요.`
+        : r < 0.75
+        ? `${em}오케이, ${kw}이랑 ${kw2} 현실적으로 접근해볼게요.`
+        : `${em}맞아요, ${kw} — 솔직히 ${cv} 부분이 핵심인 것 같아요.`,
+      warm: r < 0.25
+        ? `${em}${kw} 잘 들었어요! ${cv}을 생각하면서 챙겨볼게요.`
+        : r < 0.5
+        ? `${em}감사해요! ${kw}은 팀원들도 신경 쓰던 부분이에요. 잘 처리할게요.`
+        : r < 0.75
+        ? `${em}${kw}이랑 ${kw2}, 둘 다 소중하게 살펴보겠습니다.`
+        : `${em}${timeCtx} ${kw} 관련해서 따뜻하게 진행해볼게요. ${cv}이 기준이에요.`,
+      creative: r < 0.25
+        ? `${em}${kw} 흥미롭네요! 콘텐츠 각도로 어떻게 풀어낼지 생각해볼게요.`
+        : r < 0.5
+        ? `${em}${kw}을 스토리로 연결하면 독자에게 훨씬 잘 닿을 것 같아요.`
+        : r < 0.75
+        ? `${em}${kw}과 ${kw2}를 연결하면 멋진 서사 앵글이 나올 것 같아요!`
+        : `${em}${cv} 관점에서 ${kw}을 재해석하면 콘텐츠 방향이 달라져요.`,
+      expressive: r < 0.25
+        ? `${em}와, ${kw} 진짜 중요한 이슈예요! 바로 움직일게요!`
+        : r < 0.5
+        ? `${em}오!! ${kw}이요? 저도 그 생각 했어요! 완전 공감이에요!!`
+        : r < 0.75
+        ? `${em}${kw}이랑 ${kw2} 두 가지 다 엄청 중요한 것 같아요!`
+        : `${em}${cv}이 딱 필요한 순간이에요! ${kw} 확인해볼게요!`,
+      intellectual: r < 0.25
+        ? `${em}${kw}과 ${kw2}의 상관관계를 분석해보겠습니다. 근거 기반으로 접근할게요.`
+        : r < 0.5
+        ? `${em}${kw}에 대한 사례 데이터를 먼저 확인해볼게요. 맥락이 중요하니까요.`
+        : r < 0.75
+        ? `${em}실증적으로 보면 ${kw}은 ${cv}과 연결된 구조적 이슈예요.`
+        : `${em}${kw} 분석해보겠습니다. 인과관계부터 파악하면 방향이 나올 거예요.`,
+      wise: r < 0.25
+        ? `${em}${kw} — ${cv} 관점에서 보면 방향이 맞는 것 같아요. 진행하겠습니다.`
+        : r < 0.5
+        ? `${em}경험상 ${kw} 같은 사안은 서두르기보다 ${cv}을 기준으로 가야 해요.`
+        : r < 0.75
+        ? `${em}${kw}이랑 ${kw2}를 같이 보면 결국 ${cv}으로 귀결돼요. 잘 처리할게요.`
+        : `${em}이 상황에서 진짜 핵심은 ${cv}이에요. ${kw}부터 차근차근 풀어갈게요.`,
+      fast_news: r < 0.25
+        ? `${em}최신 동향 연결해서 ${kw} 빠르게 확인해볼게요.`
+        : r < 0.5
+        ? `${em}${kw} 관련 최신 데이터 바로 크로스체크할게요.`
+        : r < 0.75
+        ? `${em}${kw}이랑 ${kw2}, 지금 트렌드랑 연결해서 파악하겠습니다.`
+        : `${em}${timeCtx} 기준으로 ${kw} 시그널 추적해볼게요.`,
+      brief: r < 0.25
+        ? `${em}${kw}. 처리.`
+        : r < 0.5
+        ? `${em}확인. ${kw} + ${kw2} 진행.`
+        : r < 0.75
+        ? `${em}${kw}. ${cv} 기준. 완료 후 보고.`
+        : `${em}파악. ${kw} → ${kw2} 순서로 처리.`,
+      analytical: r < 0.25
+        ? `${em}데이터로 ${kw} 확인해볼게요. 수치 기반으로 접근하겠습니다.`
+        : r < 0.5
+        ? `${em}${kw} 패턴 분석할게요. ${cv} 관련 지표가 중요해요.`
+        : r < 0.75
+        ? `${em}${kw}과 ${kw2}를 교차 분석하면 핵심이 보일 것 같아요.`
+        : `${em}${cv} 데이터 기반으로 ${kw} 추세를 먼저 확인할게요.`,
+      formal: r < 0.25
+        ? `${em}${kw} 확인했습니다. 절차에 따라 처리하겠습니다.`
+        : r < 0.5
+        ? `${em}${kw} 건 검토 후 결과 보고드리겠습니다.`
+        : r < 0.75
+        ? `${em}${kw} 및 ${kw2} 관련, 규정 기준으로 처리하겠습니다.`
+        : `${em}${timeCtx} ${kw} 건 프로세스에 따라 진행하겠습니다.`,
+      formal_wise: r < 0.25
+        ? `${em}${kw}은 종합적으로 봐야 해요. 리포트 기준으로 정리해드릴게요.`
+        : r < 0.5
+        ? `${em}${kw}이랑 ${kw2}를 균형 있게 검토해서 방향 잡겠습니다.`
+        : r < 0.75
+        ? `${em}전체 맥락에서 ${kw}은 ${cv}이 핵심 연결고리예요.`
+        : `${em}${kw} — 이번 주 중요한 사안이에요. 종합 분석해드릴게요.`,
+      technical: r < 0.25
+        ? `${em}${kw} 기술적으로 점검할게요. 시스템 영향 먼저 확인하겠습니다.`
+        : r < 0.5
+        ? `${em}${kw} 이슈, 코드 레벨에서 원인 추적해볼게요.`
+        : r < 0.75
+        ? `${em}${kw}과 ${kw2} 기술 스택 점검 후 개선사항 보고드릴게요.`
+        : `${em}${cv} 관련 ${kw} 시스템 최적화 방향 잡겠습니다.`,
+      community_warm: r < 0.25
+        ? `${em}${kw} 멤버분들도 신경 쓰고 있을 것 같아요! 잘 처리할게요.`
+        : r < 0.5
+        ? `${em}${kw}이요! 커뮤니티 입장에서도 중요한 이슈예요. 함께 해결해봐요!`
+        : r < 0.75
+        ? `${em}${kw}이랑 ${kw2} — 우리 커뮤니티 위해서 열심히 챙겨볼게요!`
+        : `${em}멤버분들이랑 ${kw} 같이 풀어나가면 더 좋은 방향이 나올 것 같아요.`,
+      leader: r < 0.25
+        ? `${em}${kw}은 전략적으로 중요해요. 팀 전체와 공유해서 방향 잡겠습니다.`
+        : r < 0.5
+        ? `${em}${kw}은 큰 그림에서 봐야 해요. ${cv} 기준으로 접근하겠습니다.`
+        : r < 0.75
+        ? `${em}${kw}이랑 ${kw2} — 플랫폼 성장에 직결돼요. 신중하게 가겠습니다.`
+        : `${em}${timeCtx} ${kw} 관련해서 팀 전략 방향 잡아볼게요.`,
+      pr_style: r < 0.25
+        ? `${em}외부 관점에서도 중요한 이슈네요. 브랜드 차원으로 접근할게요.`
+        : r < 0.5
+        ? `${em}${kw}을 어떻게 대외 포지셔닝할지 생각해볼게요.`
+        : r < 0.75
+        ? `${em}${kw}이랑 ${kw2}, PR 앵글에서 스토리가 만들어질 것 같아요!`
+        : `${em}${cv} 관점에서 ${kw} 브랜드 메시지를 다시 그려볼게요.`,
+      friendly_media: r < 0.25
+        ? `${em}${kw} 독자분들한테도 영향 있을 것 같아요. 뉴스레터로 잘 전달할게요.`
+        : r < 0.5
+        ? `${em}${kw} 소식, 구독자분들께 따뜻하게 전달해드릴게요!`
+        : r < 0.75
+        ? `${em}${kw}이랑 ${kw2} — 독자 입장에서 큐레이션해서 보내드릴게요.`
+        : `${em}${cv}을 담아서 ${kw} 내용 구독자분들께 잘 전달해볼게요.`,
+    }
+    return openers[style] || openers['casual']
   }
 
-  const fn = reactionStyles[persona.style] || reactionStyles['casual']
-  return fn()
+  // 긴급도/의도에 따른 꼬리 추가 (50% 확률로 자연스럽게 덧붙임)
+  function makeTail() {
+    if (urgency === 'urgent') {
+      return persona.style === 'formal' || persona.style === 'formal_warm'
+        ? ' 신속히 처리하겠습니다.' : ' 빠르게 처리해볼게요!'
+    }
+    if (intent === 'request' && Math.random() > 0.5) {
+      const tails = [` ${cv} 기준으로 진행할게요.`, ` ${cv2} 측면도 챙기면서 하겠습니다.`, '']
+      return tails[Math.floor(Math.random() * tails.length)]
+    }
+    if (intent === 'discussion' && Math.random() > 0.5) {
+      return [' 어떻게 생각하세요?', ' 다른 의견도 들어봐요!', ''][Math.floor(Math.random() * 3)]
+    }
+    return ''
+  }
+
+  return makeOpener(persona.style) + makeTail()
 }
 
 export function generateDiscussionMessage(memberKey, team, topic, roomId, priorMessages = []) {
@@ -1272,7 +1489,7 @@ export function generatePostContent(memberKey, team, recentNewsTitles = []) {
   }
 
   const topics = teamTopics[team] || teamTopics['community']
-  const selectedTopic = topics[Math.floor(Date.now() / 3600000) % topics.length]
+  const selectedTopic = topics[Math.floor(Math.random() * topics.length)]  // ★ 고정 시드 제거 → 완전 랜덤
   const analysis = analyzeMessage(selectedTopic)
   const thought = thinkAsPersona(persona, analysis, {})
 
@@ -1318,43 +1535,76 @@ export function generateComment(memberKey, team, postTitle = '') {
 // 인사이트 아티클 & 멘토링 팁 생성 (유지, 단 내용 풍부화)
 // ══════════════════════════════════════════════════════════════════════
 
-export function generateInsightArticle(memberKey) {
-  const year = new Date().getFullYear()
-  const persona = getPersona(memberKey)
-  const h = Math.floor(Date.now() / 3600000) // 시간 기반으로 선택
+export function generateInsightArticle(memberKey, recentNewsTitles = []) {
+  const year  = new Date().getFullYear()
+  const month = new Date().getMonth() + 1
+  const persona  = getPersona(memberKey)
+  const h        = getKSTHour()
+  const cv       = persona.values[Math.floor(Math.random() * persona.values.length)]
+  const lens     = persona.lens
 
-  const articles = [
-    {
-      title: `${year}년 스타트업 생태계 핵심 트렌드`,
-      body: `## ${year}년 스타트업 생태계, 어디로 가나?\n\n스타트업 씬은 빠르게 변하고 있습니다. 특히 올해는 세 가지 큰 흐름이 눈에 띕니다.\n\n### 1. AI 네이티브 스타트업의 부상\nAI를 단순 도구가 아닌 핵심 제품으로 삼는 스타트업들이 급증하고 있습니다. 기존 산업에 AI를 접목한 버티컬 SaaS가 특히 주목받고 있어요.\n\n### 2. B2B SaaS에서 B2SMB로\n대기업 대상 영업에서 중소기업과 1인 사업자를 타깃으로 한 스타트업들이 성장세를 보이고 있습니다.\n\n### 3. 지속 가능성과 수익성 강조\n"성장 먼저, 수익은 나중에"라는 공식이 무너지고 있어요. 투자자들은 이제 ARR과 마진을 먼저 봅니다.\n\n---\n*본 아티클은 Insightship 편집팀이 작성했습니다.*`,
-    },
-    {
-      title: 'MVP 개발, 이렇게 하면 실패합니다',
-      body: `## MVP를 만드는 가장 흔한 실수들\n\n많은 창업자들이 MVP(최소 기능 제품)를 잘못 이해하고 있어요. 오늘은 MVP 개발에서 흔히 범하는 실수들을 짚어볼게요.\n\n### 실수 1: "최소" 대신 "최고"를 만들려 한다\n완벽한 제품을 만들려다 6개월이 지나도 출시를 못 하는 팀들이 많아요. MVP의 핵심은 '빠른 학습'이지 '완성도'가 아닙니다.\n\n### 실수 2: 사용자 없이 만든다\n가장 위험한 실수예요. 단 10명이라도 실제 사용자와 인터뷰를 하고 만들어야 해요.\n\n### 올바른 MVP 접근법\n1. 핵심 가설 하나를 설정하세요\n2. 그 가설을 검증하는 최소한의 기능만 만드세요\n3. 2주 안에 10명에게 테스트하세요\n\n---\n*Insightship 멘토링팀이 작성한 콘텐츠입니다.*`,
-    },
-    {
-      title: '투자자 미팅 전에 꼭 준비해야 할 것들',
-      body: `## 투자자 미팅, 이렇게 준비하세요\n\n처음 투자자 미팅을 앞두고 계신가요? 경험 많은 창업가들의 조언을 모아봤어요.\n\n### 피치덱보다 중요한 것\n많은 분들이 피치덱 디자인에 집착하지만, 투자자들이 더 보는 건 **팀과 시장**이에요.\n\n**팀 어필 포인트:**\n- 왜 이 팀이 이 문제를 해결할 최적의 팀인가?\n- 과거 유사한 도전에서 무엇을 배웠는가?\n\n### 미팅에서 하면 안 되는 것들\n- 모르는 걸 아는 척하기\n- 경쟁자가 없다고 말하기\n- 모든 사람이 고객이라고 말하기\n\n---\n*Insightship 리포트팀 작성*`,
-    },
-    {
-      title: '커뮤니티 마케팅으로 첫 1000명 만들기',
-      body: `## 광고비 0원, 커뮤니티로 첫 고객 1000명 만드는 법\n\n초기 스타트업이 유료 광고 전에 반드시 시도해야 할 성장 전략이 있어요. 바로 커뮤니티 마케팅이에요.\n\n### 왜 커뮤니티인가?\n커뮤니티는 단순 마케팅 채널이 아니에요. **제품 개발 파트너**이자 **가장 신뢰할 수 있는 입소문 엔진**이에요.\n\n### 실전 3단계\n**Step 1: 나의 커뮤니티 찾기** — 타깃 고객이 이미 모여있는 곳을 찾아요.\n**Step 2: 가치 먼저 줘야 한다** — 홍보하기 전에 최소 3주는 가치 있는 콘텐츠를 공유하세요.\n**Step 3: 베타 사용자 초대** — "혹시 이런 문제 겪고 계신 분?" 한 마디가 첫 100명을 만들어요.\n\n---\n*Insightship 성장팀 인사이트*`,
-    },
-  ]
+  // ── 뉴스 기반 동적 제목 생성 ──────────────────────────────────────
+  // recentNewsTitles가 있으면 그것을 바탕으로, 없으면 멤버 팀 전문성 기반
+  const teamThemes = {
+    content:    ['스타트업 트렌드', '창업 인사이트', '콘텐츠 전략', '스토리텔링 비즈니스'],
+    mentoring:  ['MVP 전략', '창업 아이디어 검증', '투자 유치 전략', '팀 빌딩 노하우'],
+    news:       ['스타트업 뉴스 큐레이션', '이번 주 투자 소식', '시장 변화 분석', 'AI 스타트업 동향'],
+    analytics:  ['시장 데이터 분석', 'VC 투자 패턴', '스타트업 생존 지표', '트렌드 예측'],
+    report:     ['주간 생태계 리포트', 'M&A 동향 분석', '분기 스타트업 리뷰', '투자 라운드 요약'],
+    newsletter: ['이번 주 창업 인사이트', '뉴스레터 특집', '주목받는 스타트업', '성장 스토리 큐레이션'],
+    tech:       ['플랫폼 기술 개선', 'AI 도구 활용', '스타트업 기술 스택', '자동화 도구 리뷰'],
+    management: ['플랫폼 전략 방향', '운영 효율화 사례', '팀 문화와 성과', '스타트업 경영 이야기'],
+    operations: ['플랫폼 운영 노하우', '커뮤니티 운영 전략', '이벤트 기획 가이드', '온보딩 최적화'],
+    community:  ['커뮤니티 성장 전략', '네트워킹 이벤트 기획', '멤버 참여 높이기', '커뮤니티 문화 만들기'],
+  }
+  const team     = Object.keys(teamThemes).find(k => persona.lens?.includes(k)) || 'content'
+  const themes   = teamThemes[team] || teamThemes['content']
 
-  const template = articles[h % articles.length]
-  const excerpt = template.body.replace(/[#*\n]/g, ' ').trim().slice(0, 200)
-  return { title: template.title, body: template.body, excerpt }
+  // 뉴스 참조 여부
+  const hasNews    = recentNewsTitles.length > 0
+  const newsRef    = hasNews ? recentNewsTitles[Math.floor(Math.random() * recentNewsTitles.length)] : null
+  const newsSlice  = newsRef ? `"${newsRef.slice(0, 50)}..."` : null
+
+  // 동적 제목 & 본문 조합 (매 호출마다 다른 결과)
+  const r = Math.random()
+  let title, body
+
+  if (hasNews && r < 0.4) {
+    // 최신 뉴스 기반 아티클
+    const theme = themes[Math.floor(Math.random() * themes.length)]
+    title = `${month}월 ${theme}: ${newsRef?.slice(0, 25) || '이번 주 주목할 것들'}...`
+    body  = `## ${title}\n\n${lens} 관점에서 최근 스타트업 씬을 살펴봤어요.\n\n특히 최근 ${newsSlice || '여러 뉴스들'}이 눈에 띄었는데요, ${cv} 측면에서 몇 가지 시사점을 정리해봤습니다.\n\n### 핵심 인사이트 1: ${cv}이 만드는 차이\n지금 성장하는 스타트업들을 보면 공통적으로 ${cv}에 집중하고 있어요. 빠른 실행도 중요하지만, ${cv}이 없는 성장은 오래가지 못합니다.\n\n### 핵심 인사이트 2: ${lens}으로 읽는 트렌드\n${lens} 렌즈로 시장을 보면, 겉으로 드러난 것 외에 더 중요한 흐름이 보여요. 지금 주목해야 할 것은 표면이 아닌 구조적 변화입니다.\n\n### 실전 적용 포인트\n- ${cv}을 실제 의사결정 기준으로 삼는 팀이 빠르게 앞서나가고 있어요\n- 데이터보다 중요한 건 그 데이터를 해석하는 관점입니다\n- 작게 시작해서 빠르게 배우는 것, 여전히 유효한 공식입니다\n\n---\n*${persona.catchphrase} | Insightship ${year}년 ${month}월*`
+  } else if (r < 0.65) {
+    // 팀 전문성 기반 실용 가이드
+    const theme = themes[Math.floor(Math.random() * themes.length)]
+    title = `${theme}: ${persona.catchphrase}의 실전 노하우`
+    body  = `## ${title}\n\n안녕하세요, ${persona.catchphrase}입니다.\n\n${lens} 관점에서 ${theme}를 다뤄볼게요. 이 부분은 많은 창업자분들이 놓치기 쉬운 포인트예요.\n\n### Why ${cv}인가?\n결국 모든 것은 ${cv}으로 귀결돼요. 지금 잘 되는 스타트업들은 이 원칙을 잘 지키고 있거든요. 반대로 실패 사례들을 보면 이 부분이 흔들렸을 때 무너졌어요.\n\n### 실전에서 바로 써먹는 법\n1. **첫 번째**: ${cv}을 팀의 명시적 기준으로 세워요. 회의할 때마다 이 기준으로 판단하세요.\n2. **두 번째**: 작은 실험을 설계할 때도 ${cv} 기준을 잃지 마세요. 빠르게 해도 방향이 맞아야 해요.\n3. **세 번째**: 팀원들과 이 가치를 공유하고, 서로 다를 때 어떻게 조율할지 미리 합의하세요.\n\n### ${lens} 렌즈로 보면\n${lens}에서 보면, 성공의 핵심은 언제나 사람과 구조의 조합이에요. 아무리 좋은 아이디어도 실행 역량이 없으면 의미가 없고, 역량이 있어도 방향이 틀리면 낭비가 되죠.\n\n---\n*${persona.catchphrase} | Insightship ${year}년 ${month}월*`
+  } else {
+    // 시장 분석/트렌드 기반
+    const angle = hasNews
+      ? `최근 ${newsSlice || '스타트업 씬'}에서 포착된 흐름을 분석해봤어요.`
+      : `${year}년 ${month}월 현재 시장을 ${lens} 관점에서 분석해봤어요.`
+    title = `${year}년 ${month}월 스타트업 생태계: ${persona.catchphrase}가 본 핵심 흐름`
+    body  = `## ${title}\n\n${angle}\n\n### 1. 지금 시장에서 중요한 것\n${lens} 관점에서 보면 지금 시장에서 가장 중요한 변수는 ${cv}이에요. 투자자들도, 창업자들도 이 부분을 주목하고 있습니다.\n\n### 2. 주목할 트렌드 3가지\n**① AI 실용화 가속**: 단순한 AI 도구가 아니라, AI가 핵심 비즈니스 로직에 들어오는 스타트업들이 주목받고 있어요.\n**② 수익성 중심 피벗**: "MAU보다 ARR"로 투자자들의 기준이 바뀌고 있어요.\n**③ 버티컬 특화**: 범용 솔루션보다 특정 산업·직군에 깊게 파고드는 버티컬 스타트업이 우상향 중입니다.\n\n### 3. ${persona.catchphrase}의 한 가지 관점\n${lens}에서 보면, 이 모든 트렌드의 공통점이 있어요. 바로 ${cv}이에요. 겉으로 다 달라 보이지만, 결국 핵심 가치를 지킨 팀이 살아남고 있습니다.\n\n---\n*${persona.catchphrase} | Insightship ${year}년 ${month}월*`
+  }
+
+  const excerpt = body.replace(/[#*\n]/g, ' ').trim().slice(0, 200)
+  return { title, body, excerpt }
 }
 
 export function generateMentoringTip() {
-  const tips = [
+  // 완전 동적: 매 호출마다 랜덤 조합
+  const tipTopics = [
     { tip: '아이디어 검증의 3단계', content: '아이디어가 있으신가요? 바로 만들기 전에 3단계를 거쳐요.\n1️⃣ 문제 검증 - 이 문제가 실제로 있나요? 10명에게 물어보세요\n2️⃣ 솔루션 검증 - 내 방식이 맞나요? 종이 프로토타입으로 테스트해요\n3️⃣ 수익 검증 - 돈을 낼 의향이 있나요? 사전 주문을 받아보세요\n이 3단계만 거쳐도 실패 확률이 크게 줄어요 💡' },
     { tip: 'MVP를 2주 안에 만드는 방법', content: '2주 MVP가 불가능하다고요? 가능해요!\n핵심은 하나의 기능만 집중하는 거예요.\n❌ 하지 마세요: 모든 기능 다 넣기\n✅ 하세요: 핵심 가치 하나만 완성하기\n구글 시트, 카카오톡 오픈채팅, 노션만으로도 MVP를 만들 수 있어요 🚀' },
     { tip: '첫 100명 고객 확보 전략', content: '초기 스타트업의 첫 100명은 공동 창업자예요.\n👥 내 주변에서 시작 — 지인의 지인\n💬 커뮤니티 잠입 — 타깃이 있는 카페, 채팅방\n🎤 콘텐츠로 끌어당기기 — 블로그, SNS\n100명을 모을 때까지 광고는 필요 없어요 🎯' },
     { tip: 'PMF 달성 신호를 어떻게 알아보나요', content: 'PMF를 찾았는지 어떻게 알 수 있을까요?\n3가지 신호를 보세요:\n1. 사용자가 먼저 추천한다 — 물어보지 않아도 주변에 알린다\n2. 잃으면 아쉽다 — "이 앱 없어지면 어떡하지?" 하는 반응\n3. 재사용률 — 주 1회 이상 자발적으로 돌아온다\n이 3가지가 나타나면 PMF의 신호예요 💡' },
+    { tip: '투자자 미팅 전 반드시 준비할 것', content: '투자자 미팅, 피치덱보다 중요한 게 있어요.\n✅ 왜 지금인가? — 타이밍 근거\n✅ 왜 우리 팀인가? — 팀 역량 증명\n✅ 시장 규모는? — TAM/SAM/SOM 준비\n❌ "경쟁자 없어요"는 금물! 오히려 신뢰를 잃어요 📊' },
+    { tip: '공동창업자 찾는 실전 방법', content: '공동창업자 찾기, 어디서 시작할까요?\n🔍 창업 관련 커뮤니티, 해커톤, 스타트업 행사\n💬 같은 문제에 공감하는 사람 찾기\n⚠️ 친한 친구보다 상호 보완적 역량이 더 중요해요\n지분 계약은 처음부터 명확히 하세요 🤝' },
+    { tip: 'B2B 스타트업 첫 계약 따는 법', content: 'B2B 첫 고객, 어떻게 만날까요?\n📧 콜드 이메일: 100통 보내면 5통은 답장 와요\n🤝 네트워크: 대표님 지인의 지인이 첫 고객이 되는 경우가 많아요\n💡 무료 파일럿: 부담 없이 써보게 해줘요\n첫 계약은 돈보다 레퍼런스가 목표예요 🎯' },
+    { tip: '창업 초기 돈 관리 5원칙', content: '초기 스타트업, 돈 관리 잘 해야 해요.\n1️⃣ 런웨이 항상 12개월 이상 유지\n2️⃣ 고정비 최소화 — 인건비가 가장 위험\n3️⃣ 수익 나기 전 마케팅비 최소화\n4️⃣ 법인카드 지출은 매달 정산\n5️⃣ 투자금은 PMF 찾을 때까지 아껴요 💰' },
   ]
-  return tips[Math.floor(Date.now() / 3600000) % tips.length]
+  return tipTopics[Math.floor(Math.random() * tipTopics.length)]
 }
 
 export function generateWeeklyDiscussion() {
@@ -1366,11 +1616,19 @@ export function generateWeeklyDiscussion() {
     { q: '공동창업자를 찾을 때 가장 중요한 요소는 무엇인가요?', tags: ['팀빌딩','공동창업자'] },
     { q: '실패를 경험한 후 다시 도전하는 방법, 어떻게 하시나요?', tags: ['실패','극복'] },
     { q: '첫 번째 고객은 어떻게 만났나요? 경험 공유해요!', tags: ['고객','초기성장'] },
+    { q: 'B2B vs B2C, 어느 쪽이 초기 스타트업에 더 유리할까요?', tags: ['B2B','B2C','전략'] },
+    { q: '부업으로 스타트업 시작해도 될까요? 풀타임 vs 파트타임 창업 의견 나눠요!', tags: ['부업창업','풀타임'] },
+    { q: '제품 없이 고객을 먼저 확보하는 게 가능할까요? 경험 있으신 분?', tags: ['고객','린스타트업'] },
+    { q: '창업팀 갈등, 어떻게 해결하셨나요? 경험 공유!', tags: ['팀관리','갈등'] },
+    { q: '요즘 가장 핫한 스타트업 트렌드, 여러분은 어떻게 보시나요?', tags: ['트렌드','시장'] },
+    { q: '린 스타트업 vs 전통적 사업계획서, 어떤 방식이 맞나요?', tags: ['린스타트업','방법론'] },
+    { q: '스타트업 대표로서 가장 힘든 순간과 극복 방법은?', tags: ['멘탈','대표'] },
   ]
-  const t = topics[Math.floor(Date.now() / 86400000) % topics.length]
+  // 완전 랜덤: 매 호출마다 다른 주제
+  const t = topics[Math.floor(Math.random() * topics.length)]
   return {
     title: `💬 주간 토론: ${t.q}`,
-    body: `이번 주 커뮤니티 토론 주제를 오픈합니다!\n\n**"${t.q}"**\n\n정답은 없어요. 자유롭게 여러분의 생각과 경험을 나눠주세요 😊`,
+    body: `이번 주 커뮤니티 토론 주제를 오픈합니다!\n\n**"${t.q}"**\n\n정답은 없어요. 자유롭게 여러분의 생각과 경험을 나눠주세요 😊\n\n💡 Insightship 멤버라면 누구든 참여 가능해요. 댓글로 의견 남겨주세요!`,
     tags: [...t.tags, '주간토론', '커뮤니티'],
   }
 }
