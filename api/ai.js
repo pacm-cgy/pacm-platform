@@ -21,7 +21,7 @@ import {
   generateWeeklyDiscussion,
   generateMentoringTip,
   generateInsightArticle,
-} from './staff-brain.js'
+} from './_staff-brain.js'
 export const config = { runtime: 'edge', maxDuration: 60 }
 
 

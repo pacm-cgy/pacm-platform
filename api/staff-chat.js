@@ -21,7 +21,7 @@ import {
   pickChatMessage,
   generateConversationStarter,
   generateDiscussionMessage,
-} from './staff-brain.js'
+} from './_staff-brain.js'
 export const config = { maxDuration: 30 }
 
 // ══════════════════════════════════════════════════════════════════════
