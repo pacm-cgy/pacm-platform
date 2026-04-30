@@ -16,18 +16,18 @@
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
 // runtime: Node.js serverless
-export const config = { maxDuration: 30 }
-
-// ══════════════════════════════════════════════════════════════════════
-// Top-level imports (ES Module 규칙: 반드시 파일 최상단)
-// ai-engine.js 통합 후 staff-brain.js 직접 사용
-// ══════════════════════════════════════════════════════════════════════
 import {
   getPersona,
   pickChatMessage,
   generateConversationStarter,
   generateDiscussionMessage,
 } from './staff-brain.js'
+export const config = { maxDuration: 30 }
+
+// ══════════════════════════════════════════════════════════════════════
+// Top-level imports (ES Module 규칙: 반드시 파일 최상단)
+// ai-engine.js 통합 후 staff-brain.js 직접 사용
+// ══════════════════════════════════════════════════════════════════════
 
 // ── 입력값 sanitize (XSS / SQL Injection 방어) ──────────────────────
 const SAFE_KEY_RE  = /^[a-z0-9_]{1,64}$/i

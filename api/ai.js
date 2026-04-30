@@ -5,8 +5,6 @@
  *   /api/ai-team, /api/ai-workers, /api/ai-platform-operator
  *   /api/ai-content-writer, /api/badge-system
  */
-export const config = { runtime: 'edge', maxDuration: 60 }
-
 import {
   getKSTHour,
   getActivityLevel,
@@ -24,6 +22,8 @@ import {
   generateMentoringTip,
   generateInsightArticle,
 } from './staff-brain.js'
+export const config = { runtime: 'edge', maxDuration: 60 }
+
 
 
 const handleAdminAi = (() => {
