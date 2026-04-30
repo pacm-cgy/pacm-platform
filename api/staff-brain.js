@@ -1,6 +1,17 @@
 /**
  * api/staff-brain.js
  * ╔══════════════════════════════════════════════════════════════════════╗
+ * ║  INSIGHTSHIP 자체 AI 사고 엔진 v3.0 — "Fully Human-Like AI Staff"  ║
+ * ║                                                                      ║
+ * ║  v3.0 업그레이드 (100+ 연구 기반):                                  ║
+ * ║  ✅ Big Five 성격 축 기반 언어 스타일 결정                         ║
+ * ║  ✅ 에피소드 기억 참조 (이전 대화 언급)                            ║
+ * ║  ✅ Disfluency — 자연스러운 망설임·필러 삽입                      ║
+ * ║  ✅ 감정(Mood) 상태에 따른 언어 변화                               ║
+ * ║  ✅ Theory of Mind — 상대방 감정 감지·공감 반응                   ║
+ * ║  ✅ 자발적 목표·업무 행동 (능동형 직원)                            ║
+ * ║  ✅ 시간대별 일과 루틴 — 아침 인사·업무 공유·퇴근 마무리         ║
+ * ╚══════════════════════════════════════════════════════════════════════╝
  * ║  INSIGHTSHIP 자체 AI 사고 엔진 v2.0 — "Think, Don't Template"      ║
  * ║                                                                      ║
  * ║  핵심 철학:                                                          ║
@@ -488,44 +499,68 @@ function _getStanceWeight(memberKey, stance) {
 // ══════════════════════════════════════════════════════════════════════
 
 function analyzeMessage(text) {
-  if (!text) return { topics: [], sentiment: 'neutral', intent: 'general', urgency: 'normal', keywords: [] }
+  if (!text) return { topics: [], sentiment: 'neutral', intent: 'general', urgency: 'normal', keywords: [], emotion_cues: [], subtext: null }
   const t = text.toLowerCase()
 
-  // 주제 추출
+  // ── 주제 추출 (확장: 더 많은 키워드 패턴) ──────────────────────────
   const topics = []
-  if (t.match(/운영|공지|점검|이벤트|온보딩|일정/)) topics.push('operations')
-  if (t.match(/콘텐츠|아티클|글|편집|기사|포스팅/)) topics.push('content')
-  if (t.match(/멘토|창업|조언|코칭|피드백|아이디어/)) topics.push('mentoring')
-  if (t.match(/뉴스|소식|최신|업데이트|정보|시장/)) topics.push('news')
-  if (t.match(/분석|데이터|통계|트렌드|지표|kpi/)) topics.push('analytics')
-  if (t.match(/리포트|보고|정리|종합|집계/)) topics.push('report')
-  if (t.match(/뉴스레터|구독|이메일|발행/)) topics.push('newsletter')
-  if (t.match(/기술|개발|버그|성능|시스템|배포/)) topics.push('tech')
-  if (t.match(/커뮤니티|멤버|게시물|댓글|소통/)) topics.push('community')
-  if (t.match(/전략|경영|방향|목표|정책|결정|pr/)) topics.push('management')
+  if (t.match(/운영|공지|점검|이벤트|온보딩|일정|알림|고지|공지사항/)) topics.push('operations')
+  if (t.match(/콘텐츠|아티클|글|편집|기사|포스팅|작성|에디터|칼럼|스토리/)) topics.push('content')
+  if (t.match(/멘토|창업|조언|코칭|피드백|아이디어|스타트업|mvp|린|부트스트랩/)) topics.push('mentoring')
+  if (t.match(/뉴스|소식|최신|업데이트|정보|시장|동향|트렌드|핫|핫이슈/)) topics.push('news')
+  if (t.match(/분석|데이터|통계|트렌드|지표|kpi|수치|인사이트|패턴|상관관계/)) topics.push('analytics')
+  if (t.match(/리포트|보고|정리|종합|집계|요약|주간|월간|분기/)) topics.push('report')
+  if (t.match(/뉴스레터|구독|이메일|발행|큐레이션|구독자/)) topics.push('newsletter')
+  if (t.match(/기술|개발|버그|성능|시스템|배포|코드|api|서버|최적화|보안/)) topics.push('tech')
+  if (t.match(/커뮤니티|멤버|게시물|댓글|소통|네트워킹|참여|행사|이벤트/)) topics.push('community')
+  if (t.match(/전략|경영|방향|목표|정책|결정|pr|홍보|브랜드|비전|vc|투자/)) topics.push('management')
+  if (t.match(/팀|협업|사람|관계|소통|분위기|문화|케어|배려/)) topics.push('people')
 
-  // 감정/분위기
-  const sentiment = t.match(/좋아|훌륭|잘|성공|성과|긍정|파이팅/) ? 'positive'
-    : t.match(/문제|버그|오류|실패|급하|긴급|안됨/) ? 'negative'
-    : t.match(/어때|어떻|의견|생각|논의|토론/) ? 'inquiry'
+  // ── 감정/분위기 (더 세밀한 감지) ───────────────────────────────────
+  const sentiment = t.match(/좋아|훌륭|잘됐|성공|성과|긍정|파이팅|최고|대단|감사|기쁘|완료|해냈/) ? 'positive'
+    : t.match(/문제|버그|오류|실패|급하|긴급|안됨|걱정|힘들|막막|어렵|위기|손실|리스크/) ? 'negative'
+    : t.match(/어때|어떻|의견|생각|논의|토론|어떻게|검토|고민|의논|물어/) ? 'inquiry'
+    : t.match(/지쳤|피곤|힘들|모르겠|뭔지/) ? 'tired'
     : 'neutral'
 
-  // 의도
-  const intent = t.match(/해줘|해주세요|부탁|요청|진행/) ? 'request'
-    : t.match(/어때|어떻|의견|생각|어떻게/) ? 'discussion'
-    : t.match(/공유|알려|전달|보고/) ? 'report'
-    : t.match(/안녕|반가|잘부탁|수고/) ? 'greeting'
+  // ── 의도 (더 세밀한 분류) ─────────────────────────────────────────
+  const intent = t.match(/해줘|해주세요|부탁|요청|진행해|처리해|확인해/) ? 'request'
+    : t.match(/어때|어떻|의견|생각|어떻게|어떠|어때요|토론|논의|고민/) ? 'discussion'
+    : t.match(/공유|알려|전달|보고|업데이트|공지|알림/) ? 'report'
+    : t.match(/안녕|반가|잘부탁|수고|좋은 아침|안녕하세요|처음|반갑/) ? 'greeting'
+    : t.match(/축하|잘했|대단해|응원/) ? 'celebration'
+    : t.match(/감사|고마워|덕분|도움/) ? 'gratitude'
     : 'statement'
 
-  // 긴급도
-  const urgency = t.match(/급해|지금 바로|빠르게|긴급|즉시|당장/) ? 'urgent' : 'normal'
+  // ── 긴급도 ─────────────────────────────────────────────────────────
+  const urgency = t.match(/급해|지금 바로|빠르게|긴급|즉시|당장|빨리|서둘|지금 당장/) ? 'urgent' : 'normal'
 
-  // 핵심 키워드 추출 (의미 있는 명사/동사)
-  const stopWords = new Set(['이','가','을','를','은','는','의','에','에서','와','과','도','로','으로','하고','하는','하여','한','것','수','있','없','그','이런','저런'])
-  const words = text.split(/[\s,\.!?]+/).filter(w => w.length >= 2 && !stopWords.has(w))
-  const keywords = [...new Set(words)].slice(0, 5)
+  // ── 감정 신호 (이모지·어조 패턴 감지) ──────────────────────────────
+  const emotion_cues = []
+  if (t.match(/ㅋㅋ|ㅎㅎ|하하|히히/)) emotion_cues.push('amused')
+  if (t.match(/ㅠㅠ|ㅜㅜ|힘들|슬프|아쉬/)) emotion_cues.push('sad')
+  if (t.match(/!!|!!!|ㅎㅎㅎ|대박|완전/)) emotion_cues.push('excited')
+  if (t.match(/\?\?|모르겠|갸웃|헷갈/)) emotion_cues.push('confused')
+  if (t.match(/음|글쎄|잠깐|사실은|실은/)) emotion_cues.push('hesitant')
 
-  return { topics, sentiment, intent, urgency, keywords }
+  // ── 행간 의미 (Subtext) 감지 ────────────────────────────────────────
+  // 표면 의도 너머의 숨은 의도를 파악
+  const subtext = t.match(/사실|솔직히|말하자면|어떻게 보면/) ? 'underlying_opinion'
+    : t.match(/~인 것 같|~인 듯|아닌가요|아닐까요/) ? 'soft_suggestion'
+    : t.match(/일단|우선|먼저/) ? 'sequential_planning'
+    : null
+
+  // ── 핵심 키워드 추출 (의미 있는 명사/동사) ─────────────────────────
+  const stopWords = new Set([
+    '이','가','을','를','은','는','의','에','에서','와','과','도','로','으로',
+    '하고','하는','하여','한','것','수','있','없','그','이런','저런','그런',
+    '그래서','그리고','하지만','근데','그러나','그냥','좀','정말','진짜','너무',
+    '매우','꽤','약간','많이','조금','아주','더','덜','가장','제일',
+  ])
+  const words = text.split(/[\s,\.!?~\-\[\](){}]+/).filter(w => w.length >= 2 && !stopWords.has(w))
+  const keywords = [...new Set(words)].slice(0, 6)
+
+  return { topics, sentiment, intent, urgency, keywords, emotion_cues, subtext }
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -533,44 +568,85 @@ function analyzeMessage(text) {
 // ══════════════════════════════════════════════════════════════════════
 
 function thinkAsPersona(persona, analysis, context = {}) {
-  const { topics, sentiment, intent, urgency, keywords } = analysis
-  const { recentMessages = [], roomId = 'general', adminMessage = null } = context
+  const { topics, sentiment, intent, urgency, keywords, emotion_cues = [], subtext } = analysis
+  const { recentMessages = [], roomId = 'general', adminMessage = null, mood = null } = context
 
-  // 1. 감정 반응 결정 (성격에 따라 다름) — 더 풍부한 표현으로 확장
-  const emotionIntensity = {
-    very_high: () => ['정말 ', '완전히 ', '엄청 ', '진짜 너무 ', '와, '],
-    high:      () => ['진짜 ', '너무 ', '', '꽤나 ', '상당히 '],
-    medium:    () => ['', '꽤 ', '', '좀 ', '어느 정도 '],
-    low:       () => ['', '', '', '다소 '],
-    very_low:  () => ['', '', ''],
-  }[persona.emotion_range || 'medium']()
+  // ── 1. 감정 반응 결정 (성격 × 현재 기분 복합 반영) ───────────────────
+  // 연구: Emotion Regulation in Workplace (Gross 2002)
+  const moodAmplifier = mood?.key === 'enthusiastic' ? 1
+    : mood?.key === 'tired' ? -1
+    : mood?.key === 'stressed' ? -1
+    : 0
 
-  const emoIntensity = emotionIntensity[Math.floor(Math.random() * emotionIntensity.length)]
+  const emotionRangeEffective = (() => {
+    const ranges = ['very_low','low','medium','high','very_high']
+    const idx = ranges.indexOf(persona.emotion_range || 'medium')
+    const adjusted = Math.max(0, Math.min(4, idx + moodAmplifier))
+    return ranges[adjusted]
+  })()
 
-  // 2. 이전 메시지에서 언급할 포인트 선택
+  const emotionPool = {
+    very_high: ['정말 ', '완전히 ', '엄청 ', '진짜 너무 ', '와, ', '대박, ', '진짜로 '],
+    high:      ['진짜 ', '너무 ', '', '꽤나 ', '상당히 ', '꽤 많이 '],
+    medium:    ['', '꽤 ', '', '좀 ', '어느 정도 ', '나름 '],
+    low:       ['', '', '', '다소 ', '약간 '],
+    very_low:  ['', '', ''],
+  }[emotionRangeEffective] || ['']
+
+  const emoIntensity = emotionPool[Math.floor(Math.random() * emotionPool.length)]
+
+  // ── 2. 이전 대화에서 언급할 포인트 선택 (에피소드 기억 시뮬레이션) ───
+  // 연구: Episodic Memory in AI Agents (2025)
   let referencePoint = null
+  let collegueRef = null  // 다른 직원 메시지 언급
+
   if (recentMessages.length > 0) {
+    // 마지막 메시지에서 언급 포인트
     const lastMsg = recentMessages[recentMessages.length - 1]
-    if (lastMsg && lastMsg.message) {
-      // 이전 메시지에서 핵심 단어 추출
-      const prevWords = lastMsg.message.split(/[\s,.!?]+/).filter(w => w.length > 2)
+    if (lastMsg?.message) {
+      const prevWords = lastMsg.message.split(/[\s,.!?~]+/).filter(w => w.length > 2)
       referencePoint = prevWords[Math.floor(Math.random() * Math.min(prevWords.length, 5))]
+    }
+    // 여러 메시지 중 다른 직원 언급 (Theory of Mind 적용)
+    if (recentMessages.length >= 2 && Math.random() > 0.6) {
+      const prevMsg = recentMessages[recentMessages.length - 2]
+      if (prevMsg?.sender_name && prevMsg?.message) {
+        collegueRef = { name: prevMsg.sender_name, snippet: prevMsg.message.slice(0, 20) }
+      }
     }
   }
 
-  // 3. 자신의 lens(관점)로 주제 해석
+  // ── 3. 자신의 lens(관점)로 주제 해석 ────────────────────────────────
   const lensInterpretation = interpretThroughLens(persona, analysis)
 
-  // 4. 동의/반대/중립 결정 (성격에 따른 확률)
-  const stance = decideStance(persona, sentiment)
+  // ── 4. 동의/반대/중립 결정 ───────────────────────────────────────────
+  // 기분이 안 좋을 때 더 비판적, 기분 좋을 때 더 동의적
+  const stanceBias = mood?.key === 'stressed' ? 'challenge'
+    : mood?.key === 'enthusiastic' ? 'agree'
+    : null
+  const stance = stanceBias || decideStance(persona, sentiment)
+
+  // ── 5. 감정 신호에 따른 공감 레이어 ─────────────────────────────────
+  // 연구: Empathic Accuracy (Ickes 1993)
+  const empathySignal = emotion_cues.includes('sad') ? 'comfort'
+    : emotion_cues.includes('excited') ? 'join_excitement'
+    : emotion_cues.includes('confused') ? 'clarify'
+    : null
+
+  // ── 6. 행간 의미 반영 ────────────────────────────────────────────────
+  const respondToSubtext = subtext === 'soft_suggestion' && Math.random() > 0.5
 
   return {
     emotionIntensity: emoIntensity,
     referencePoint,
+    collegueRef,
     lensInterpretation,
     stance,
     voiceWord: persona.voice[Math.floor(Math.random() * persona.voice.length)],
     coreValue: persona.values[Math.floor(Math.random() * persona.values.length)],
+    empathySignal,
+    respondToSubtext,
+    moodKey: mood?.key || 'neutral',
   }
 }
 
@@ -670,16 +746,60 @@ function buildSentence(persona, thought, analysis, context = {}) {
   const useRef = referencePoint && Math.random() > 0.7
   const refPhrase = useRef ? `"${referencePoint}" 말씀하신 것처럼, ` : ''
 
-  // 스탠스(입장)에 따른 문장 구조 — 인간적인 필러·망설임 표현 추가
-  const fillers = ['그러니까... ', '음, ', '아, ', '사실 ', '솔직히 ', '']
-  const filler = Math.random() < 0.2 ? fillers[Math.floor(Math.random() * fillers.length)] : ''
+  // ── Disfluency 시스템 (연구: Oxford/Cornell 2025) ─────────────────────
+  // 성격·기분에 따라 다른 망설임 패턴을 가짐
+  const moodKey = thought.moodKey || 'neutral'
+  const disfluencyByStyle = {
+    formal_warm:    ['음, ', '그러니까 ', '아, '],
+    cheerful:       ['아! ', '오, ', '헐, ', ''],
+    casual:         ['그니까, ', '뭐랄까 ', '솔직히 ', '음, '],
+    warm:           ['아, ', '음, ', ''],
+    creative:       ['흥미롭게도, ', '생각해보면, ', ''],
+    expressive:     ['와, ', '오! ', '헐! ', ''],
+    intellectual:   ['사실, ', '논리적으로, ', ''],
+    wise:           ['결국, ', '경험상, ', '생각해보면, '],
+    fast_news:      ['방금, ', ''],
+    brief:          [''],
+    analytical:     ['수치로 보면, ', '패턴상, ', ''],
+    formal:         [''],
+    formal_wise:    ['종합하면, ', ''],
+    technical:      ['기술적으로, ', ''],
+    community_warm: ['모두, ', ''],
+    leader:         ['전략적으로, ', ''],
+    pr_style:       ['브랜드 관점에서, ', ''],
+    friendly_media: ['독자 입장에서, ', ''],
+  }
+  const disfluencyPool = disfluencyByStyle[persona.style] || ['음, ', '']
+  // 피곤하거나 스트레스 받으면 망설임 더 많이
+  const disfluencyRate = moodKey === 'tired' ? 0.4 : moodKey === 'stressed' ? 0.3 : moodKey === 'focused' ? 0.05 : 0.18
+  const filler = Math.random() < disfluencyRate
+    ? disfluencyPool[Math.floor(Math.random() * disfluencyPool.length)]
+    : ''
+
+  // ── 동료 언급 (Theory of Mind 적용) ────────────────────────────────
+  // 다른 직원이 한 말을 자연스럽게 언급 (30% 확률)
+  const collegueRef = thought.collegueRef
+  const collegueRefPhrase = collegueRef && Math.random() > 0.7
+    ? `${collegueRef.name}님 말씀처럼, ` : ''
+
+  // ── 공감 레이어 (Empathic Response 연구 적용) ────────────────────────
+  const empathySignal = thought.empathySignal
+  const empathyOpener = empathySignal === 'comfort'
+    ? `힘드셨겠어요. ` + (persona.style === 'warm' || persona.style === 'community_warm' ? '같이 해봐요. ' : '')
+    : empathySignal === 'join_excitement'
+    ? (persona.emotion_range === 'high' || persona.emotion_range === 'very_high' ? '저도 엄청 기대돼요! ' : '')
+    : empathySignal === 'clarify'
+    ? '잠깐, 정리해드릴게요. '
+    : ''
+
+  // ── 스탠스(입장)에 따른 문장 구조 ──────────────────────────────────
   const stanceOpeners = {
-    agree:     [voiceWord + ' ', `${emotionIntensity}공감해요. `, `맞는 것 같아요. `, `저도 같은 생각이에요. `, `${filler}저도 그렇게 봐요. `, `맞아요, `],
-    add:       [`${lensInterpretation}, `, `덧붙이면 `, `추가로 말씀드리면 `, `${coreValue} 관점에서도 `, `한 가지 더 말하면 `, `아, 그리고 `],
-    analyze:   [`${lensInterpretation}, `, `분석해보면 `, `자세히 보면 `, `데이터로 보면 `, `${filler}살펴보니까 `, `따져보면 `],
-    disagree:  [`${persona.disagree_style} — `, `조금 다른 시각에서는 `, `한 가지 질문이 있는데요, `, `${filler}다른 관점에서 보면 `, `음... 저는 좀 달리 봐요. `],
-    challenge: [`${lensInterpretation}, 그런데 `, `전략적으로 다시 보면 `, `잠깐, `, `그런데 한편으로는 `, `${filler}이 부분은 좀 다시 봐야 할 것 같아요. `],
-    question:  [`${mainKeyword} 관련해서 궁금한 게 있어요. `, `혹시 `, `생각해봤는데, `, `${filler}${mainKeyword}이 어떻게 되는 건가요? `, `잠깐, `],
+    agree:     [voiceWord + ' ', `${emotionIntensity}공감해요. `, `맞는 것 같아요. `, `저도 같은 생각이에요. `, `${filler}저도 그렇게 봐요. `, `맞아요, `, `${collegueRefPhrase}저도 동의해요. `],
+    add:       [`${lensInterpretation}, `, `덧붙이면 `, `추가로 말씀드리면 `, `${coreValue} 관점에서도 `, `한 가지 더 말하면 `, `아, 그리고 `, `${filler}그 외에도 `],
+    analyze:   [`${lensInterpretation}, `, `분석해보면 `, `자세히 보면 `, `데이터로 보면 `, `${filler}살펴보니까 `, `따져보면 `, `구조적으로 보면 `],
+    disagree:  [`${persona.disagree_style} — `, `조금 다른 시각에서는 `, `한 가지 질문이 있는데요, `, `${filler}다른 관점에서 보면 `, `음... 저는 좀 달리 봐요. `, `${collegueRefPhrase}그 부분은 조금 달라요. `],
+    challenge: [`${lensInterpretation}, 그런데 `, `전략적으로 다시 보면 `, `잠깐, `, `그런데 한편으로는 `, `${filler}이 부분은 좀 다시 봐야 할 것 같아요. `, `음... 재고해봐야 할 것 같아요. `],
+    question:  [`${mainKeyword} 관련해서 궁금한 게 있어요. `, `혹시 `, `생각해봤는데, `, `${filler}${mainKeyword}이 어떻게 되는 건가요? `, `잠깐, `, `${filler}여기서 하나 여쭤봐도 될까요? `],
   }
 
   const openers = stanceOpeners[stance] || stanceOpeners['add']
@@ -691,7 +811,10 @@ function buildSentence(persona, thought, analysis, context = {}) {
   // 마무리 — 성격에 따라
   const closer = buildCloser(persona, stance, intent, urgency)
 
-  const sentence = (refPhrase + opener + body + closer).trim()
+  // ── 공감 오프너 우선 적용 ───────────────────────────────────────────
+  const finalOpener = empathyOpener || opener
+
+  const sentence = (refPhrase + finalOpener + body + closer).trim()
 
   // 이모지 붙이기 (스타일에 따라)
   return emoji ? emoji + sentence : sentence

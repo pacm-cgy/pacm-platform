@@ -119,9 +119,92 @@ const ROOMS = {
 
 // ══════════════════════════════════════════════════════════════════════
 // 자체 AI 엔진 — 채팅 메시지 생성 (외부 API 없음)
+// ai-engine.js 통합 후 staff-brain.js 직접 사용
 // ══════════════════════════════════════════════════════════════════════
 
-import { generateChat } from './ai-engine.js'
+import {
+  getPersona,
+  pickChatMessage,
+  generateConversationStarter,
+  generateDiscussionMessage,
+} from './staff-brain.js'
+
+// brain key 변환: ai_aria → ARIA, ai_ops_june → OPS_JUNE
+function _getBrainKey(senderUsername) {
+  if (!senderUsername) return null
+  return senderUsername.replace(/^ai_/, '').toUpperCase()
+}
+
+const _chatEngineHistory = new Map()
+const _ENGINE_HIST = 8
+
+function _chatFingerprint(text) {
+  if (!text) return ''
+  return text.replace(/[\s\W\u0000-\u00FF\u2600-\u27BF\uFE00-\uFEFF]/gu, '').slice(0, 25).toLowerCase()
+}
+
+function _isEngineRepeat(brainKey, msg) {
+  const fp = _chatFingerprint(msg)
+  if (!fp || fp.length < 4) return false
+  const hist = _chatEngineHistory.get(brainKey) || []
+  return hist.some(h => h.slice(0, 18) === fp.slice(0, 18))
+}
+
+function _rememberEngine(brainKey, msg) {
+  const fp = _chatFingerprint(msg)
+  if (!fp) return
+  const hist = _chatEngineHistory.get(brainKey) || []
+  hist.unshift(fp)
+  if (hist.length > _ENGINE_HIST) hist.length = _ENGINE_HIST
+  _chatEngineHistory.set(brainKey, hist)
+}
+
+const _BRAIN_TEAM_MAP = {
+  ARIA:'operations', OPS:'operations',
+  NOVA:'content',    CNT:'content',
+  LUMI:'mentoring',  MNT:'mentoring',
+  PULSE:'news',      NWS:'news',
+  TREND:'analytics', ANL:'analytics',
+  SAGE:'report',     RPT:'report',
+  ECHO:'newsletter', NWL:'newsletter',
+  LEARN:'tech',      TCH:'tech',
+  HANA:'community',  CMM:'community',
+  MAX:'management',  MGT:'management',
+}
+
+function generateChat(senderUsername, topic, room = 'general', recentMessages = []) {
+  const brainKey = _getBrainKey(senderUsername)
+  if (!brainKey) return null
+
+  const persona = getPersona(brainKey)
+  if (!persona) return null
+
+  const teamKey = _BRAIN_TEAM_MAP[brainKey] || _BRAIN_TEAM_MAP[brainKey.split('_')[0]] || 'operations'
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let msg = null
+    if (recentMessages.length > 0) {
+      const variedTopic = attempt === 0 ? topic
+        : attempt === 1 ? (topic + ' 심화')
+        : (topic + ' 새 관점')
+      msg = generateDiscussionMessage(brainKey, teamKey, variedTopic, room, recentMessages)
+    } else {
+      msg = attempt === 0
+        ? generateConversationStarter(brainKey, teamKey, room)
+        : pickChatMessage({ room, hour: (new Date().getUTCHours() + 9) % 24 }, brainKey, room)
+    }
+    if (msg && !_isEngineRepeat(brainKey, msg)) {
+      _rememberEngine(brainKey, msg)
+      return msg
+    }
+  }
+
+  const fallback = recentMessages.length > 0
+    ? generateDiscussionMessage(brainKey, teamKey, topic, room, recentMessages)
+    : generateConversationStarter(brainKey, teamKey, room)
+  if (fallback) _rememberEngine(brainKey, fallback)
+  return fallback
+}
 
 function generateStaffMessage(staff, topic, room, recentMessages = []) {
   return generateChat(staff.username, topic, room, recentMessages)

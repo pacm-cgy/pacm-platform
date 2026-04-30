@@ -1,160 +1,97 @@
 {
   "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
-    }
+    { "source": "/api/fetch-news",            "destination": "/api/news" },
+    { "source": "/api/summarize-news",        "destination": "/api/news" },
+    { "source": "/api/run-summarize",         "destination": "/api/news" },
+    { "source": "/api/longform-quality-check","destination": "/api/news" },
+    { "source": "/api/extract-news-trends",   "destination": "/api/news" },
+    { "source": "/api/news-cleanup",          "destination": "/api/news" },
+    { "source": "/api/recrawl-news",          "destination": "/api/news" },
+    { "source": "/api/reset-summaries",       "destination": "/api/news" },
+    { "source": "/api/self-ai-summarize",     "destination": "/api/news" },
+    { "source": "/api/admin-ai",              "destination": "/api/ai"   },
+    { "source": "/api/ai-engine",             "destination": "/api/ai"   },
+    { "source": "/api/ai-mentor",             "destination": "/api/ai"   },
+    { "source": "/api/ai-mentor-learn",       "destination": "/api/ai"   },
+    { "source": "/api/ai-team",               "destination": "/api/ai"   },
+    { "source": "/api/ai-workers",            "destination": "/api/ai"   },
+    { "source": "/api/ai-platform-operator",  "destination": "/api/ai"   },
+    { "source": "/api/ai-content-writer",     "destination": "/api/ai"   },
+    { "source": "/api/badge-system",          "destination": "/api/ai"   },
+    { "source": "/api/admin-action",          "destination": "/api/admin" },
+    { "source": "/api/auto-ops",              "destination": "/api/admin" },
+    { "source": "/api/dev-permissions",       "destination": "/api/admin" },
+    { "source": "/api/incident-response",     "destination": "/api/admin" },
+    { "source": "/api/security-audit",        "destination": "/api/admin" },
+    { "source": "/api/patch-notes",           "destination": "/api/admin" },
+    { "source": "/api/office",                "destination": "/api/admin" },
+    { "source": "/api/sync-ai-accounts",      "destination": "/api/admin" },
+    { "source": "/api/community-engine",      "destination": "/api/admin" },
+    { "source": "/api/feedback-reply",        "destination": "/api/admin" },
+    { "source": "/api/generate-report",       "destination": "/api/admin" },
+    { "source": "/api/generate-images",       "destination": "/api/admin" },
+    { "source": "/api/analyze-trend",         "destination": "/api/admin" },
+    { "source": "/api/report",                "destination": "/api/admin" },
+    { "source": "/api/ad-inquiry",            "destination": "/api/inquiry" },
+    { "source": "/api/partner-inquiry",       "destination": "/api/inquiry" },
+    { "source": "/api/send-newsletter",       "destination": "/api/inquiry" },
+    { "source": "/api/unsubscribe",           "destination": "/api/inquiry" },
+    { "source": "/api/setup-db",              "destination": "/api/setup" },
+    { "source": "/api/db-setup",              "destination": "/api/setup" },
+    { "source": "/api/db-setup-staff",        "destination": "/api/setup" },
+    { "source": "/api/setup-rag",             "destination": "/api/setup" },
+    { "source": "/api/add-knowledge",         "destination": "/api/setup" },
+    { "source": "/api/(.*)",                  "destination": "/api/$1"   },
+    { "source": "/((?!api/).*)",              "destination": "/index.html" }
   ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "X-Frame-Options",
-          "value": "DENY"
-        },
-        {
-          "key": "X-XSS-Protection",
-          "value": "1; mode=block"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
-        },
-        {
-          "key": "Permissions-Policy",
-          "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), serial=(), midi=()"
-        },
-        {
-          "key": "Strict-Transport-Security",
-          "value": "max-age=63072000; includeSubDomains; preload"
-        },
-        {
-          "key": "X-DNS-Prefetch-Control",
-          "value": "off"
-        },
-        {
-          "key": "Cross-Origin-Opener-Policy",
-          "value": "same-origin-allow-popups"
-        },
-        {
-          "key": "Cross-Origin-Resource-Policy",
-          "value": "same-site"
-        },
-        {
-          "key": "Cross-Origin-Embedder-Policy",
-          "value": "unsafe-none"
-        },
-        {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co https://*.naver.com https://*.naver.net https://ssl.pstatic.net https://*.pstatic.net https://image.pollinations.ai https://*.kakao.com https://img1.daumcdn.net https://t1.daumcdn.net https://images.unsplash.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://openapi.naver.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;"
-        },
-        {
-          "key": "X-Permitted-Cross-Domain-Policies",
-          "value": "none"
-        },
-        {
-          "key": "X-Download-Options",
-          "value": "noopen"
-        }
+        { "key": "X-Content-Type-Options",   "value": "nosniff" },
+        { "key": "X-Frame-Options",          "value": "DENY" },
+        { "key": "X-XSS-Protection",         "value": "1; mode=block" },
+        { "key": "Referrer-Policy",          "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy",       "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), serial=(), midi=()" },
+        { "key": "Strict-Transport-Security","value": "max-age=63072000; includeSubDomains; preload" },
+        { "key": "X-DNS-Prefetch-Control",   "value": "off" },
+        { "key": "Cross-Origin-Opener-Policy","value": "same-origin-allow-popups" },
+        { "key": "Cross-Origin-Resource-Policy","value": "same-site" },
+        { "key": "Cross-Origin-Embedder-Policy","value": "unsafe-none" },
+        { "key": "Content-Security-Policy",  "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co https://*.naver.com https://*.naver.net https://ssl.pstatic.net https://*.pstatic.net https://image.pollinations.ai https://*.kakao.com https://img1.daumcdn.net https://t1.daumcdn.net https://images.unsplash.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://openapi.naver.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;" },
+        { "key": "X-Permitted-Cross-Domain-Policies","value": "none" },
+        { "key": "X-Download-Options",       "value": "noopen" }
       ]
     },
     {
       "source": "/assets/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
-        }
-      ]
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
     },
     {
       "source": "/api/(.*)",
       "headers": [
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "X-Robots-Tag",
-          "value": "noindex, nofollow"
-        },
-        {
-          "key": "X-RateLimit-Policy",
-          "value": "40;w=60"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "no-store, no-cache, must-revalidate"
-        }
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Robots-Tag",           "value": "noindex, nofollow" },
+        { "key": "X-RateLimit-Policy",     "value": "40;w=60" },
+        { "key": "Cache-Control",          "value": "no-store, no-cache, must-revalidate" }
       ]
     }
   ],
   "crons": [
-    {
-      "path": "/api/fetch-news",
-      "schedule": "0 2 * * *"
-    },
-    {
-      "path": "/api/summarize-news",
-      "schedule": "0 4 * * *"
-    },
-    {
-      "path": "/api/run-summarize",
-      "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/longform-quality-check",
-      "schedule": "30 6 * * *"
-    },
-    {
-      "path": "/api/extract-news-trends",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/news-cleanup",
-      "schedule": "0 10 * * *"
-    },
-    {
-      "path": "/api/community-engine",
-      "schedule": "0 12 * * *"
-    },
-    {
-      "path": "/api/ai-platform-operator",
-      "schedule": "0 13 * * *"
-    },
-    {
-      "path": "/api/ai-content-writer",
-      "schedule": "0 14 * * *"
-    },
-    {
-      "path": "/api/badge-system",
-      "schedule": "0 15 * * *"
-    },
-    {
-      "path": "/api/ai-mentor-learn",
-      "schedule": "0 16 * * *"
-    },
-    {
-      "path": "/api/generate-report",
-      "schedule": "0 17 * * 5"
-    },
-    {
-      "path": "/api/send-newsletter",
-      "schedule": "0 23 * * 0"
-    },
-    {
-      "path": "/api/patch-notes",
-      "schedule": "0 0 1,15 * *"
-    }
+    { "path": "/api/news?action=fetch",          "schedule": "0 2 * * *"   },
+    { "path": "/api/news?action=summarize",      "schedule": "0 4 * * *"   },
+    { "path": "/api/news?action=run_summarize",  "schedule": "0 6 * * *"   },
+    { "path": "/api/news?action=quality_check",  "schedule": "30 6 * * *"  },
+    { "path": "/api/news?action=extract_trends", "schedule": "0 8 * * *"   },
+    { "path": "/api/news?action=cleanup",        "schedule": "0 10 * * *"  },
+    { "path": "/api/admin?action=community",     "schedule": "0 12 * * *"  },
+    { "path": "/api/ai?action=platform_operator","schedule": "0 13 * * *"  },
+    { "path": "/api/ai?action=content_writer",   "schedule": "0 14 * * *"  },
+    { "path": "/api/ai?action=badge",            "schedule": "0 15 * * *"  },
+    { "path": "/api/ai?action=mentor_learn",     "schedule": "0 16 * * *"  },
+    { "path": "/api/admin?action=generate_report","schedule": "0 17 * * 5" },
+    { "path": "/api/inquiry?action=newsletter",  "schedule": "0 23 * * 0"  },
+    { "path": "/api/admin?action=patch_notes",   "schedule": "0 0 1,15 * *"}
   ],
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
