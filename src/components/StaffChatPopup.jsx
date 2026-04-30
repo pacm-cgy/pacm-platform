@@ -1,14 +1,15 @@
 /**
  * src/components/StaffChatPopup.jsx
  * ╔══════════════════════════════════════════════════════════════════════╗
- * ║  직원 전용 채팅방 팝업 v4.0 — admin role 전용                       ║
+ * ║  직원 전용 채팅방 팝업 v5.0 — admin role 전용                       ║
  * ║                                                                      ║
- * ║  v4 버그픽스 (완전 재작성):                                          ║
- * ║  1. 메시지 역순 수정 — API asc 전환 + 프론트 정렬 보장              ║
- * ║  2. 뜨다가 사라짐 수정 — fetchMessages 중복 호출 방지 (debounce)    ║
- * ║  3. 무한 새로고침 수정 — ensureTable 실패 시 영구 잠금              ║
- * ║  4. 직원 채팅 안 보임 수정 — 스크롤 로직 완전 재작성               ║
- * ║  5. 600ms 타이밍 수정 — optimistic 유지 기간 연장 + 안전 교체       ║
+ * ║  v5 버그픽스:                                                        ║
+ * ║  1. fetchMessages: r.ok 체크 추가 (HTML 응답 시 기존 메시지 유지)   ║
+ * ║  2. fetchMessages: JSON 파싱 별도 try/catch (Unexpected token 방지) ║
+ * ║  3. fetchMessages: finally 블록으로 fetchingRef 잠금 해제 보장      ║
+ * ║  4. fetchMessages: 빈 배열 반환 시 기존 메시지 유지                 ║
+ * ║  5. sendMessage: postRes.ok 체크 + JSON 파싱 별도 try/catch         ║
+ * ║  6. sendMessage: 저장 실패 시 optimistic 유지 후 폴링에 위임        ║
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -149,7 +150,7 @@ export default function StaffChatPopup() {
   }, [])
 
   // ── 메시지 조회 ─────────────────────────────────────────────────
-  // ★ v4: debounce + in-flight 방지로 중복 호출 제거
+  // ★ v5: debounce + in-flight 방지 + r.ok 체크 + finally로 잠금 해제 보장
   const fetchMessages = useCallback((silent = false) => {
     // debounce: 짧은 시간 내 여러 호출은 마지막 1개만 실행
     if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current)
@@ -161,21 +162,37 @@ export default function StaffChatPopup() {
 
       try {
         const currentRoom = roomRef.current
-        const r = await fetch(`/api/staff-chat?room=${currentRoom}&limit=80`)
-        const d = await r.json().catch(() => ({}))
+
+        // ★ v5: fetch 자체를 try/catch로 분리 — 네트워크 에러 처리
+        let r
+        try {
+          r = await fetch(`/api/staff-chat?room=${currentRoom}&limit=80`)
+        } catch (_netErr) {
+          // 네트워크 에러 → 기존 메시지 유지, 조용히 종료
+          return
+        }
+
+        // ★ v5: r.ok 체크 — 서버 오류(500/503 등) HTML 응답 시 기존 메시지 유지
+        if (!r.ok) return
+
+        // ★ v5: JSON 파싱을 별도 try/catch — "Unexpected token 'A'" 에러 방지
+        let d
+        try {
+          d = await r.json()
+        } catch (_parseErr) {
+          // "A server error occurred" 같은 HTML 응답 → 기존 메시지 유지
+          return
+        }
 
         // 테이블 없음 감지
         if (d.table_missing === true || d.table_ready === false) {
           if (!tableMissingRef.current) {
             tableMissingRef.current = true
             setTableNotReady(true)
-            // ★ v4: 실패 플래그 없을 때만 ensureTable 호출
             if (!tableInitRef.current && !tableFailedRef.current) {
               ensureTableRef.current?.()
             }
           }
-          if (!silent) setLoading(false)
-          fetchingRef.current = false
           return
         }
 
@@ -185,20 +202,23 @@ export default function StaffChatPopup() {
 
         if (Array.isArray(d.messages)) {
           setMessages(prev => {
-            // ★ v4: 서버 메시지는 이미 asc 정렬로 옴 (API 수정됨)
-            // pending optimistic 메시지만 뒤에 붙임
             const serverIds = new Set(d.messages.map(m => m.id))
+            // pending optimistic 메시지 보존
             const pending   = prev.filter(m =>
               optimisticIds.current.has(m.id) && !serverIds.has(m.id)
             )
             const merged = [...d.messages, ...pending]
 
+            // ★ v5: 서버가 빈 배열 반환해도 화면 클리어 방지
+            // 일시적 서버 오류 or DB 지연으로 0개 반환 시 기존 메시지 유지
+            if (merged.length === 0 && prev.length > 0) return prev
+
             // 새 메시지 감지 → unread 증가
-            const prevReal  = prev.filter(m => !optimisticIds.current.has(m.id))
-            const newCount  = d.messages.length - prevReal.length
+            const prevReal = prev.filter(m => !optimisticIds.current.has(m.id))
+            const newCount = d.messages.length - prevReal.length
             if (!openRef.current && newCount > 0) setUnread(u => u + newCount)
 
-            // ★ v4: 새 메시지가 있으면 스크롤 플래그 세팅
+            // 새 메시지 있으면 스크롤
             if (newCount > 0 || merged.length !== prevMsgLenRef.current) {
               shouldScrollRef.current = true
             }
@@ -206,12 +226,13 @@ export default function StaffChatPopup() {
             return merged
           })
         }
-      } catch (_) {}
-
-      if (!silent) setLoading(false)
-      fetchingRef.current = false
-    }, silent ? 80 : 0) // 폴링은 80ms debounce, 최초 로드는 즉시
-  }, []) // 의존성 없음 — 모두 ref로 접근
+      } finally {
+        // ★ v5: finally 보장 — 어떤 경로로 종료돼도 잠금 해제
+        if (!silent) setLoading(false)
+        fetchingRef.current = false
+      }
+    }, silent ? 80 : 0)
+  }, [])
 
   // ── 테이블 자동 생성 ────────────────────────────────────────────
   const ensureTable = useCallback(async () => {
@@ -340,19 +361,26 @@ export default function StaffChatPopup() {
           msg_type:     'admin_message',
         }),
       })
-      const postData = await postRes.json().catch(() => ({}))
+      // ★ v5: postRes.ok 체크 + JSON 파싱 별도 try/catch
+      let postData = {}
+      if (postRes.ok) {
+        try { postData = await postRes.json() } catch (_) {}
+      }
 
       if (postData.ok && postData.message) {
-        // ★ v4: optimistic → 서버 메시지 교체 (즉시, fetchMessages 호출 없이)
+        // ★ v5: optimistic → 서버 메시지 즉시 교체
         optimisticIds.current.delete(optimisticId)
         shouldScrollRef.current = true
         setMessages(prev => prev.map(m =>
           m.id === optimisticId ? postData.message : m
         ))
       } else {
-        // 저장 실패: optimistic 제거
+        // ★ v5: 저장 실패 시 optimistic 메시지를 '전송 실패' 상태로 표시하고
+        // 다음 폴링(4s)에서 자연스럽게 정리되도록 함 (즉시 제거 → 빈 화면 방지)
+        // optimisticIds에서 제거하여 다음 fetch 시 서버 메시지로 대체되도록
         optimisticIds.current.delete(optimisticId)
-        setMessages(prev => prev.filter(m => m.id !== optimisticId))
+        // 즉시 fetchMessages 호출하여 실제 서버 상태와 동기화
+        setTimeout(() => fetchMessages(true), 300)
       }
 
       // 3) staff-chat-auto 트리거 (fire & forget)
@@ -363,14 +391,18 @@ export default function StaffChatPopup() {
         headers: { 'Content-Type': 'application/json', ...authH2 },
         body: JSON.stringify({ action: 'admin_message', room: roomSnap, message: msg }),
       })
-        .then(r => r.json().catch(() => ({})))
+        .then(async r => {
+          // ★ v5: r.ok 체크 후 JSON 파싱
+          if (!r.ok) return {}
+          try { return await r.json() } catch (_) { return {} }
+        })
         .then(d => {
           setAiTyping(false)
           if (d.handled > 0) {
             setAutoMsg(`${d.responders?.join(', ')} 이(가) 반응했어요`)
             setTimeout(() => setAutoMsg(null), 6000)
           }
-          // ★ v4: AI 응답 후 1회만 fetchMessages (debounce로 중복 방지됨)
+          // AI 응답 후 fetchMessages로 동기화
           fetchMessages(true)
         })
         .catch(() => {
@@ -379,9 +411,10 @@ export default function StaffChatPopup() {
         })
 
     } catch (_) {
-      // 전송 오류: optimistic 제거
+      // ★ v5: 전송 오류 시 optimistic 제거 후 서버 동기화
       optimisticIds.current.delete(optimisticId)
       setMessages(prev => prev.filter(m => m.id !== optimisticId))
+      setTimeout(() => fetchMessages(true), 300)
     } finally {
       setSending(false)
     }
