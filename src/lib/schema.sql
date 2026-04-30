@@ -851,3 +851,107 @@ create policy if not exists "dev_log_write"   on public.dev_permission_logs   fo
 -- patch_notes: 공개 읽기, 서비스 롤 쓰기
 create policy if not exists "patch_read"      on public.patch_notes           for select using (is_published = true);
 create policy if not exists "patch_write"     on public.patch_notes           for all    using (true) with check (true);
+
+-- ================================================================
+-- Schema Extension v3.0 — Security Architecture (보안 설계도 구현)
+-- ================================================================
+
+-- ── 보안 감사 로그 테이블 (설계도 §7 Immutable Logging) ──────────
+create table if not exists public.security_audit_logs (
+  id          uuid primary key default uuid_generate_v4(),
+  action      text not null,
+  user_id     uuid references auth.users(id) on delete set null,
+  ip_address  text,
+  severity    text not null default 'info'
+                check (severity in ('critical','high','medium','low','info')),
+  meta        jsonb default '{}'::jsonb,
+  created_at  timestamptz not null default now()
+);
+create index if not exists sal_created_idx   on public.security_audit_logs(created_at desc);
+create index if not exists sal_severity_idx  on public.security_audit_logs(severity);
+create index if not exists sal_user_idx      on public.security_audit_logs(user_id);
+create index if not exists sal_ip_idx        on public.security_audit_logs(ip_address);
+create index if not exists sal_action_idx    on public.security_audit_logs(action);
+
+-- ── IP 차단 목록 (설계도 §4 DDoS / WAF 연동) ─────────────────────
+create table if not exists public.blocked_ips (
+  id          uuid primary key default uuid_generate_v4(),
+  ip_address  text not null unique,
+  reason      text not null,
+  blocked_by  text,
+  is_active   boolean not null default true,
+  expires_at  timestamptz,
+  blocked_at  timestamptz not null default now()
+);
+create index if not exists bip_ip_idx      on public.blocked_ips(ip_address);
+create index if not exists bip_active_idx  on public.blocked_ips(is_active);
+create index if not exists bip_exp_idx     on public.blocked_ips(expires_at);
+
+-- ── 세션 추적 (설계도 §3 세션 고정 방지) ─────────────────────────
+create table if not exists public.active_sessions (
+  id              uuid primary key default uuid_generate_v4(),
+  user_id         uuid not null references auth.users(id) on delete cascade,
+  ip_address      text,
+  user_agent      text,
+  last_active_at  timestamptz not null default now(),
+  created_at      timestamptz not null default now()
+);
+create index if not exists ses_user_idx    on public.active_sessions(user_id);
+create index if not exists ses_ip_idx      on public.active_sessions(ip_address);
+create index if not exists ses_active_idx  on public.active_sessions(last_active_at desc);
+
+-- ── 로그인 실패 추적 (설계도 §3 계정 잠금 30분) ───────────────────
+create table if not exists public.login_attempts (
+  id          uuid primary key default uuid_generate_v4(),
+  email       text,
+  ip_address  text not null,
+  success     boolean not null default false,
+  user_agent  text,
+  attempted_at timestamptz not null default now()
+);
+create index if not exists la_ip_idx    on public.login_attempts(ip_address);
+create index if not exists la_email_idx on public.login_attempts(email);
+create index if not exists la_time_idx  on public.login_attempts(attempted_at desc);
+
+-- ── profiles 테이블 보안 컬럼 추가 (설계도 §6 ABAC) ──────────────
+alter table if exists public.profiles
+  add column if not exists is_ai_account  boolean not null default false,
+  add column if not exists admin_locked   boolean not null default false,
+  add column if not exists last_login_at  timestamptz,
+  add column if not exists login_count    integer not null default 0,
+  add column if not exists failed_logins  integer not null default 0,
+  add column if not exists locked_until   timestamptz;
+
+-- ── RLS 설정 ─────────────────────────────────────────────────────
+alter table if exists public.security_audit_logs  enable row level security;
+alter table if exists public.blocked_ips          enable row level security;
+alter table if exists public.active_sessions      enable row level security;
+alter table if exists public.login_attempts       enable row level security;
+
+-- security_audit_logs: 서비스 롤만 읽기/쓰기 (일반 유저 접근 불가)
+create policy if not exists "sal_service_read"
+  on public.security_audit_logs for select
+  using (auth.role() = 'service_role');
+create policy if not exists "sal_service_write"
+  on public.security_audit_logs for insert
+  with check (true);
+
+-- blocked_ips: 서비스 롤만 관리
+create policy if not exists "bip_service_all"
+  on public.blocked_ips for all
+  using (auth.role() = 'service_role')
+  with check (auth.role() = 'service_role');
+
+-- active_sessions: 자기 세션만 조회, 서비스 롤 전체
+create policy if not exists "ses_own_read"
+  on public.active_sessions for select
+  using (auth.uid() = user_id or auth.role() = 'service_role');
+create policy if not exists "ses_service_write"
+  on public.active_sessions for all
+  using (true) with check (true);
+
+-- login_attempts: 서비스 롤만
+create policy if not exists "la_service_all"
+  on public.login_attempts for all
+  using (auth.role() = 'service_role')
+  with check (true);
