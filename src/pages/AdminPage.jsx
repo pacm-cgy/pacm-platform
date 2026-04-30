@@ -1586,13 +1586,54 @@ ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS read_time integer DEFAULT 3
           <span style={{ fontSize:10, color:'var(--t4)' }}>* CRON_SECRET 환경변수 또는 admin 계정으로만 실행 가능</span>
         </div>
         {articlesMigrateResult && (
-          <div style={{ marginTop:8, padding:8, borderRadius:6, fontSize:11,
-            background: articlesMigrateResult.ok ? '#052e1640' : '#3f0f0f40',
-            border: `1px solid ${articlesMigrateResult.ok ? '#22c55e30' : '#f43f5e30'}`,
-            color: articlesMigrateResult.ok ? '#4ade80' : '#f87171' }}>
-            {articlesMigrateResult.ok
-              ? '✅ 컬럼 추가 완료 — 이제 재처리 배치를 실행하세요.'
-              : `❌ 실패: ${articlesMigrateResult.error || JSON.stringify(articlesMigrateResult).slice(0, 200)}`}
+          <div style={{ marginTop:8, padding:10, borderRadius:6, fontSize:11,
+            background: articlesMigrateResult.ok ? '#052e1640' : '#1e0a0a60',
+            border: `1px solid ${articlesMigrateResult.ok ? '#22c55e30' : '#f43f5e30'}` }}>
+            <div style={{ fontWeight:600, marginBottom:4,
+              color: articlesMigrateResult.ok ? '#4ade80' : '#f87171' }}>
+              {articlesMigrateResult.ok
+                ? '✅ DB 초기화 완료 — 이제 재처리 배치를 실행하세요.'
+                : (articlesMigrateResult.message || `❌ 실패: ${articlesMigrateResult.error || '알 수 없는 오류'}`)}
+            </div>
+            {/* exec_sql RPC 없을 때 — manual SQL 표시 */}
+            {!articlesMigrateResult.schema_rpc && articlesMigrateResult.manual_sql && (
+              <div style={{ marginTop:6 }}>
+                <div style={{ color:'#fbbf24', marginBottom:4 }}>
+                  ⚠ exec_sql RPC 없음 — 아래 SQL을 Supabase SQL Editor에서 직접 실행하세요:
+                </div>
+                <pre style={{ fontFamily:'var(--f-mono)', fontSize:9, color:'#94a3b8',
+                  background:'#0a0a14', border:'1px solid #334155', borderRadius:4,
+                  padding:'6px 8px', whiteSpace:'pre-wrap', maxHeight:160, overflowY:'auto',
+                  userSelect:'all', margin:'0 0 4px' }}>
+                  {articlesMigrateResult.manual_sql}
+                </pre>
+                <div style={{ display:'flex', gap:6 }}>
+                  <button
+                    onClick={() => navigator.clipboard?.writeText(articlesMigrateResult.manual_sql)
+                      .then(() => alert('복사 완료! Supabase SQL Editor에 붙여넣기하세요.'))}
+                    className="btn btn-ghost btn-sm" style={{ fontSize:10 }}>📋 SQL 복사</button>
+                  <a href={articlesMigrateResult.supabase_url || 'https://supabase.com/dashboard'}
+                    target="_blank" rel="noopener noreferrer"
+                    className="btn btn-ghost btn-sm" style={{ fontSize:10 }}>🔗 SQL Editor 열기</a>
+                </div>
+              </div>
+            )}
+            {/* 체크 결과 */}
+            {articlesMigrateResult.checks?.length > 0 && (
+              <details style={{ marginTop:6 }}>
+                <summary style={{ fontSize:10, color:'var(--t3)', cursor:'pointer' }}>테이블/컬럼 확인 결과</summary>
+                <div style={{ marginTop:4, display:'flex', flexWrap:'wrap', gap:4 }}>
+                  {articlesMigrateResult.checks.map((c, i) => (
+                    <span key={i} style={{ fontSize:9, padding:'2px 5px', borderRadius:3,
+                      background: c.ok ? '#052e1660' : '#3f0f0f60',
+                      color: c.ok ? '#4ade80' : '#f87171',
+                      border: `1px solid ${c.ok ? '#22c55e30' : '#f43f5e30'}` }}>
+                      {c.ok ? '✅' : '❌'} {c.col}
+                    </span>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         )}
       </Panel>
@@ -1801,6 +1842,12 @@ CREATE POLICY scm_admin_all ON public.staff_chat_messages FOR ALL USING (
             <div style={{ fontSize:12, fontWeight:600, color: dbSetupResult.ok ? '#4ade80' : '#f87171', marginBottom:6 }}>
               {dbSetupResult.message || (dbSetupResult.ok ? '✅ 성공' : '❌ 실패')}
             </div>
+            {/* exec_sql RPC 없을 때 — rpc_result 디버그 정보 */}
+            {!dbSetupResult.ok && dbSetupResult.rpc_result && (
+              <div style={{ fontSize:10, color:'#94a3b8', marginBottom:6 }}>
+                RPC 실패 이유: <code style={{ color:'#fbbf24' }}>{dbSetupResult.rpc_result.reason?.slice(0, 120)}</code>
+              </div>
+            )}
             {!dbSetupResult.ok && (
               <div style={{ fontSize:11, color:'#F59E0B', marginTop:4 }}>
                 ⬆ 위 "테이블 생성 SQL 보기"를 열어 SQL을 복사한 뒤 SQL Editor에서 실행하세요.
