@@ -125,9 +125,11 @@ export default function StaffChatPopup() {
   const bottomRef     = useRef(null)
   const pollRef       = useRef(null)
   const prevCountRef  = useRef(0)
-  const roomRef       = useRef(room)   // BUG3 fix: 폴링에서 최신 room 참조
-  const openRef       = useRef(open)   // BUG3 fix: 폴링에서 최신 open 참조
-  const tableInitRef  = useRef(false)  // 테이블 생성 중복 방지
+  const roomRef       = useRef(room)   // 폴링에서 최신 room 참조
+  const openRef       = useRef(open)   // 폴링에서 최신 open 참조
+  // 테이블 초기화 상태 추적 — 컴포넌트 생명주기 동안 1회만 ensureTable 실행
+  const tableInitRef    = useRef(false)   // ensureTable 실행 중
+  const tableMissingRef = useRef(false)   // 테이블 없음 확정 (반복 ensureTable 방지)
 
   // ref 동기화
   useEffect(() => { roomRef.current = room }, [room])
@@ -146,30 +148,28 @@ export default function StaffChatPopup() {
   // fetchMessages ref — 순환 참조 없이 ensureTable → fetchMessages 호출용
   const fetchMessagesRef = useRef(null)
 
-  // ── 테이블 자동 생성 (table_ready=false 감지 시 1회 호출) ────────
+  // ── 테이블 자동 생성 (table_missing 감지 시 1회만 호출) ────────
+  // ★ 폴링마다 호출되지 않도록 tableInitRef / tableMissingRef 이중 가드
   const ensureTable = useCallback(async () => {
-    if (tableInitRef.current) return   // 이미 진행 중이면 스킵
+    if (tableInitRef.current) return          // 이미 진행 중
+    if (!tableMissingRef.current) return      // 테이블 없음이 확인된 적 없음
     tableInitRef.current = true
     setTableSetup(true)
     try {
       const authH = await getAuthHeader()
-      if (!authH.Authorization) {
-        // admin JWT 없어도 최소한 setupTable fire-and-forget은 API에서 시도됨
-        // → 그냥 스킵하지 말고 계속 폴링하면 API가 자동 생성 시도
-      } else {
+      if (authH.Authorization) {
         const r = await fetch('/api/db-setup-staff', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json', ...authH },
         })
         const d = await r.json().catch(() => ({}))
         if (d.ok || d.table_exists) {
-          // 테이블 생성 완료 → 안내 해제 후 즉시 재조회
+          // 테이블 생성(또는 이미 존재) 확인 → 안내 해제 후 즉시 재조회
+          tableMissingRef.current = false
           setTableNotReady(false)
           fetchMessagesRef.current?.(true)
-        } else if (d.manual_sql) {
-          // 자동 생성 실패 → 수동 SQL 안내
-          console.warn('[StaffChat] table auto-create failed, manual SQL needed:', d.manual_sql)
         }
+        // 실패해도 tableMissingRef 유지 → 버튼 재시도 시 다시 ensureTable 호출 가능
       }
     } catch (_) {}
     setTableSetup(false)
@@ -177,8 +177,6 @@ export default function StaffChatPopup() {
   }, [getAuthHeader])
 
   // ── 메시지 조회 ─────────────────────────────────────────────────
-  // BUG2 fix: table_ready=false 면 기존 messages 유지 — 빈배열로 덮지 않음
-  // BUG3 fix: useCallback deps [] → 함수 재생성 없음 → 폴링 인터벌 안정적
   const fetchMessages = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
     try {
@@ -186,27 +184,35 @@ export default function StaffChatPopup() {
       const r = await fetch(`/api/staff-chat?room=${currentRoom}&limit=80`)
       const d = await r.json().catch(() => ({}))
 
-      // table_ready=false → 테이블 없음: 기존 메시지 유지 + 자동 생성 트리거 (1회)
-      if (d.table_ready === false) {
-        setTableNotReady(true)
-        if (!tableInitRef.current) ensureTable()
+      // table_missing=true → 테이블 없음 확정
+      // tableMissingRef를 true로 세팅 후 ensureTable 1회만 호출
+      if (d.table_missing === true || d.table_ready === false) {
+        if (!tableMissingRef.current) {
+          // 최초 감지 시에만 ensureTable 트리거
+          tableMissingRef.current = true
+          setTableNotReady(true)
+          // 진행 중이 아닐 때만 ensureTable 호출 (중복 방지)
+          if (!tableInitRef.current) ensureTable()
+        }
         if (!silent) setLoading(false)
         return
       }
+      // 테이블이 있음 확인되면 missing 상태 해제
+      tableMissingRef.current = false
       setTableNotReady(false)
 
       if (Array.isArray(d.messages)) {
         setMessages(prev => {
-          // BUG2 fix: 새 메시지가 기존보다 적으면 (예: 빈배열) 기존 유지
           if (d.messages.length === 0 && prev.length > 0) return prev
-          const newCount = d.messages.length - prev.filter(m => !m.id?.startsWith('optimistic-')).length
+          const realPrev = prev.filter(m => !m.id?.startsWith('optimistic-'))
+          const newCount = d.messages.length - realPrev.length
           if (!openRef.current && newCount > 0) setUnread(u => u + newCount)
           return d.messages
         })
       }
     } catch (_) {}
     if (!silent) setLoading(false)
-  }, [ensureTable])   // ensureTable 포함 — 순환 ref로 역방향 참조 해결됨
+  }, [ensureTable])
 
   // 방 변경 시 메시지 로드
   useEffect(() => {
@@ -220,11 +226,16 @@ export default function StaffChatPopup() {
     fetchMessagesRef.current = fetchMessages
   }, [fetchMessages])
 
-  // 폴링 — 3초마다, fetchMessages가 재생성되지 않아 인터벌 안정적
+  // 폴링 — open 상태에서만 실행, 팝업이 닫히면 폴링 중단하여 불필요한 요청 제거
+  // 간격: open 시 4초 (3초→4초로 상향해 서버 부하 감소)
   useEffect(() => {
-    pollRef.current = setInterval(() => fetchMessages(true), 3000)
+    if (!open) {
+      clearInterval(pollRef.current)
+      return
+    }
+    pollRef.current = setInterval(() => fetchMessages(true), 4000)
     return () => clearInterval(pollRef.current)
-  }, [fetchMessages])
+  }, [open, fetchMessages])
 
   // 새 메시지 시 자동 스크롤
   useEffect(() => {
@@ -478,7 +489,7 @@ export default function StaffChatPopup() {
                   </div>
                   <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                     <button
-                      onClick={() => { tableInitRef.current = false; ensureTable() }}
+                      onClick={() => { tableInitRef.current = false; tableMissingRef.current = true; ensureTable() }}
                       style={{
                         background:'rgba(244,63,94,0.15)', border:'1px solid rgba(244,63,94,0.3)',
                         borderRadius:4, color:'#F87171', cursor:'pointer', fontSize:10, padding:'4px 10px',
