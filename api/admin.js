@@ -15,29 +15,46 @@ import {
 } from './_auth.js'
 export const config = { maxDuration: 60 }
 
-
-const handleAdminAction = (() => {
-// 어드민 전용 작업 API - service_role 키 사용 (RLS 우회)
-// 인증: Bearer CRON_SECRET (cron/서버) 또는 Bearer <user_jwt> (admin 유저)
-
-
+// ══════════════════════════════════════════════════════════════════════
+// 모듈 최상위 공유 변수 — 모든 핸들러에서 참조 가능
+// ══════════════════════════════════════════════════════════════════════
 const SB_URL      = process.env.SUPABASE_URL
 const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY  // service_role: RLS 우회
 const CRON_SECRET = process.env.CRON_SECRET
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-cron-secret, x-vercel-cron',
 }
 
-// service_role 헤더
+// service_role 헤더 (Prefer: return=minimal)
 const H = () => ({
   apikey: SB_KEY,
   Authorization: `Bearer ${SB_KEY}`,
   'Content-Type': 'application/json',
   Prefer: 'return=minimal',
 })
+
+// service_role 헤더 (Prefer: return=representation — INSERT/UPDATE 후 rows 반환)
+const SBH = () => ({
+  apikey: SB_KEY,
+  Authorization: `Bearer ${SB_KEY}`,
+  'Content-Type': 'application/json',
+  Prefer: 'return=representation',
+})
+
+// JSON 응답 헬퍼 — 모든 핸들러 공유
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...CORS },
+  })
+}
+
+const handleAdminAction = (() => {
+// 어드민 전용 작업 API - service_role 키 사용 (RLS 우회)
+// 인증: Bearer CRON_SECRET (cron/서버) 또는 Bearer <user_jwt> (admin 유저)
 
 // JWT로 admin 여부 검증 (Supabase Auth + profiles)
 async function verifyAdmin(jwt) {
@@ -2321,21 +2338,25 @@ async function getAuth(req) {
 
 // ── 패치노트 목록 조회 ────────────────────────────────────────────────
 async function getList(limit = 20, offset = 0) {
-  const r = await fetch(
-    `${SB_URL}/rest/v1/patch_notes?is_published=eq.true&select=*&order=published_at.desc&limit=${limit}&offset=${offset}`,
-    { headers: SBH() }
-  )
-  return r.ok ? await r.json() : []
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/patch_notes?is_published=eq.true&select=*&order=published_at.desc&limit=${limit}&offset=${offset}`,
+      { headers: SBH() }
+    )
+    return r.ok ? await r.json() : []
+  } catch (_e) { return [] }
 }
 
 // ── 단건 조회 ─────────────────────────────────────────────────────────
 async function getOne(id) {
-  const r = await fetch(
-    `${SB_URL}/rest/v1/patch_notes?id=eq.${id}&select=*`,
-    { headers: SBH() }
-  )
-  const rows = r.ok ? await r.json() : []
-  return rows[0] || null
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/patch_notes?id=eq.${id}&select=*`,
+      { headers: SBH() }
+    )
+    const rows = r.ok ? await r.json() : []
+    return rows[0] || null
+  } catch (_e) { return null }
 }
 
 // ── 패치노트 삽입 ─────────────────────────────────────────────────────
@@ -5135,12 +5156,7 @@ const handleReport = (() => {
 
 
 
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...CORS },
-  })
-}
+// json() 함수는 모듈 최상위에 이미 선언됨 — 중복 제거
 
 // Supabase JWT로 유저 확인
 async function getUser(authHeader) {
@@ -5320,41 +5336,49 @@ async function _handleReport_impl(req) {
 // 통합 라우터
 // ════════════════════════════════════════════════════════════
 export default async function handler(req) {
-  const url    = new URL(req.url)
-  const path   = url.pathname
-  const action = url.searchParams.get('action')
+  try {
+    const url    = new URL(req.url)
+    const path   = url.pathname
+    const action = url.searchParams.get('action')
 
-  // cron action 분기 (vercel.json crons use ?action=xxx)
-  if (action === 'community')       return handleCommunityEngine(req)
-  if (action === 'generate_report') return handleGenerateReport(req)
-  if (action === 'patch_notes')     return handlePatchNotes(req)
-  if (action === 'auto_ops')        return handleAutoOps(req)
-  if (action === 'security_audit')  return handleSecurityAudit(req)
-  if (action === 'sync_accounts')   return handleSyncAiAccounts(req)
+    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
 
-  // path 분기 (rewrites 경유 — 기존 URL 호환)
-  if (path.endsWith('/admin-action'))      return handleAdminAction(req)
-  if (path.endsWith('/auto-ops'))          return handleAutoOps(req)
-  if (path.endsWith('/dev-permissions'))   return handleDevPermissions(req)
-  if (path.endsWith('/incident-response')) return handleIncidentResponse(req)
-  if (path.endsWith('/security-audit'))    return handleSecurityAudit(req)
-  if (path.endsWith('/patch-notes'))       return handlePatchNotes(req)
-  if (path.endsWith('/office'))            return handleOffice(req)
-  if (path.endsWith('/sync-ai-accounts'))  return handleSyncAiAccounts(req)
-  if (path.endsWith('/community-engine'))  return handleCommunityEngine(req)
-  if (path.endsWith('/feedback-reply'))    return handleFeedbackReply(req)
-  if (path.endsWith('/generate-report'))   return handleGenerateReport(req)
-  if (path.endsWith('/generate-images'))   return handleGenerateImages(req)
-  if (path.endsWith('/analyze-trend'))     return handleAnalyzeTrend(req)
-  if (path.endsWith('/report'))            return handleReport(req)
-  if (path.endsWith('/admin'))             return handleAdminAction(req)
+    // cron action 분기 (vercel.json crons use ?action=xxx)
+    if (action === 'community')       return await handleCommunityEngine(req)
+    if (action === 'generate_report') return await handleGenerateReport(req)
+    if (action === 'patch_notes')     return await handlePatchNotes(req)
+    if (action === 'auto_ops')        return await handleAutoOps(req)
+    if (action === 'security_audit')  return await handleSecurityAudit(req)
+    if (action === 'sync_accounts')   return await handleSyncAiAccounts(req)
 
-  return new Response(JSON.stringify({
-    service: 'admin-router', version: '1.0',
-    actions: ['community','generate_report','patch_notes','auto_ops','security_audit','sync_accounts'],
-    routes: ['/api/admin-action','/api/auto-ops','/api/dev-permissions','/api/incident-response',
-             '/api/security-audit','/api/patch-notes','/api/office','/api/sync-ai-accounts',
-             '/api/community-engine','/api/feedback-reply','/api/generate-report',
-             '/api/generate-images','/api/analyze-trend','/api/report'],
-  }), { headers: { 'Content-Type': 'application/json' } })
+    // path 분기 (rewrites 경유 — 기존 URL 호환)
+    if (path.endsWith('/admin-action'))      return await handleAdminAction(req)
+    if (path.endsWith('/auto-ops'))          return await handleAutoOps(req)
+    if (path.endsWith('/dev-permissions'))   return await handleDevPermissions(req)
+    if (path.endsWith('/incident-response')) return await handleIncidentResponse(req)
+    if (path.endsWith('/security-audit'))    return await handleSecurityAudit(req)
+    if (path.endsWith('/patch-notes'))       return await handlePatchNotes(req)
+    if (path.endsWith('/office'))            return await handleOffice(req)
+    if (path.endsWith('/sync-ai-accounts'))  return await handleSyncAiAccounts(req)
+    if (path.endsWith('/community-engine'))  return await handleCommunityEngine(req)
+    if (path.endsWith('/feedback-reply'))    return await handleFeedbackReply(req)
+    if (path.endsWith('/generate-report'))   return await handleGenerateReport(req)
+    if (path.endsWith('/generate-images'))   return await handleGenerateImages(req)
+    if (path.endsWith('/analyze-trend'))     return await handleAnalyzeTrend(req)
+    if (path.endsWith('/report'))            return await handleReport(req)
+    if (path.endsWith('/admin'))             return await handleAdminAction(req)
+
+    return json({
+      service: 'admin-router', version: '1.0',
+      actions: ['community','generate_report','patch_notes','auto_ops','security_audit','sync_accounts'],
+      routes: ['/api/admin-action','/api/auto-ops','/api/dev-permissions','/api/incident-response',
+               '/api/security-audit','/api/patch-notes','/api/office','/api/sync-ai-accounts',
+               '/api/community-engine','/api/feedback-reply','/api/generate-report',
+               '/api/generate-images','/api/analyze-trend','/api/report'],
+    })
+  } catch (err) {
+    // 어떤 핸들러에서도 예외가 발생하면 500 대신 안전한 JSON 응답 반환
+    console.error('[admin] unhandled error:', err?.message, err?.stack?.split('\n')[1])
+    return json({ error: 'Internal server error', detail: err?.message }, 500)
+  }
 }

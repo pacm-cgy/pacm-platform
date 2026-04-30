@@ -242,22 +242,27 @@ function _isMissingTable(status, body) {
 }
 
 async function getMessages(room, limit = 60) {
-  const r = await fetch(
-    `${SB_URL}/rest/v1/staff_chat_messages?room=eq.${room}&is_deleted=eq.false&order=created_at.asc&limit=${limit}&select=id,room,sender_key,sender_name,sender_emoji,sender_color,sender_team,message,msg_type,reply_to,created_at`,
-    { headers: H() }
-  )
-  if (r.status === 404 || r.status === 400) {
-    const errBody = await r.text().catch(() => '')
-    if (_isMissingTable(r.status, errBody)) {
-      return null   // null → 프론트가 테이블 없음 감지, 기존 메시지 유지
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/staff_chat_messages?room=eq.${room}&is_deleted=eq.false&order=created_at.asc&limit=${limit}&select=id,room,sender_key,sender_name,sender_emoji,sender_color,sender_team,message,msg_type,reply_to,created_at`,
+      { headers: H() }
+    )
+    if (r.status === 404 || r.status === 400) {
+      const errBody = await r.text().catch(() => '')
+      if (_isMissingTable(r.status, errBody)) {
+        return null   // null → 프론트가 테이블 없음 감지, 기존 메시지 유지
+      }
+      return null
     }
+    if (!r.ok) return null
+    const rows = await r.json().catch(() => null)
+    if (!Array.isArray(rows)) return null
+    // asc 정렬로 가져오므로 reverse() 불필요 — 이미 시간순(오래된 것 먼저)
+    return rows
+  } catch (_e) {
+    // fetch 실패(네트워크 오류, Supabase 미응답 등) → null 반환으로 안전 처리
     return null
   }
-  if (!r.ok) return null
-  const rows = await r.json().catch(() => null)
-  if (!Array.isArray(rows)) return null
-  // asc 정렬로 가져오므로 reverse() 불필요 — 이미 시간순(오래된 것 먼저)
-  return rows
 }
 
 // Edge 런타임 모듈 스코프 캐시 (동일 워커 인스턴스 내 중복 호출만 방지)
@@ -325,7 +330,8 @@ async function insertMessage(data) {
     body:    payload,
   })
 
-  let r = await doInsert()
+  let r
+  try { r = await doInsert() } catch (_e) { return null }
 
   // 테이블 없으면 생성 후 즉시 재시도 (1회)
   if (r.status === 404 || r.status === 400) {
@@ -513,14 +519,16 @@ export default async function handler(req) {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(msgId))
       return json({ error: '유효하지 않은 메시지 ID 형식입니다.' }, 400)
 
-    await fetch(
-      `${SB_URL}/rest/v1/staff_chat_messages?id=eq.${msgId}`,
-      {
-        method:  'PATCH',
-        headers: { ...H(), Prefer: 'return=minimal' },
-        body:    JSON.stringify({ is_deleted: true }),
-      }
-    )
+    try {
+      await fetch(
+        `${SB_URL}/rest/v1/staff_chat_messages?id=eq.${msgId}`,
+        {
+          method:  'PATCH',
+          headers: { ...H(), Prefer: 'return=minimal' },
+          body:    JSON.stringify({ is_deleted: true }),
+        }
+      )
+    } catch (_e) { /* 삭제 실패 시 무시 — 이미 응답 반환 */ }
     return json({ ok: true, deleted: msgId })
   }
 
