@@ -353,21 +353,76 @@ async function fetchAccountStatuses() {
 // 단일 계정 동기화
 // ══════════════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════════════
+// Auth Admin API 헬퍼 — service_role 키로 auth.users 조회/생성
+// ══════════════════════════════════════════════════════════════════════
+
+// email → auth user 조회 (Admin API)
+async function findAuthUserByEmail(email) {
+  try {
+    const r = await fetch(`${SB_URL}/auth/v1/admin/users?email=${encodeURIComponent(email)}&page=1&per_page=5`, {
+      headers: {
+        apikey: SB_KEY,
+        Authorization: `Bearer ${SB_KEY}`,
+      },
+    })
+    if (!r.ok) return null
+    const data = await r.json().catch(() => null)
+    // users 배열에서 email 매치
+    const users = data?.users || []
+    return users.find(u => u.email === email) || null
+  } catch { return null }
+}
+
+// auth user 생성 (Admin API) — 트리거로 profiles 자동 생성
+async function createAuthUser(acct) {
+  const email = `${acct.username}@ai.insightship.kr`
+  const password = `AI_${acct.username}_${Date.now()}_INSIGHTSHIP!`
+
+  const r = await fetch(`${SB_URL}/auth/v1/admin/users`, {
+    method: 'POST',
+    headers: {
+      apikey: SB_KEY,
+      Authorization: `Bearer ${SB_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        username:     acct.username,
+        display_name: acct.display_name,
+        is_ai:        true,
+        team:         acct.team,
+      },
+    }),
+  })
+
+  const body = await r.json().catch(() => null)
+  if (!r.ok) {
+    return { ok: false, status: r.status, error: body?.message || body?.msg || JSON.stringify(body).slice(0, 100) }
+  }
+  return { ok: true, userId: body.id, email }
+}
+
 async function syncOneAccount(acct) {
   try {
-    // 1. 존재 여부 확인
+    const now           = new Date().toISOString()
+    const profileAvatar = avatarUrl(acct.seed, acct.bg)
+    const aiEmail       = `${acct.username}@ai.insightship.kr`
+
+    // ── 1. profiles 테이블에 username으로 존재 여부 확인 ─────────────
     const checkR = await fetch(
-      `${SB_URL}/rest/v1/profiles?username=eq.${acct.username}&limit=1&select=id,username`,
+      `${SB_URL}/rest/v1/profiles?username=eq.${acct.username}&limit=1&select=id,username,email`,
       { headers: H() }
     )
-    const existing = await checkR.json().catch(() => [])
-    const exists   = Array.isArray(existing) && existing.length > 0
+    const existingProfiles = await checkR.json().catch(() => [])
+    const profileExists    = Array.isArray(existingProfiles) && existingProfiles.length > 0
+    const existingProfile  = profileExists ? existingProfiles[0] : null
 
-    const now        = new Date().toISOString()
-    const profileAvatar = avatarUrl(acct.seed, acct.bg)
-
-    if (exists) {
-      // 2a. 업데이트
+    if (profileExists) {
+      // ── 2a. 프로필 존재 → PATCH (업데이트) ───────────────────────
       const patchR = await fetch(
         `${SB_URL}/rest/v1/profiles?username=eq.${acct.username}`,
         {
@@ -375,7 +430,8 @@ async function syncOneAccount(acct) {
           headers: { ...H(), Prefer: 'return=minimal' },
           body: JSON.stringify({
             display_name: acct.display_name,
-            bio:          acct.bio,
+            bio:          acct.bio.slice(0, 500),
+            role:         'writer',
             is_verified:  true,
             avatar_url:   profileAvatar,
             updated_at:   now,
@@ -386,48 +442,119 @@ async function syncOneAccount(acct) {
         username:    acct.username,
         status:      patchR.ok ? 'updated' : 'update_error',
         http_status: patchR.status,
+        profile_id:  existingProfile?.id || null,
         team:        acct.team,
         is_lead:     !!acct.is_lead,
       }
-    } else {
-      // 2b. 신규 생성
-      const insertR = await fetch(`${SB_URL}/rest/v1/profiles`, {
-        method:  'POST',
+    }
+
+    // ── 2b. 프로필 없음 → Auth User 확인 / 생성 ────────────────────
+    // 먼저 Auth에 같은 email 사용자 있는지 확인
+    const existingAuthUser = await findAuthUserByEmail(aiEmail)
+    let userId = existingAuthUser?.id || null
+
+    if (!userId) {
+      // Auth User 신규 생성 → 트리거가 profiles 자동 생성
+      const createResult = await createAuthUser(acct)
+      if (!createResult.ok) {
+        // Auth User 생성 실패 시 직접 profiles upsert 시도 (fallback)
+        // (FK 제약이 없는 경우를 대비한 안전망)
+        const directR = await fetch(`${SB_URL}/rest/v1/profiles`, {
+          method:  'POST',
+          headers: { ...H(), Prefer: 'return=representation,resolution=ignore-duplicates' },
+          body: JSON.stringify({
+            username:     acct.username,
+            display_name: acct.display_name,
+            bio:          acct.bio.slice(0, 500),
+            email:        aiEmail,
+            role:         'writer',
+            is_verified:  true,
+            avatar_url:   profileAvatar,
+            created_at:   now,
+            updated_at:   now,
+          }),
+        })
+        const directBody = await directR.json().catch(() => [])
+        if (directR.status === 201 || directR.status === 200) {
+          return {
+            username:   acct.username,
+            status:     'created_direct',
+            id:         directBody?.[0]?.id || null,
+            team:       acct.team,
+            is_lead:    !!acct.is_lead,
+          }
+        }
+        return {
+          username:      acct.username,
+          status:        'auth_error',
+          auth_error:    createResult.error,
+          http_status:   createResult.status,
+          team:          acct.team,
+        }
+      }
+      userId = createResult.userId
+      // 트리거가 profiles를 자동 생성하므로 300ms 대기
+      await new Promise(r => setTimeout(r, 300))
+    }
+
+    // ── 3. Auth User 존재 → profiles 확인 후 업데이트 ──────────────
+    // 트리거로 생성된 profiles를 업데이트 (username, bio, avatar 등)
+    const patchByIdR = await fetch(
+      `${SB_URL}/rest/v1/profiles?id=eq.${userId}`,
+      {
+        method:  'PATCH',
         headers: { ...H(), Prefer: 'return=representation' },
         body: JSON.stringify({
           username:     acct.username,
           display_name: acct.display_name,
-          bio:          acct.bio,
+          bio:          acct.bio.slice(0, 500),
           role:         'writer',
           is_verified:  true,
           avatar_url:   profileAvatar,
-          created_at:   now,
           updated_at:   now,
         }),
-      })
+      }
+    )
 
-      if (insertR.status === 201 || insertR.status === 200) {
-        const created = await insertR.json().catch(() => [])
-        return {
-          username:    acct.username,
-          status:      'created',
-          id:          created?.[0]?.id || null,
-          team:        acct.team,
-          is_lead:     !!acct.is_lead,
-        }
-      } else {
-        const errText = await insertR.text().catch(() => '')
-        return {
-          username:    acct.username,
-          status:      'insert_error',
-          http_status: insertR.status,
-          error:       errText.slice(0, 150),
-          team:        acct.team,
-        }
+    if (patchByIdR.ok || patchByIdR.status === 204) {
+      return {
+        username:   acct.username,
+        status:     'created',
+        auth_id:    userId,
+        team:       acct.team,
+        is_lead:    !!acct.is_lead,
       }
     }
+
+    // profiles PATCH 실패 → 직접 INSERT 시도 (username이 다를 경우)
+    const upsertR = await fetch(`${SB_URL}/rest/v1/profiles`, {
+      method:  'POST',
+      headers: { ...H(), Prefer: 'return=representation,resolution=merge-duplicates' },
+      body: JSON.stringify({
+        id:           userId,
+        username:     acct.username,
+        display_name: acct.display_name,
+        bio:          acct.bio.slice(0, 500),
+        email:        aiEmail,
+        role:         'writer',
+        is_verified:  true,
+        avatar_url:   profileAvatar,
+        created_at:   now,
+        updated_at:   now,
+      }),
+    })
+    const upsertBody = await upsertR.json().catch(() => [])
+    return {
+      username:    acct.username,
+      status:      upsertR.ok ? 'created' : 'upsert_error',
+      http_status: upsertR.status,
+      id:          upsertBody?.[0]?.id || userId,
+      team:        acct.team,
+      is_lead:     !!acct.is_lead,
+    }
+
   } catch (e) {
-    return { username: acct.username, status: 'exception', error: e.message, team: acct.team }
+    return { username: acct.username, status: 'exception', error: e.message?.slice(0, 150), team: acct.team }
   }
 }
 

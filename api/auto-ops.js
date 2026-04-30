@@ -15,7 +15,7 @@
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
 
-export const config = { runtime: 'edge', maxDuration: 60 }
+export const config = { maxDuration: 60 }
 
 import { generateReport, generateCommunityPost } from './ai-engine.js'
 

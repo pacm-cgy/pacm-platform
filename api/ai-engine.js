@@ -107,10 +107,17 @@ const PERSONA_META = {
 }
 
 // username → brain key 매핑
+// ai_aria → ARIA
+// ai_ops_june → OPS_JUNE
+// ai_cnt_iris → CNT_IRIS
+// ai_mnt_bora → MNT_BORA  ...etc
 function getBrainKey(senderUsername) {
-  // ai_aria → ARIA, ai_ops_june → OPS_JUNE 등
   if (!senderUsername) return null
-  return senderUsername.replace(/^ai_/, '').toUpperCase().replace(/_/g, '_')
+  // 접두사 'ai_' 제거 후 대문자로 변환 (언더스코어 유지)
+  const raw = senderUsername.replace(/^ai_/, '').toUpperCase()
+  // raw가 이미 PERSONA_BANK 키와 일치하면 그대로 사용
+  // 예: ARIA, NOVA, MAX, OPS_JUNE, CNT_IRIS, MNT_BORA 등
+  return raw
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -125,7 +132,21 @@ export function generateChat(senderUsername, topic, room = 'general', recentMess
   const persona = getPersona(brainKey)
   if (!persona) return null
 
-  const teamKey = brainKey.split('_')[0]
+  // brainKey 앞부분을 팀 영문명으로 변환
+  // ARIA→operations, OPS_JUNE→operations, CNT_IRIS→content, MNT_BORA→mentoring …
+  const BRAIN_TEAM_MAP = {
+    ARIA: 'operations', OPS: 'operations',
+    NOVA: 'content',    CNT: 'content',
+    LUMI: 'mentoring',  MNT: 'mentoring',
+    PULSE:'news',       NWS: 'news',
+    TREND:'analytics',  ANL: 'analytics',
+    SAGE: 'report',     RPT: 'report',
+    ECHO: 'newsletter', NWL: 'newsletter',
+    LEARN:'tech',       TCH: 'tech',
+    HANA: 'community',  CMM: 'community',
+    MAX:  'management', MGT: 'management',
+  }
+  const teamKey = BRAIN_TEAM_MAP[brainKey] || BRAIN_TEAM_MAP[brainKey.split('_')[0]] || 'operations'
 
   // 최대 3회 시도: 반복 아닌 메시지를 찾을 때까지
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -429,7 +450,7 @@ export function getAllPersonas() {
 // API 핸들러
 // ══════════════════════════════════════════════════════════════════════
 
-export const config = { runtime: 'edge' }
+// runtime: Node.js serverless (edge runtime removed — local imports not supported in edge)
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',

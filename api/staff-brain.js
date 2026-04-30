@@ -40,10 +40,13 @@ export function getActiveWorkerCount(level) {
 }
 
 export function isWorkerActive(memberKey, level) {
-  if (level === 'sleep') return ['ARIA','PULSE','NWS_CLAM'].includes(memberKey)
-  if (level === 'morning') return ['ARIA','OPS_JUNE','OPS_RAY','PULSE','HANA','CMM_JADE','MAX'].includes(memberKey)
-  if (level === 'lunch') return ['HANA','PULSE','ECHO','NOVA','CMM_JADE','NWS_VERO'].includes(memberKey)
-  if (level === 'night') return ['LEARN','TREND','TCH_VEGA','ANL_MIKO','MAX','MGT_VERA'].includes(memberKey)
+  if (level === 'sleep')   return ['ARIA','PULSE','NWS_CLAM','MAX'].includes(memberKey)
+  if (level === 'morning') return ['ARIA','OPS_JUNE','OPS_RAY','OPS_MINA','PULSE','HANA','CMM_JADE','MAX','ECHO','NOVA','MGT_VERA','MGT_ALBA'].includes(memberKey)
+  if (level === 'lunch')   return ['HANA','PULSE','ECHO','NOVA','CMM_JADE','NWS_VERO','CMM_BEAU','LUMI','NWL_RUBY','MNT_YUNA'].includes(memberKey)
+  if (level === 'night')   return ['LEARN','TREND','TCH_VEGA','ANL_MIKO','MAX','MGT_VERA','SAGE','RPT_IVAN'].includes(memberKey)
+  if (level === 'evening') return ['HANA','ECHO','NOVA','PULSE','CMM_JADE','CMM_BEAU','MNT_BORA','MNT_YUNA','LUMI','ARIA','MAX','NWL_RUBY','MGT_ALBA'].includes(memberKey)
+  if (level === 'late')    return ['LEARN','TCH_VEGA','TREND','MAX','ANL_MIKO','RPT_IVAN'].includes(memberKey)
+  // work_am, work_pm — all active
   return true
 }
 

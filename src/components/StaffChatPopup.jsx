@@ -292,9 +292,10 @@ export default function StaffChatPopup() {
       setMessages(prev => [...prev, optimisticMsg])
 
       // 2) 서버에 실제 저장
+      const authH = await getAuthHeader()
       const postRes = await fetch(`/api/staff-chat?room=${room}`, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authH },
         body: JSON.stringify({
           sender_key:   profile.username || 'admin',
           sender_name:  profile.display_name || profile.username || '관리자',
@@ -337,9 +338,14 @@ export default function StaffChatPopup() {
           setAiTyping(false)
           if (d.handled > 0) {
             setAutoMsg(`${d.responders?.join(', ')} 이(가) 반응했어요`)
-            setTimeout(() => setAutoMsg(null), 4000)
+            setTimeout(() => setAutoMsg(null), 6000)
+            // 1차 반응 확인
+            fetchMessages(true)
+            // 2차 웨이브(토론 이어받기) 확인 — 서버 측 2초 딜레이 고려
+            setTimeout(() => fetchMessages(true), 4000)
+          } else {
+            fetchMessages(true)
           }
-          fetchMessages(true)
         })
         .catch(() => setAiTyping(false))
 

@@ -1,5 +1,5 @@
 // 어드민 AI 작성 보조 — 자체 AI 엔진 (외부 API 없음)
-export const config = { runtime: 'edge' }
+// runtime: Node.js serverless
 
 const CRON_SECRET = process.env.CRON_SECRET
 const SB_URL      = process.env.SUPABASE_URL

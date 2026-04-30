@@ -10,7 +10,7 @@
  * ║  - 처리된 피드백은 업무 지시(ops 채널)에 반영                      ║
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
-export const config = { runtime: 'edge' }
+// runtime: Node.js serverless
 
 import { generateFeedbackReply } from './ai-engine.js'
 
