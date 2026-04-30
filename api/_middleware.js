@@ -1,18 +1,21 @@
 /**
- * Vercel Edge Middleware
+ * Vercel Edge Middleware v2.0
  * - IP 기반 Rate Limiting (DDoS 방어)
  * - 의심 요청 차단 (SQL 인젝션 / path traversal / 스캐너)
  * - 보안 헤더 강화
+ * - dev-permissions 엔드포인트 최고 등급 보안 (분당 2회 / IP 화이트리스트)
+ * - X-Dev-Master-Key 헤더 노출 차단
  */
 import { NextResponse } from 'next/server'
 export const config = { matcher: ['/(.*)', '/api/:path*'] }
 
 // ── Rate-Limit 설정 ─────────────────────────────────────────────────
-const WINDOW_MS   = 60_000   // 1분
-const MAX_REQ     = 80       // 일반 경로: 분당 80회
-const MAX_API     = 40       // /api/*: 분당 40회
-const MAX_STRICT  = 6        // 민감 API: 분당 6회
-const MAX_AUTH    = 10       // 인증 경로: 분당 10회
+const WINDOW_MS      = 60_000   // 1분
+const MAX_REQ        = 80       // 일반 경로: 분당 80회
+const MAX_API        = 40       // /api/*: 분당 40회
+const MAX_STRICT     = 6        // 민감 API: 분당 6회
+const MAX_AUTH       = 10       // 인증 경로: 분당 10회
+const MAX_DEV_PERMS  = 2        // 개발팀 권한 API: 분당 2회 (최고 등급)
 
 // Edge 인스턴스당 메모리 (Vercel Edge는 요청마다 재사용)
 const rateLimitMap = new Map()
@@ -126,18 +129,22 @@ export default function middleware(req) {
   }
 
   // ── 3. Rate Limiting ─────────────────────────────────────────────
+  // 최고 등급: dev-permissions (분당 2회)
+  const DEV_PERM_PATHS = ['/api/dev-permissions']
   // 민감 API (cron 트리거 가능 경로)
   const STRICT_PATHS = [
     '/api/run-summarize', '/api/generate-report', '/api/send-newsletter',
     '/api/setup-db', '/api/db-setup', '/api/reset-summaries',
     '/api/reprocess-all-news', '/api/admin-action', '/api/admin-ai',
-    '/api/staff-auth', '/api/sync-ai-accounts',
+    '/api/staff-auth', '/api/sync-ai-accounts', '/api/patch-notes',
   ]
   // 인증 경로
   const AUTH_PATHS = ['/api/ai-mentor', '/api/ai-team', '/api/office', '/api/staff-chat']
 
   let rlResult
-  if (STRICT_PATHS.some(p => path.startsWith(p))) {
+  if (DEV_PERM_PATHS.some(p => path.startsWith(p))) {
+    rlResult = rateLimit(`${ip}_devperms`, MAX_DEV_PERMS)
+  } else if (STRICT_PATHS.some(p => path.startsWith(p))) {
     rlResult = rateLimit(`${ip}_strict`, MAX_STRICT)
   } else if (AUTH_PATHS.some(p => path.startsWith(p))) {
     rlResult = rateLimit(`${ip}_auth`, MAX_AUTH)
@@ -164,6 +171,21 @@ export default function middleware(req) {
     )
   }
 
+  // ── 2-c. dev-permissions 엔드포인트 추가 보안 ───────────────────
+  // X-Dev-Master-Key 가 응답에 절대 노출되지 않도록 요청 헤더에서만 처리
+  // GET /api/dev-permissions 는 Authorization 헤더 필수
+  if (path.startsWith('/api/dev-permissions')) {
+    const authH = req.headers.get('authorization') || ''
+    const cronH = req.headers.get('x-cron-secret') || ''
+    // Authorization 또는 X-Cron-Secret 없으면 미들웨어 레벨에서 즉시 차단
+    if (!authH && !cronH) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized', code: 'DEV_PERMS_BLOCKED' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+  }
+
   // ── 4. 응답 보안 헤더 주입 ───────────────────────────────────────
   const res = NextResponse.next()
 
@@ -175,6 +197,12 @@ export default function middleware(req) {
   res.headers.set('X-DNS-Prefetch-Control',    'off')
   res.headers.set('Cross-Origin-Opener-Policy','same-origin-allow-popups')
   res.headers.set('Cross-Origin-Embedder-Policy', 'unsafe-none')
+
+  // dev-permissions: 민감 헤더가 응답에 반영되지 않도록 제거
+  if (path.startsWith('/api/dev-permissions')) {
+    res.headers.delete('X-Dev-Master-Key')
+    res.headers.set('X-Robots-Tag', 'noindex, nofollow')
+  }
 
   // Rate-Limit 응답 헤더
   res.headers.set('X-RateLimit-Remaining', String(rlResult.remaining))

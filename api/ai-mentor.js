@@ -1,6 +1,6 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════╗
- * ║   PACM-AI MENTOR ENGINE v5.0 — 완전 자체 개발 AI                   ║
+ * ║   PACM-AI MENTOR ENGINE v5.1 — 완전 자체 개발 AI                   ║
  * ║                                                                      ║
  * ║   외부 LLM API 완전 0원 — 100% 자체 구현                            ║
  * ║                                                                      ║
@@ -12,6 +12,7 @@
  * ║   5. Context Reasoner v2           — 세션 지속성 + 사용자 프로필    ║
  * ║   6. Knowledge Graph v2            — 개념 간 관계 추론 + 동적 확장  ║
  * ║   7. Response Quality Evaluator    — 자체 품질 점수 + 개선 루프     ║
+ * ║   8. Ethics Filter v1              — 유해·부적절 발언 차단 + 안전   ║
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
 export const config = { runtime: 'edge' }
@@ -1213,6 +1214,69 @@ async function persistLearningData({ sessionId, userMsg, reply, intent, userId, 
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// §10-B. 윤리 필터 v1 — 유해·부적절 요청 차단
+// ══════════════════════════════════════════════════════════════════════
+
+// 차단 카테고리별 키워드 패턴 (한국어 + 영어)
+const ETHICS_RULES = [
+  {
+    id: 'violence',
+    label: '폭력/상해',
+    patterns: [/폭탄|폭발물|총기|무기|살인|살해|죽이|공격|테러|협박|폭행/],
+    response: '그 주제는 제가 다룰 수 없어요. 저는 청소년 창업 멘토로서 건강하고 긍정적인 대화를 지향합니다. 창업이나 아이디어에 대해 이야기해요! 💡',
+  },
+  {
+    id: 'hate',
+    label: '혐오/차별',
+    patterns: [/혐오|차별|비하|비난|욕설|욕하|멍청|바보|쓰레기|ㅂㅅ|ㅅㅂ|ㅅㄲ|ㅈㄹ/],
+    response: '그런 표현은 사용하지 않는 것이 좋아요. 서로를 존중하는 대화로 함께 성장해요! 창업과 아이디어 이야기라면 언제든 도와드릴게요 😊',
+  },
+  {
+    id: 'illegal',
+    label: '불법/사기',
+    patterns: [/불법|사기|해킹|개인정보 도용|탈세|세금 포탈|저작권 침해|표절|위조|사기치|다단계/],
+    response: '죄송하지만 그 내용은 법적·윤리적 문제가 있어 도움드릴 수 없어요. 합법적이고 윤리적인 창업 방법에 대해서라면 최선을 다해 도와드릴게요! 🌱',
+  },
+  {
+    id: 'adult',
+    label: '성인/음란',
+    patterns: [/성인|야동|포르노|음란|성행위|섹스/],
+    response: '저는 청소년 창업 멘토입니다. 건전하고 유익한 창업 관련 대화를 나눠요! 궁금한 창업 주제가 있으면 편하게 물어보세요 🚀',
+  },
+  {
+    id: 'personal_info',
+    label: '개인정보 수집 시도',
+    patterns: [/주민번호|신용카드번호|계좌번호|비밀번호 알려|패스워드 알려/],
+    response: '개인 정보는 절대 공유하지 마세요! 저는 개인 정보를 수집하지 않으며, 창업 관련 질문만 도와드립니다. 안전을 위해 항상 주의해주세요 🔒',
+  },
+  {
+    id: 'self_harm',
+    label: '자해/자살',
+    patterns: [/자살|자해|죽고 싶|사라지고 싶|없어지고 싶/],
+    response: '지금 많이 힘드시군요. 혼자 감당하지 않아도 돼요. 청소년 위기상담전화 **1388** (24시간)에 전화하거나 문자 주시면 전문가가 도와드립니다. 여러분은 소중한 존재입니다 💙',
+  },
+  {
+    id: 'ai_deception',
+    label: 'AI 사칭/기만 유도',
+    patterns: [/사람인 척|사람이야\?|인간인 척|거짓말해|속여|jailbreak|탈옥/],
+    response: '저는 PACM-AI 창업 멘토 AI입니다. 투명하게 AI임을 밝히며, 기만적 행동은 하지 않아요. 진정성 있는 창업 조언을 드리는 것이 제 역할입니다 😊',
+  },
+]
+
+function ethicsCheck(msg) {
+  if (!msg) return null
+  const lower = msg.toLowerCase()
+  for (const rule of ETHICS_RULES) {
+    for (const pattern of rule.patterns) {
+      if (pattern.test(lower) || pattern.test(msg)) {
+        return { blocked: true, category: rule.id, label: rule.label, response: rule.response }
+      }
+    }
+  }
+  return { blocked: false }
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // §11. Rate Limiter
 // ══════════════════════════════════════════════════════════════════════
 
@@ -1284,6 +1348,28 @@ export default async function handler(req) {
 
   const userMsg = lastUser.content.trim()
   const startTime = Date.now()
+
+  // ── A-0. 윤리 필터 — 유해·부적절 요청 차단
+  const ethicsResult = ethicsCheck(userMsg)
+  if (ethicsResult?.blocked) {
+    return new Response(JSON.stringify({
+      reply: ethicsResult.response,
+      intent: 'ethics_blocked',
+      intent_confidence: '10.00',
+      engine: 'LUMI-v5.1',
+      agent: 'LUMI',
+      knowledge_used: 0,
+      articles_used: 0,
+      external_api: false,
+      cost: 0,
+      elapsed_ms: Date.now() - startTime,
+      ethics_blocked: true,
+      ethics_category: ethicsResult.category,
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...CORS, 'Cache-Control': 'no-store' },
+    })
+  }
 
   // ── A. 의도 분류
   const intent = classifyIntent(userMsg)

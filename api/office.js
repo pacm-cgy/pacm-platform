@@ -3,7 +3,7 @@
  * 자체 AI 엔진 전용 — 외부 API 완전 제거
  * SUPABASE_URL (서버사이드 환경변수) 사용
  */
-export const config = { runtime: 'edge' }
+// runtime: Node.js serverless
 
 import { generateChat, generateText } from './ai-engine.js'
 

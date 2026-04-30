@@ -15,7 +15,7 @@
  * ║  - strategy  : 전략 회의 채널                                       ║
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
-export const config = { runtime: 'edge' }
+// runtime: Node.js serverless
 
 const SB_URL       = process.env.SUPABASE_URL
 const SB_KEY       = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -392,9 +392,14 @@ export default async function handler(req) {
 
   // ── DELETE: 메시지 삭제 (관리자) ─────────────────────────────────
   if (req.method === 'DELETE') {
-    const isAuthed =
-      req.headers.get('authorization') === `Bearer ${CRON_SECRET}` ||
-      req.headers.get('x-cron-secret')  === CRON_SECRET
+    const delAuthHeader  = req.headers.get('authorization') || ''
+    const delBearerToken = delAuthHeader.startsWith('Bearer ') ? delAuthHeader.slice(7) : ''
+    const isCronAuth =
+      delAuthHeader === `Bearer ${CRON_SECRET}` ||
+      req.headers.get('x-cron-secret') === CRON_SECRET
+    const isAdminAuth = delBearerToken && delBearerToken !== CRON_SECRET
+      ? await checkAdminJWT(delBearerToken) : false
+    const isAuthed = isCronAuth || isAdminAuth
     if (!isAuthed) return json({ error: 'Unauthorized' }, 401)
 
     const msgId = url.searchParams.get('id')

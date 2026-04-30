@@ -784,3 +784,70 @@ create policy if not exists "nl_logs_read"     on public.newsletter_logs    for 
 create policy if not exists "nl_logs_insert"   on public.newsletter_logs    for insert with check (true);
 create policy if not exists "ai_notices_read"  on public.ai_notices         for select using (true);
 create policy if not exists "ai_notices_insert" on public.ai_notices        for insert with check (true);
+
+-- ================================================================
+-- Schema Extension v2.0 — Dev Permissions + Patch Notes
+-- ================================================================
+
+-- ── 개발팀 권한 관리 ──────────────────────────────────────────
+create table if not exists public.dev_permissions (
+  id          uuid primary key default uuid_generate_v4(),
+  username    text not null,
+  permission  text not null,           -- github_read / github_write / supabase_read / ...
+  tier        smallint not null default 1,
+  granted_by  text,
+  expires_at  timestamptz not null,
+  note        text,
+  is_active   boolean not null default true,
+  created_at  timestamptz not null default now(),
+  unique(username, permission)
+);
+create index if not exists dev_perm_username_idx  on public.dev_permissions(username);
+create index if not exists dev_perm_expires_idx   on public.dev_permissions(expires_at);
+create index if not exists dev_perm_tier_idx      on public.dev_permissions(tier);
+
+-- ── 개발팀 권한 감사 로그 ─────────────────────────────────────
+create table if not exists public.dev_permission_logs (
+  id               uuid primary key default uuid_generate_v4(),
+  action           text not null,       -- grant / revoke / grant_denied_high_tier
+  target_username  text not null,
+  permission       text not null,
+  granted_by       text,
+  note             text,
+  created_at       timestamptz not null default now()
+);
+create index if not exists dev_perm_log_user_idx  on public.dev_permission_logs(target_username);
+create index if not exists dev_perm_log_time_idx  on public.dev_permission_logs(created_at desc);
+
+-- ── 패치노트 ─────────────────────────────────────────────────
+create table if not exists public.patch_notes (
+  id           uuid primary key default uuid_generate_v4(),
+  version      text not null,           -- v1.0, v1.1 ...
+  title        text not null,
+  body         text not null,           -- 마크다운
+  tags         text[] default '{}',
+  changes      jsonb default '[]',      -- [{ type, desc }] 구조적 변경 목록
+  is_published boolean not null default false,
+  is_auto      boolean not null default false,
+  author       text default 'admin',
+  published_at timestamptz,
+  updated_at   timestamptz,
+  deleted_at   timestamptz,
+  created_at   timestamptz not null default now()
+);
+create index if not exists patch_notes_pub_idx  on public.patch_notes(published_at desc);
+create index if not exists patch_notes_ver_idx  on public.patch_notes(version);
+
+-- ── RLS ──────────────────────────────────────────────────────
+alter table if exists public.dev_permissions       enable row level security;
+alter table if exists public.dev_permission_logs   enable row level security;
+alter table if exists public.patch_notes           enable row level security;
+
+-- dev_permissions: 서비스 롤만 쓰기, 모두 읽기
+create policy if not exists "dev_perm_read"   on public.dev_permissions       for select using (true);
+create policy if not exists "dev_perm_write"  on public.dev_permissions       for all    using (true) with check (true);
+create policy if not exists "dev_log_read"    on public.dev_permission_logs   for select using (true);
+create policy if not exists "dev_log_write"   on public.dev_permission_logs   for insert with check (true);
+-- patch_notes: 공개 읽기, 서비스 롤 쓰기
+create policy if not exists "patch_read"      on public.patch_notes           for select using (is_published = true);
+create policy if not exists "patch_write"     on public.patch_notes           for all    using (true) with check (true);

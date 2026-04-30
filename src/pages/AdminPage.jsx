@@ -31,6 +31,8 @@ const TABS = [
   { id: 'workers',    label: '워커 제어',   icon: Activity  },
   { id: 'ops',        label: '자동 운영',   icon: Zap       },
   { id: 'cron',       label: '시스템',      icon: Settings  },
+  { id: 'devperms',   label: '개발팀 권한', icon: Lock      },
+  { id: 'patchnotes', label: '패치노트',    icon: FileText  },
 ]
 
 // ── 채팅방 상수 ──────────────────────────────────────────────────────
@@ -1977,23 +1979,41 @@ function StaffChatTab() {
 
   const sendMsg = async () => {
     if (!input.trim() || sending) return
+    const msgText = input.trim()
     setSending(true)
+    setInput('')
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const authHeader = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
       await fetch(`/api/staff-chat?room=${room}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeader },
         body: JSON.stringify({
           sender_key:   profile?.username || 'admin',
           sender_name:  profile?.display_name || 'Admin',
           sender_emoji: '👤',
           sender_color: '#60A5FA',
           sender_team:  '관리자',
-          message:      input.trim(),
-          msg_type:     'chat',
+          message:      msgText,
+          msg_type:     'admin_message',
         }),
       })
-      setInput('')
       await fetchMsgs()
+      // AI 직원 자동 반응 트리거 (fire-and-forget)
+      const autoHeaders = { 'Content-Type': 'application/json', ...authHeader }
+      const cronSecret = typeof process !== 'undefined' ? undefined : undefined // 환경 변수 없음
+      fetch('/api/staff-chat-auto', {
+        method: 'POST',
+        headers: autoHeaders,
+        body: JSON.stringify({ action: 'admin_message', room, message: msgText }),
+      }).then(r => r.json()).then(d => {
+        if (d.handled > 0) {
+          // 1차 반응 확인 (2초 후)
+          setTimeout(() => fetchMsgs(), 2000)
+          // 2차 웨이브(토론 이어받기) 확인 (5초 후)
+          setTimeout(() => fetchMsgs(), 5000)
+        }
+      }).catch(() => {})
     } catch (_) {}
     setSending(false)
   }
@@ -2168,15 +2188,23 @@ function StaffChatTab() {
             { label:'피드백 검토 지시', msg:'📋 전팀 공지: 오늘 들어온 유저 피드백을 각 팀별로 검토하고 개선 사항을 ops 채널에 보고해주세요.', room:'ops' },
             { label:'주간 전략 브리핑', msg:'🎯 이번 주 플랫폼 전략 방향을 논의합니다. 각 팀 선임 매니저분들 의견 부탁드립니다.', room:'strategy' },
             { label:'피드백 처리 완료 보고 요청', msg:'📥 피드백 채널: 오늘 수신된 피드백 처리 현황을 공유해주세요.', room:'feedback' },
+            { label:'전체 공지: 이번 주 목표 공유', msg:'📢 전팀 공지: 이번 주 각 팀별 목표와 우선순위를 general 채널에 공유해주세요.', room:'general' },
           ].map(item => (
             <button key={item.label} onClick={async () => {
+              const { data: { session } } = await supabase.auth.getSession()
+              const authHeader = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
               await fetch(`/api/staff-chat?room=${item.room}`, {
-                method:'POST', headers:{'Content-Type':'application/json'},
+                method:'POST', headers:{'Content-Type':'application/json', ...authHeader},
                 body: JSON.stringify({ sender_key:'ai_max', sender_name:'MAX', sender_emoji:'🏛️',
                   sender_color:'#F87171', sender_team:'관리팀', message:item.msg, msg_type:'task_directive' }),
               })
               setRoom(item.room)
               await fetchMsgs()
+              // AI 직원 자동 반응 트리거
+              fetch('/api/staff-chat-auto', {
+                method:'POST', headers:{'Content-Type':'application/json', ...authHeader},
+                body: JSON.stringify({ action:'admin_message', room: item.room, message: item.msg }),
+              }).then(r=>r.json()).then(d=>{ if(d.handled>0) setTimeout(()=>fetchMsgs(),2000) }).catch(()=>{})
             }}
               style={{ width:'100%', background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.2)',
                 borderRadius:6, padding:'7px 10px', color:'var(--t2)', fontSize:11, cursor:'pointer',
@@ -2335,6 +2363,713 @@ function FeedbackManageTab() {
             </div>
           ))}
         </Panel>
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 개발팀 권한 관리 탭
+// ══════════════════════════════════════════════════════════════════════
+
+const PERM_META = {
+  github_read:    { label: 'GitHub 읽기',       emoji: '👁️',  tier: 1, color: '#60A5FA' },
+  github_write:   { label: 'GitHub 쓰기',       emoji: '✏️',  tier: 2, color: '#34D399' },
+  supabase_read:  { label: 'Supabase 읽기',     emoji: '🔍',  tier: 1, color: '#A78BFA' },
+  supabase_write: { label: 'Supabase 쓰기',     emoji: '📝',  tier: 2, color: '#F59E0B' },
+  supabase_admin: { label: 'Supabase 관리자',   emoji: '🔑',  tier: 4, color: '#F87171' },
+  deploy_preview: { label: 'Preview 배포',      emoji: '🚀',  tier: 2, color: '#38BDF8' },
+  deploy_prod:    { label: '프로덕션 배포',     emoji: '🏭',  tier: 5, color: '#F43F5E' },
+}
+
+function DevPermissionsTab() {
+  const [byUser,   setByUser]   = useState({})
+  const [loading,  setLoading]  = useState(false)
+  const [working,  setWorking]  = useState(false)
+  const [msg,      setMsg]      = useState('')
+  const [selUser,  setSelUser]  = useState('')
+  const [selPerm,  setSelPerm]  = useState('github_read')
+  const [note,     setNote]     = useState('')
+  const [masterKey, setMasterKey] = useState('')
+  const [logs,     setLogs]     = useState([])
+  const [showLogs, setShowLogs] = useState(false)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      const r = await fetch('/api/dev-permissions', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const d = await r.json()
+      if (d.ok) setByUser(d.by_user || {})
+      else setMsg('❌ ' + (d.error || '로드 실패'))
+    } catch (e) { setMsg('❌ ' + e.message) }
+    setLoading(false)
+  }
+
+  const loadLogs = async () => {
+    try {
+      const { data: rows } = await supabase
+        .from('dev_permission_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50)
+      setLogs(rows || [])
+      setShowLogs(true)
+    } catch (e) { setMsg('❌ 로그 로드 실패') }
+  }
+
+  const grant = async () => {
+    if (!selUser.trim() || !selPerm) { setMsg('⚠️ 유저명과 권한을 선택하세요'); return }
+    setWorking(true); setMsg('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      const r = await fetch('/api/dev-permissions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          ...(masterKey ? { 'X-Dev-Master-Key': masterKey } : {}),
+        },
+        body: JSON.stringify({ action: 'grant', username: selUser.trim(), permission: selPerm, note }),
+      })
+      const d = await r.json()
+      if (d.ok) { setMsg(`✅ ${selUser}에게 [${PERM_META[selPerm]?.label}] 권한 부여 완료`); load() }
+      else setMsg('❌ ' + (d.error || '권한 부여 실패'))
+    } catch (e) { setMsg('❌ ' + e.message) }
+    setWorking(false)
+  }
+
+  const grantTechPreset = async () => {
+    if (!selUser.trim()) { setMsg('⚠️ 유저명을 입력하세요'); return }
+    if (!masterKey) { setMsg('⚠️ 기술팀 프리셋은 마스터 키 필요'); return }
+    setWorking(true); setMsg('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      const r = await fetch('/api/dev-permissions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'X-Dev-Master-Key': masterKey,
+        },
+        body: JSON.stringify({ action: 'grant_tech_preset', username: selUser.trim() }),
+      })
+      const d = await r.json()
+      if (d.ok) { setMsg(`✅ ${selUser} 기술팀 프리셋 완료 (${d.results?.length || 0}개 권한)`); load() }
+      else setMsg('❌ ' + (d.error || '프리셋 실패'))
+    } catch (e) { setMsg('❌ ' + e.message) }
+    setWorking(false)
+  }
+
+  const revoke = async (username, permission) => {
+    if (!confirm(`${username}의 [${PERM_META[permission]?.label || permission}] 권한을 취소하시겠습니까?`)) return
+    setWorking(true); setMsg('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      const r = await fetch(`/api/dev-permissions?username=${encodeURIComponent(username)}&permission=${permission}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(masterKey ? { 'X-Dev-Master-Key': masterKey } : {}),
+        },
+      })
+      const d = await r.json()
+      if (d.ok) { setMsg(`✅ ${username}의 [${permission}] 권한 취소 완료`); load() }
+      else setMsg('❌ ' + (d.error || '취소 실패'))
+    } catch (e) { setMsg('❌ ' + e.message) }
+    setWorking(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  const allUsers = Object.keys(byUser)
+  const totalPerms = Object.values(byUser).reduce((s, arr) => s + arr.length, 0)
+
+  const tierBadge = (tier) => {
+    const colors = { 1:'#60A5FA', 2:'#34D399', 3:'#F59E0B', 4:'#F87171', 5:'#F43F5E' }
+    return (
+      <span style={{ background: colors[tier] || '#60A5FA', color:'#fff', borderRadius:3,
+        padding:'1px 5px', fontSize:9, fontFamily:'var(--f-mono)' }}>
+        T{tier}
+      </span>
+    )
+  }
+
+  return (
+    <div>
+      {/* 헤더 요약 */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:10, marginBottom:24 }}>
+        <div style={{ background:'var(--bg2)', border:'1px solid var(--b1)', borderRadius:10, padding:16, textAlign:'center' }}>
+          <div style={{ fontSize:28, fontWeight:700, color:'#60A5FA', fontFamily:'var(--f-mono)' }}>{allUsers.length}</div>
+          <div style={{ fontSize:12, color:'var(--t3)', marginTop:4 }}>권한 보유 유저</div>
+        </div>
+        <div style={{ background:'var(--bg2)', border:'1px solid var(--b1)', borderRadius:10, padding:16, textAlign:'center' }}>
+          <div style={{ fontSize:28, fontWeight:700, color:'#34D399', fontFamily:'var(--f-mono)' }}>{totalPerms}</div>
+          <div style={{ fontSize:12, color:'var(--t3)', marginTop:4 }}>활성 권한 수</div>
+        </div>
+        <div style={{ background:'var(--bg2)', border:'1px solid var(--b1)', borderRadius:10, padding:16, textAlign:'center' }}>
+          <div style={{ fontSize:28, fontWeight:700, color:'#F87171', fontFamily:'var(--f-mono)' }}>
+            {Object.values(byUser).flat().filter(p => p.tier >= 4).length}
+          </div>
+          <div style={{ fontSize:12, color:'var(--t3)', marginTop:4 }}>고급 권한 (T4+)</div>
+        </div>
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 380px', gap:20, alignItems:'start' }}>
+        {/* 왼쪽: 유저별 권한 목록 */}
+        <div>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
+            <h3 style={{ fontSize:14, fontWeight:600, color:'var(--t1)', margin:0 }}>
+              🔐 현재 활성 권한 목록
+            </h3>
+            <button onClick={load} style={{ background:'none', border:'1px solid var(--b1)', borderRadius:6,
+              padding:'4px 10px', fontSize:11, color:'var(--t3)', cursor:'pointer' }}>
+              {loading ? '⏳' : '↺ 새로고침'}
+            </button>
+            <button onClick={loadLogs} style={{ background:'none', border:'1px solid var(--b1)', borderRadius:6,
+              padding:'4px 10px', fontSize:11, color:'var(--t3)', cursor:'pointer' }}>
+              📋 감사 로그
+            </button>
+          </div>
+
+          {loading ? (
+            <div style={{ color:'var(--t3)', fontSize:13 }}>로딩 중...</div>
+          ) : allUsers.length === 0 ? (
+            <div style={{ background:'var(--bg2)', border:'1px solid var(--b1)', borderRadius:10,
+              padding:24, textAlign:'center', color:'var(--t3)', fontSize:13 }}>
+              현재 활성 권한 없음
+            </div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {allUsers.map(username => (
+                <div key={username} style={{ background:'var(--bg2)', border:'1px solid var(--b1)',
+                  borderRadius:10, padding:14 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+                    <span style={{ fontSize:16 }}>👤</span>
+                    <span style={{ fontSize:13, fontWeight:600, color:'var(--t1)',
+                      fontFamily:'var(--f-mono)' }}>{username}</span>
+                    <span style={{ background:'rgba(96,165,250,0.1)', color:'#60A5FA', borderRadius:4,
+                      padding:'1px 6px', fontSize:10 }}>{byUser[username].length}개 권한</span>
+                  </div>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                    {byUser[username].map(p => {
+                      const meta = PERM_META[p.permission] || {}
+                      const exp  = new Date(p.expires_at)
+                      const hoursLeft = Math.max(0, Math.round((exp - Date.now()) / 3600_000))
+                      return (
+                        <div key={p.id} style={{ background:'var(--bg3)', border:`1px solid ${meta.color || '#60A5FA'}33`,
+                          borderRadius:8, padding:'6px 10px', display:'flex', alignItems:'center', gap:6 }}>
+                          <span style={{ fontSize:14 }}>{meta.emoji || '🔒'}</span>
+                          <div>
+                            <div style={{ fontSize:11, color:'var(--t1)', fontWeight:500 }}>{meta.label || p.permission}</div>
+                            <div style={{ fontSize:10, color:'var(--t4)', fontFamily:'var(--f-mono)' }}>
+                              {hoursLeft}h 남음 {tierBadge(p.tier)}
+                            </div>
+                          </div>
+                          <button onClick={() => revoke(username, p.permission)}
+                            style={{ background:'rgba(244,63,94,0.1)', border:'1px solid rgba(244,63,94,0.25)',
+                              borderRadius:4, padding:'2px 6px', fontSize:10, color:'#F43F5E', cursor:'pointer',
+                              marginLeft:4 }}>
+                            취소
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 감사 로그 */}
+          {showLogs && logs.length > 0 && (
+            <div style={{ marginTop:20 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+                <h4 style={{ fontSize:13, color:'var(--t1)', margin:0 }}>📋 권한 변경 감사 로그</h4>
+                <button onClick={() => setShowLogs(false)}
+                  style={{ background:'none', border:'none', color:'var(--t4)', cursor:'pointer', fontSize:12 }}>✕</button>
+              </div>
+              <div style={{ background:'var(--bg2)', border:'1px solid var(--b1)', borderRadius:10, overflow:'hidden' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:11 }}>
+                  <thead>
+                    <tr style={{ borderBottom:'1px solid var(--b1)', background:'var(--bg3)' }}>
+                      <th style={{ padding:'8px 12px', textAlign:'left', color:'var(--t3)' }}>시각</th>
+                      <th style={{ padding:'8px 12px', textAlign:'left', color:'var(--t3)' }}>액션</th>
+                      <th style={{ padding:'8px 12px', textAlign:'left', color:'var(--t3)' }}>대상</th>
+                      <th style={{ padding:'8px 12px', textAlign:'left', color:'var(--t3)' }}>권한</th>
+                      <th style={{ padding:'8px 12px', textAlign:'left', color:'var(--t3)' }}>처리자</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logs.map(l => (
+                      <tr key={l.id} style={{ borderBottom:'1px solid var(--b1)' }}>
+                        <td style={{ padding:'7px 12px', color:'var(--t4)', fontFamily:'var(--f-mono)' }}>
+                          {new Date(l.created_at).toLocaleString('ko-KR')}
+                        </td>
+                        <td style={{ padding:'7px 12px' }}>
+                          <span style={{ color: l.action === 'grant' ? '#34D399' : l.action === 'revoke' ? '#F87171' : '#F59E0B',
+                            fontFamily:'var(--f-mono)', fontSize:10 }}>{l.action}</span>
+                        </td>
+                        <td style={{ padding:'7px 12px', color:'var(--t1)', fontFamily:'var(--f-mono)' }}>{l.target_username}</td>
+                        <td style={{ padding:'7px 12px', color:'var(--t2)', fontSize:10 }}>
+                          {PERM_META[l.permission]?.label || l.permission}
+                        </td>
+                        <td style={{ padding:'7px 12px', color:'var(--t3)' }}>{l.granted_by}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 오른쪽: 권한 부여 패널 */}
+        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <div style={{ background:'var(--bg2)', border:'1px solid var(--b1)', borderRadius:10, padding:16 }}>
+            <h4 style={{ fontSize:13, fontWeight:600, color:'var(--t1)', margin:'0 0 14px 0' }}>🔑 권한 부여</h4>
+
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              <div>
+                <div style={{ fontSize:11, color:'var(--t3)', marginBottom:4 }}>대상 유저명</div>
+                <input value={selUser} onChange={e => setSelUser(e.target.value)}
+                  placeholder="username"
+                  style={{ width:'100%', background:'var(--bg3)', border:'1px solid var(--b1)',
+                    borderRadius:6, padding:'7px 10px', color:'var(--t1)', fontSize:12,
+                    fontFamily:'var(--f-mono)', boxSizing:'border-box' }}/>
+              </div>
+
+              <div>
+                <div style={{ fontSize:11, color:'var(--t3)', marginBottom:4 }}>권한 선택</div>
+                <select value={selPerm} onChange={e => setSelPerm(e.target.value)}
+                  style={{ width:'100%', background:'var(--bg3)', border:'1px solid var(--b1)',
+                    borderRadius:6, padding:'7px 10px', color:'var(--t1)', fontSize:12 }}>
+                  {Object.entries(PERM_META).map(([k, v]) => (
+                    <option key={k} value={k}>{v.emoji} {v.label} (T{v.tier})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <div style={{ fontSize:11, color:'var(--t3)', marginBottom:4 }}>메모 (선택)</div>
+                <input value={note} onChange={e => setNote(e.target.value)}
+                  placeholder="부여 사유"
+                  style={{ width:'100%', background:'var(--bg3)', border:'1px solid var(--b1)',
+                    borderRadius:6, padding:'7px 10px', color:'var(--t1)', fontSize:12, boxSizing:'border-box' }}/>
+              </div>
+
+              <div>
+                <div style={{ fontSize:11, color:'#F87171', marginBottom:4 }}>🔐 마스터 키 (T4+ 필수)</div>
+                <input type="password" value={masterKey} onChange={e => setMasterKey(e.target.value)}
+                  placeholder="DEV_MASTER_KEY"
+                  style={{ width:'100%', background:'var(--bg3)', border:'1px solid rgba(248,113,113,0.3)',
+                    borderRadius:6, padding:'7px 10px', color:'var(--t1)', fontSize:12,
+                    fontFamily:'var(--f-mono)', boxSizing:'border-box' }}/>
+              </div>
+
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={grant} disabled={working}
+                  style={{ flex:1, background:'rgba(96,165,250,0.15)', border:'1px solid rgba(96,165,250,0.4)',
+                    borderRadius:7, padding:'8px 0', color:'#60A5FA', fontSize:12, cursor:'pointer', fontWeight:600 }}>
+                  {working ? '처리 중...' : '✅ 권한 부여'}
+                </button>
+              </div>
+
+              <button onClick={grantTechPreset} disabled={working}
+                style={{ background:'rgba(52,211,153,0.1)', border:'1px solid rgba(52,211,153,0.3)',
+                  borderRadius:7, padding:'8px 0', color:'#34D399', fontSize:12, cursor:'pointer', fontWeight:600 }}>
+                🛠️ 기술팀 프리셋 일괄 부여
+              </button>
+            </div>
+          </div>
+
+          {msg && (
+            <div style={{ background: msg.startsWith('✅') ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)',
+              border: `1px solid ${msg.startsWith('✅') ? 'rgba(52,211,153,0.3)' : 'rgba(248,113,113,0.3)'}`,
+              borderRadius:8, padding:'10px 14px', fontSize:12,
+              color: msg.startsWith('✅') ? '#34D399' : '#F87171' }}>
+              {msg}
+            </div>
+          )}
+
+          {/* 권한 계층 안내 */}
+          <div style={{ background:'var(--bg2)', border:'1px solid var(--b1)', borderRadius:10, padding:14 }}>
+            <div style={{ fontSize:12, fontWeight:600, color:'var(--t2)', marginBottom:10 }}>📖 권한 계층</div>
+            {Object.entries(PERM_META).map(([k, v]) => (
+              <div key={k} style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 0',
+                borderBottom:'1px solid var(--b1)' }}>
+                <span>{v.emoji}</span>
+                <span style={{ flex:1, fontSize:11, color:'var(--t2)' }}>{v.label}</span>
+                {tierBadge(v.tier)}
+                <span style={{ fontSize:10, color:'var(--t4)', fontFamily:'var(--f-mono)' }}>
+                  {v.tier >= 4 ? '4h' : '24h'}
+                </span>
+              </div>
+            ))}
+            <div style={{ marginTop:10, fontSize:10, color:'var(--t4)', lineHeight:1.6 }}>
+              ⚠️ T4+ 권한은 마스터 키 필수<br/>
+              ⚠️ 모든 권한 변경은 감사 로그에 기록됨<br/>
+              ⚠️ IP 화이트리스트 적용 중
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 패치노트 탭
+// ══════════════════════════════════════════════════════════════════════
+
+function PatchNotesTab() {
+  const [notes,    setNotes]    = useState([])
+  const [loading,  setLoading]  = useState(false)
+  const [working,  setWorking]  = useState(false)
+  const [msg,      setMsg]      = useState('')
+  const [selected, setSelected] = useState(null)
+  const [editMode, setEditMode] = useState(false)
+  const [form,     setForm]     = useState({ title:'', body:'', version:'', tags:'' })
+  const [showWrite, setShowWrite] = useState(false)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const r = await fetch('/api/patch-notes?limit=30')
+      const d = await r.json()
+      if (d.ok) setNotes(d.notes || [])
+    } catch (e) { setMsg('❌ 로드 실패') }
+    setLoading(false)
+  }
+
+  const autoGenerate = async () => {
+    if (!confirm('AI가 최근 2주 운영 데이터를 분석해 패치노트를 자동 생성합니다. 계속할까요?')) return
+    setWorking(true); setMsg('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      const cronSecret = import.meta.env.VITE_CRON_SECRET || ''
+      const r = await fetch('/api/patch-notes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'X-Cron-Secret': cronSecret,
+        },
+        body: JSON.stringify({ action: 'auto', force: true }),
+      })
+      const d = await r.json()
+      if (d.ok && !d.skipped) {
+        setMsg(`✅ 패치노트 자동 생성 완료: ${d.version}`)
+        load()
+      } else if (d.skipped) {
+        setMsg('⚠️ 비격주 주기 (강제 실행하려면 force: true)')
+      } else {
+        setMsg('❌ ' + (d.error || '생성 실패'))
+      }
+    } catch (e) { setMsg('❌ ' + e.message) }
+    setWorking(false)
+  }
+
+  const publish = async () => {
+    if (!form.title.trim() || !form.body.trim()) { setMsg('⚠️ 제목과 본문을 입력하세요'); return }
+    setWorking(true); setMsg('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      const r = await fetch('/api/patch-notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          action:  'publish',
+          title:   form.title,
+          body:    form.body,
+          version: form.version || undefined,
+          tags:    form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        }),
+      })
+      const d = await r.json()
+      if (d.ok) {
+        setMsg(`✅ 패치노트 게시 완료: ${d.version}`)
+        setShowWrite(false)
+        setForm({ title:'', body:'', version:'', tags:'' })
+        load()
+      } else setMsg('❌ ' + (d.error || '게시 실패'))
+    } catch (e) { setMsg('❌ ' + e.message) }
+    setWorking(false)
+  }
+
+  const patchEdit = async (id) => {
+    setWorking(true); setMsg('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      const r = await fetch(`/api/patch-notes?id=${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          title: form.title,
+          body:  form.body,
+          tags:  form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+        }),
+      })
+      const d = await r.json()
+      if (d.ok) { setMsg('✅ 수정 완료'); setEditMode(false); load() }
+      else setMsg('❌ ' + (d.error || '수정 실패'))
+    } catch (e) { setMsg('❌ ' + e.message) }
+    setWorking(false)
+  }
+
+  const deleteNote = async (id) => {
+    if (!confirm('패치노트를 삭제하시겠습니까?')) return
+    setWorking(true); setMsg('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      const r = await fetch(`/api/patch-notes?id=${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const d = await r.json()
+      if (d.ok) { setMsg('✅ 삭제 완료'); setSelected(null); load() }
+      else setMsg('❌ ' + (d.error || '삭제 실패'))
+    } catch (e) { setMsg('❌ ' + e.message) }
+    setWorking(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  const tagColors = ['#60A5FA','#34D399','#F59E0B','#A78BFA','#F472B6','#38BDF8']
+
+  return (
+    <div>
+      {/* 상단 액션 */}
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:20, flexWrap:'wrap' }}>
+        <h3 style={{ fontSize:15, fontWeight:700, color:'var(--t1)', margin:0 }}>📋 패치노트 관리</h3>
+        <div style={{ marginLeft:'auto', display:'flex', gap:8 }}>
+          <button onClick={load} style={{ background:'none', border:'1px solid var(--b1)', borderRadius:7,
+            padding:'7px 14px', fontSize:12, color:'var(--t3)', cursor:'pointer' }}>
+            ↺ 새로고침
+          </button>
+          <button onClick={autoGenerate} disabled={working}
+            style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)',
+              borderRadius:7, padding:'7px 14px', fontSize:12, color:'#A78BFA', cursor:'pointer', fontWeight:600 }}>
+            🤖 AI 자동 생성
+          </button>
+          <button onClick={() => setShowWrite(true)}
+            style={{ background:'rgba(96,165,250,0.12)', border:'1px solid rgba(96,165,250,0.35)',
+              borderRadius:7, padding:'7px 14px', fontSize:12, color:'#60A5FA', cursor:'pointer', fontWeight:600 }}>
+            ✏️ 수동 작성
+          </button>
+        </div>
+      </div>
+
+      {msg && (
+        <div style={{ background: msg.startsWith('✅') ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)',
+          border: `1px solid ${msg.startsWith('✅') ? 'rgba(52,211,153,0.3)' : 'rgba(248,113,113,0.3)'}`,
+          borderRadius:8, padding:'10px 14px', fontSize:12, marginBottom:16,
+          color: msg.startsWith('✅') ? '#34D399' : '#F87171' }}>
+          {msg}
+        </div>
+      )}
+
+      {/* 수동 작성 폼 */}
+      {showWrite && (
+        <div style={{ background:'var(--bg2)', border:'1px solid var(--b1)', borderRadius:12, padding:20, marginBottom:20 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
+            <h4 style={{ fontSize:13, fontWeight:600, color:'var(--t1)', margin:0 }}>✏️ 패치노트 작성</h4>
+            <button onClick={() => setShowWrite(false)}
+              style={{ marginLeft:'auto', background:'none', border:'none', color:'var(--t4)', cursor:'pointer' }}>✕</button>
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <div>
+                <div style={{ fontSize:11, color:'var(--t3)', marginBottom:4 }}>제목 *</div>
+                <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder="v1.5 — 주요 기능 개선"
+                  style={{ width:'100%', background:'var(--bg3)', border:'1px solid var(--b1)',
+                    borderRadius:6, padding:'7px 10px', color:'var(--t1)', fontSize:12, boxSizing:'border-box' }}/>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:'var(--t3)', marginBottom:4 }}>버전 (자동 입력 가능)</div>
+                <input value={form.version} onChange={e => setForm(f => ({ ...f, version: e.target.value }))}
+                  placeholder="v1.5"
+                  style={{ width:'100%', background:'var(--bg3)', border:'1px solid var(--b1)',
+                    borderRadius:6, padding:'7px 10px', color:'var(--t1)', fontSize:12,
+                    fontFamily:'var(--f-mono)', boxSizing:'border-box' }}/>
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:'var(--t3)', marginBottom:4 }}>태그 (쉼표 구분)</div>
+              <input value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
+                placeholder="기능개선, 버그수정, 보안"
+                style={{ width:'100%', background:'var(--bg3)', border:'1px solid var(--b1)',
+                  borderRadius:6, padding:'7px 10px', color:'var(--t1)', fontSize:12, boxSizing:'border-box' }}/>
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:'var(--t3)', marginBottom:4 }}>본문 (마크다운) *</div>
+              <textarea value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
+                rows={10} placeholder="## 변경 사항&#10;&#10;### ✨ 새 기능&#10;- ...&#10;&#10;### 🐛 버그 수정&#10;- ..."
+                style={{ width:'100%', background:'var(--bg3)', border:'1px solid var(--b1)',
+                  borderRadius:6, padding:'10px', color:'var(--t1)', fontSize:12,
+                  fontFamily:'var(--f-mono)', resize:'vertical', boxSizing:'border-box' }}/>
+            </div>
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+              <button onClick={() => setShowWrite(false)}
+                style={{ background:'none', border:'1px solid var(--b1)', borderRadius:7,
+                  padding:'8px 16px', fontSize:12, color:'var(--t3)', cursor:'pointer' }}>취소</button>
+              <button onClick={publish} disabled={working}
+                style={{ background:'rgba(96,165,250,0.15)', border:'1px solid rgba(96,165,250,0.4)',
+                  borderRadius:7, padding:'8px 16px', fontSize:12, color:'#60A5FA',
+                  cursor:'pointer', fontWeight:600 }}>
+                {working ? '게시 중...' : '📢 게시'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display:'grid', gridTemplateColumns: selected ? '1fr 420px' : '1fr', gap:20, alignItems:'start' }}>
+        {/* 목록 */}
+        <div>
+          {loading ? (
+            [...Array(4)].map((_,i) => <div key={i} className="skeleton" style={{ height:80, borderRadius:10, marginBottom:10 }}/>)
+          ) : notes.length === 0 ? (
+            <div style={{ background:'var(--bg2)', border:'1px solid var(--b1)', borderRadius:10,
+              padding:32, textAlign:'center', color:'var(--t3)', fontSize:13 }}>
+              패치노트가 없습니다. AI 자동 생성 또는 수동 작성을 이용하세요.
+            </div>
+          ) : (
+            notes.map(note => (
+              <div key={note.id}
+                onClick={() => { setSelected(note); setEditMode(false) }}
+                style={{ background: selected?.id === note.id ? 'var(--bg3)' : 'var(--bg2)',
+                  border: `1px solid ${selected?.id === note.id ? '#60A5FA44' : 'var(--b1)'}`,
+                  borderRadius:10, padding:16, marginBottom:10, cursor:'pointer',
+                  transition:'border-color .2s' }}>
+                <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+                  <div style={{ background:'rgba(96,165,250,0.1)', border:'1px solid rgba(96,165,250,0.25)',
+                    borderRadius:6, padding:'3px 8px', fontFamily:'var(--f-mono)', fontSize:11,
+                    color:'#60A5FA', whiteSpace:'nowrap' }}>
+                    {note.version}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:600, color:'var(--t1)',
+                      overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                      {note.title}
+                    </div>
+                    <div style={{ fontSize:11, color:'var(--t4)', marginTop:4, display:'flex', gap:8, flexWrap:'wrap' }}>
+                      <span>📅 {new Date(note.published_at).toLocaleDateString('ko-KR')}</span>
+                      <span>✍️ {note.author}</span>
+                      {note.is_auto && <span style={{ color:'#A78BFA' }}>🤖 자동생성</span>}
+                    </div>
+                  </div>
+                  {note.tags?.length > 0 && (
+                    <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                      {note.tags.slice(0, 3).map((tag, i) => (
+                        <span key={i} style={{ background:`${tagColors[i % tagColors.length]}15`,
+                          color: tagColors[i % tagColors.length], borderRadius:4,
+                          padding:'2px 6px', fontSize:10 }}>{tag}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* 상세 / 편집 패널 */}
+        {selected && (
+          <div style={{ background:'var(--bg2)', border:'1px solid var(--b1)', borderRadius:12,
+            padding:20, position:'sticky', top:80 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
+              <span style={{ fontFamily:'var(--f-mono)', fontSize:12, color:'#60A5FA' }}>{selected.version}</span>
+              <span style={{ fontSize:12, color:'var(--t3)', flex:1,
+                overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{selected.title}</span>
+              <button onClick={() => setSelected(null)}
+                style={{ background:'none', border:'none', color:'var(--t4)', cursor:'pointer' }}>✕</button>
+            </div>
+
+            {editMode ? (
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                  style={{ background:'var(--bg3)', border:'1px solid var(--b1)', borderRadius:6,
+                    padding:'7px 10px', color:'var(--t1)', fontSize:12 }}/>
+                <input value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
+                  placeholder="태그 (쉼표)"
+                  style={{ background:'var(--bg3)', border:'1px solid var(--b1)', borderRadius:6,
+                    padding:'7px 10px', color:'var(--t1)', fontSize:12 }}/>
+                <textarea value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
+                  rows={14}
+                  style={{ background:'var(--bg3)', border:'1px solid var(--b1)', borderRadius:6,
+                    padding:'10px', color:'var(--t1)', fontSize:11, fontFamily:'var(--f-mono)', resize:'vertical' }}/>
+                <div style={{ display:'flex', gap:8 }}>
+                  <button onClick={() => setEditMode(false)}
+                    style={{ flex:1, background:'none', border:'1px solid var(--b1)', borderRadius:6,
+                      padding:'7px 0', fontSize:12, color:'var(--t3)', cursor:'pointer' }}>취소</button>
+                  <button onClick={() => patchEdit(selected.id)} disabled={working}
+                    style={{ flex:1, background:'rgba(96,165,250,0.15)', border:'1px solid rgba(96,165,250,0.4)',
+                      borderRadius:6, padding:'7px 0', fontSize:12, color:'#60A5FA', cursor:'pointer', fontWeight:600 }}>
+                    {working ? '저장 중...' : '저장'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontSize:11, color:'var(--t4)', marginBottom:12, display:'flex', gap:10 }}>
+                  <span>📅 {new Date(selected.published_at).toLocaleString('ko-KR')}</span>
+                  <span>✍️ {selected.author}</span>
+                </div>
+                {selected.tags?.length > 0 && (
+                  <div style={{ display:'flex', gap:6, marginBottom:12, flexWrap:'wrap' }}>
+                    {selected.tags.map((tag, i) => (
+                      <span key={i} style={{ background:`${tagColors[i % tagColors.length]}15`,
+                        color: tagColors[i % tagColors.length], borderRadius:4, padding:'2px 7px', fontSize:11 }}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div style={{ background:'var(--bg3)', borderRadius:8, padding:14, maxHeight:400,
+                  overflowY:'auto', fontSize:12, color:'var(--t2)', lineHeight:1.7,
+                  fontFamily:'var(--f-mono)', whiteSpace:'pre-wrap' }}>
+                  {selected.body}
+                </div>
+                <div style={{ display:'flex', gap:8, marginTop:14 }}>
+                  <button onClick={() => {
+                    setEditMode(true)
+                    setForm({ title: selected.title, body: selected.body,
+                      version: selected.version, tags: (selected.tags || []).join(', ') })
+                  }} style={{ flex:1, background:'rgba(96,165,250,0.1)', border:'1px solid rgba(96,165,250,0.3)',
+                    borderRadius:6, padding:'7px 0', fontSize:12, color:'#60A5FA', cursor:'pointer' }}>
+                    ✏️ 편집
+                  </button>
+                  <button onClick={() => deleteNote(selected.id)}
+                    style={{ background:'rgba(248,113,113,0.1)', border:'1px solid rgba(248,113,113,0.3)',
+                      borderRadius:6, padding:'7px 14px', fontSize:12, color:'#F87171', cursor:'pointer' }}>
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 하단 안내 */}
+      <div style={{ background:'rgba(167,139,250,0.05)', border:'1px solid rgba(167,139,250,0.2)',
+        borderRadius:10, padding:14, marginTop:20, fontSize:12, color:'var(--t3)', lineHeight:1.8 }}>
+        <div style={{ fontWeight:600, color:'#A78BFA', marginBottom:6 }}>📅 자동 패치노트 스케줄</div>
+        격주 월요일 09:00 KST에 cron으로 자동 실행됩니다.<br/>
+        최근 2주간 AI 운영 로그 + 워크 로그를 분석하여 변경 사항을 자동 요약합니다.<br/>
+        수동으로 즉시 생성하려면 <strong style={{ color:'#A78BFA' }}>🤖 AI 자동 생성</strong> 버튼을 사용하세요.
       </div>
     </div>
   )
@@ -2691,6 +3426,8 @@ export default function AdminPage() {
         {tab === 'workers'   && <WorkersTab/>}
         {tab === 'ops'       && <OpsTab/>}
         {tab === 'cron'      && <SystemTab stats={stats} onRefresh={loadStats}/>}
+        {tab === 'devperms'  && <DevPermissionsTab/>}
+        {tab === 'patchnotes'&& <PatchNotesTab/>}
       </div>
 
       {writeOpen && <WritePanel onClose={() => { setWriteOpen(false); loadStats() }}/>}
