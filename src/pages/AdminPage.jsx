@@ -1938,108 +1938,203 @@ CREATE POLICY scm_admin_all ON public.staff_chat_messages FOR ALL USING (
 
 function StaffChatTab() {
   const { profile } = useAuthStore()
-  const [room, setRoom]         = useState('general')
-  const [messages, setMessages] = useState([])
-  const [input, setInput]       = useState('')
-  const [loading, setLoading]   = useState(false)
-  const [sending, setSending]   = useState(false)
-  const [topic, setTopic]       = useState('')
+  const [room, setRoom]             = useState('general')
+  const [messages, setMessages]     = useState([])
+  const [input, setInput]           = useState('')
+  const [loading, setLoading]       = useState(false)
+  const [sending, setSending]       = useState(false)
+  const [aiTyping, setAiTyping]     = useState(false)
+  const [topic, setTopic]           = useState('')
   const [triggering, setTriggering] = useState(false)
-  const [msg, setMsg]           = useState('')
-  const bottomRef   = useRef(null)
-  const msgListRef  = useRef(null)   // 스크롤 컨테이너 ref
-  const prevMsgLen  = useRef(0)      // 이전 메시지 수 (새 메시지 감지용)
+  const [msg, setMsg]               = useState('')
 
-  const fetchMsgs = useCallback(async () => {
-    setLoading(true)
+  const bottomRef        = useRef(null)
+  const msgListRef       = useRef(null)
+  const prevMsgLen       = useRef(0)
+  const roomRef          = useRef('general')
+  const fetchingRef      = useRef(false)
+  const pollTimerRef     = useRef(null)
+  const fetchTokenRef    = useRef(0)
+  const aiTypingTimerRef = useRef(null)   // v6: aiTyping 자동 해제 타이머
+
+  // ── fetchMsgs v6 ──────────────────────────────────────────────────
+  // ★ 버그FIX-1(JSON 오류): 중첩 try-return → 단일 try-finally 로 재작성
+  //   어떤 경로(return/throw)로 종료돼도 finally 가 반드시 실행되어 fetchingRef 해제
+  // ★ 버그FIX-2(방 전환 초기화): resetFlag 파라미터 추가
+  //   방 전환 직후엔 빈 배열도 그대로 적용 → 이전 방 메시지 복원 방지
+  // ★ 버그FIX-3(AI 중단): fetchMsgs 는 메시지만 담당, aiTyping 은 sendMsg 에서 별도 관리
+  const fetchMsgs = useCallback(async (targetRoom, opts = {}) => {
+    const { silent = false, token = null, resetFlag = false } = opts
+
+    if (!silent && fetchingRef.current) return
+    if (!silent) { fetchingRef.current = true; setLoading(true) }
+
+    const fetchRoom = targetRoom != null ? targetRoom : roomRef.current
+
     try {
-      const r = await fetch(`/api/staff-chat?room=${room}&limit=80`)
-      const d = await r.json()
-      if (d.messages) setMessages(d.messages)
-    } catch (_) {}
-    setLoading(false)
-  }, [room])
+      let r
+      try { r = await fetch('/api/staff-chat?room=' + fetchRoom + '&limit=80') }
+      catch (_) { return }         // 네트워크 오류 → 기존 메시지 유지
 
-  useEffect(() => { setMessages([]); prevMsgLen.current = 0; fetchMsgs() }, [room])
-  useEffect(() => { const t = setInterval(() => fetchMsgs(), 6000); return () => clearInterval(t) }, [fetchMsgs])
+      if (!r.ok) return            // HTML 에러 페이지 → JSON 파싱 안 함
 
-  // 새 메시지 시 자동 스크롤 — 사용자가 위로 스크롤 중이면 강제 이동하지 않음
+      let d
+      try { d = await r.json() }
+      catch (_) { return }         // JSON 파싱 실패 → 기존 메시지 유지
+
+      if (token !== null && token !== fetchTokenRef.current) return
+      if (fetchRoom !== roomRef.current) return
+
+      if (Array.isArray(d.messages)) {
+        setMessages(prev => {
+          // ★ resetFlag=true(방 전환): 빈 배열도 그대로 적용
+          // ★ resetFlag=false(일반 폴링): 빈 배열이면 기존 메시지 유지 (일시 오류 방어)
+          if (!resetFlag && d.messages.length === 0 && prev.length > 0) return prev
+          return d.messages
+        })
+      }
+    } finally {
+      // ★ 핵심: 모든 return 경로를 커버 — finally 는 반드시 실행됨
+      if (!silent) { setLoading(false); fetchingRef.current = false }
+    }
+  }, [])
+
+  // ── 방 변경 v6 ────────────────────────────────────────────────────
+  const changeRoom = useCallback((newRoom) => {
+    if (newRoom === roomRef.current) return
+    fetchTokenRef.current += 1
+    const token = fetchTokenRef.current
+    roomRef.current = newRoom          // ref 먼저 갱신 (fetchMsgs 클로저 참조용)
+    setRoom(newRoom)
+    setMessages([])
+    prevMsgLen.current = 0
+    fetchingRef.current = false        // 이전 non-silent 잠금 강제 해제
+    fetchMsgs(newRoom, { token, resetFlag: true })
+  }, [fetchMsgs])
+
+  // ── 최초 로드 ──────────────────────────────────────────────────────
+  useEffect(() => {
+    fetchTokenRef.current += 1
+    fetchMsgs('general', { token: fetchTokenRef.current, resetFlag: true })
+  }, [fetchMsgs])
+
+  // ── 폴링 5초 ───────────────────────────────────────────────────────
+  useEffect(() => {
+    pollTimerRef.current = setInterval(() => {
+      fetchMsgs(roomRef.current, { silent: true, token: fetchTokenRef.current })
+    }, 5000)
+    return () => clearInterval(pollTimerRef.current)
+  }, [fetchMsgs])
+
+  // ── 자동 스크롤 ────────────────────────────────────────────────────
   useEffect(() => {
     const newLen = messages.length
     if (newLen === 0) return
     const container = msgListRef.current
-    if (container) {
-      const { scrollTop, scrollHeight, clientHeight } = container
-      const distFromBottom = scrollHeight - scrollTop - clientHeight
-      const isNearBottom = distFromBottom < 80
-      if (newLen > prevMsgLen.current && isNearBottom) {
-        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 80)
-      }
-    } else if (newLen > prevMsgLen.current) {
+    const nearBottom = container
+      ? container.scrollHeight - container.scrollTop - container.clientHeight < 80
+      : true
+    if (newLen > prevMsgLen.current && nearBottom) {
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 80)
     }
     prevMsgLen.current = newLen
   }, [messages])
 
+  // ── 메시지 전송 v6 ─────────────────────────────────────────────────
   const sendMsg = async () => {
     if (!input.trim() || sending) return
-    const msgText = input.trim()
+    const msgText  = input.trim()
+    const sendRoom = roomRef.current
     setSending(true)
     setInput('')
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const authHeader = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
-      await fetch(`/api/staff-chat?room=${room}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader },
-        body: JSON.stringify({
-          sender_key:   profile?.username || 'admin',
-          sender_name:  profile?.display_name || 'Admin',
-          sender_emoji: '👤',
-          sender_color: '#60A5FA',
-          sender_team:  '관리자',
-          message:      msgText,
-          msg_type:     'admin_message',
-        }),
-      })
-      await fetchMsgs()
-      // AI 직원 자동 반응 트리거 (fire-and-forget)
-      const autoHeaders = { 'Content-Type': 'application/json', ...authHeader }
-      const cronSecret = typeof process !== 'undefined' ? undefined : undefined // 환경 변수 없음
+      const auth = session?.access_token
+        ? { Authorization: 'Bearer ' + session.access_token } : {}
+
+      // 1) 저장
+      let postOk = false
+      try {
+        const res = await fetch('/api/staff-chat?room=' + sendRoom, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...auth },
+          body: JSON.stringify({
+            sender_key:   profile?.username || 'admin',
+            sender_name:  profile?.display_name || '관리자',
+            sender_emoji: '👤',
+            sender_color: '#60A5FA',
+            sender_team:  '관리자',
+            message:      msgText,
+            msg_type:     'admin_message',
+          }),
+        })
+        postOk = res.ok
+      } catch (_) {}
+
+      // silent=true → fetchingRef 잠금 없이 즉시 반영
+      if (postOk) {
+        await fetchMsgs(sendRoom, { silent: true, token: fetchTokenRef.current })
+      }
+
+      // 2) AI 자동 반응 — fire-and-forget
+      // ★ 버그FIX-3: aiTyping 을 30초 타임아웃으로 보호 (응답 유실 시 자동 해제)
+      setAiTyping(true)
+      clearTimeout(aiTypingTimerRef.current)
+      aiTypingTimerRef.current = setTimeout(() => setAiTyping(false), 30000)
+
+      const t = fetchTokenRef.current
       fetch('/api/staff-chat-auto', {
         method: 'POST',
-        headers: autoHeaders,
-        body: JSON.stringify({ action: 'admin_message', room, message: msgText }),
-      }).then(r => r.json()).then(d => {
-        if (d.handled > 0) {
-          // 1차 반응 확인 (2초 후)
-          setTimeout(() => fetchMsgs(), 2000)
-          // 2차 웨이브(토론 이어받기) 확인 (5초 후)
-          setTimeout(() => fetchMsgs(), 5000)
-        }
-      }).catch(() => {})
+        headers: { 'Content-Type': 'application/json', ...auth },
+        body: JSON.stringify({ action: 'admin_message', room: sendRoom, message: msgText }),
+      })
+        .then(r => r.ok ? r.json().catch(() => ({})) : {})
+        .then(() => {
+          clearTimeout(aiTypingTimerRef.current)
+          setAiTyping(false)
+          // staff-chat-auto 완료 직후, 3초, 6초 — AI 순차 메시지 수집
+          fetchMsgs(sendRoom, { silent: true, token: t })
+          setTimeout(() => fetchMsgs(sendRoom, { silent: true, token: t }), 3000)
+          setTimeout(() => fetchMsgs(sendRoom, { silent: true, token: t }), 6000)
+        })
+        .catch(() => { clearTimeout(aiTypingTimerRef.current); setAiTyping(false) })
+
     } catch (_) {}
     setSending(false)
   }
 
+  // ── AI 토론 트리거 ─────────────────────────────────────────────────
   const triggerDiscussion = async () => {
     if (!topic.trim() || triggering) return
     setTriggering(true)
     setMsg('')
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const r = await fetch(`/api/staff-chat?room=${room}`, {
+      const r = await fetch('/api/staff-chat?room=' + roomRef.current, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token || ''}`,
+          Authorization: 'Bearer ' + (session?.access_token || ''),
         },
-        body: JSON.stringify({ action: 'ai_discuss', topic: topic.trim(), participants: ['MAX','ARIA','NOVA','PULSE','HANA'] }),
+        body: JSON.stringify({
+          action: 'ai_discuss',
+          topic: topic.trim(),
+          participants: ['MAX','ARIA','NOVA','PULSE','HANA'],
+        }),
       })
-      const d = await r.json()
-      if (d.ok) { setMsg(`✅ AI 직원 ${d.created}명 토론 생성 완료`); setTopic(''); await fetchMsgs() }
-      else setMsg(`❌ ${d.error || '실패'}`)
-    } catch (e) { setMsg(`❌ ${e.message}`) }
+      if (!r.ok) { setMsg('❌ 서버 오류'); return }
+      let d
+      try { d = await r.json() } catch { setMsg('❌ 응답 파싱 오류'); return }
+      if (d.ok) {
+        setMsg('✅ AI 직원 ' + d.created + '명 토론 생성 완료')
+        setTopic('')
+        const t = fetchTokenRef.current
+        setTimeout(() => fetchMsgs(roomRef.current, { silent: true, token: t }), 1000)
+        setTimeout(() => fetchMsgs(roomRef.current, { silent: true, token: t }), 4000)
+      } else {
+        setMsg('❌ ' + (d.error || '실패'))
+      }
+    } catch (e) { setMsg('❌ ' + e.message) }
     setTriggering(false)
   }
 
@@ -2050,13 +2145,12 @@ function StaffChatTab() {
     ai_auto:          { label:'AI 자동',  color:'#818CF8' },
     feedback_handled: { label:'피드백',   color:'#34D399' },
     notice:           { label:'공지',     color:'#F43F5E' },
+    admin_message:    { label:'관리자',   color:'#60A5FA' },
   }
 
   return (
     <div style={{ display:'grid', gridTemplateColumns:'1fr 340px', gap:16, minHeight:600 }}>
-      {/* 왼쪽: 채팅 메인 */}
       <Panel style={{ display:'flex', flexDirection:'column', padding:0, overflow:'hidden', minHeight:560 }}>
-        {/* 헤더 */}
         <div style={{ background:'linear-gradient(135deg,#1e3a5f,#1a1a2e)', padding:'12px 16px',
           borderBottom:'1px solid rgba(96,165,250,0.2)', display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
           <MessageCircle size={14} color="#60A5FA"/>
@@ -2064,29 +2158,32 @@ function StaffChatTab() {
             STAFF ROOM
           </span>
           <span style={{ color: currentRoom?.color, fontSize:13 }}>{currentRoom?.emoji} {currentRoom?.label}</span>
-          <button onClick={fetchMsgs} style={{ marginLeft:'auto', background:'none', border:'none',
-            color:'#444', cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
-            <RefreshCw size={12}/> <span style={{ fontFamily:'var(--f-mono)', fontSize:9 }}>새로고침</span>
+          {aiTyping && (
+            <span style={{ fontSize:10, color:'#818CF8', fontFamily:'var(--f-mono)', animation:'pulse 1s infinite' }}>
+              ✦ AI 응답 중…
+            </span>
+          )}
+          <button
+            onClick={() => { fetchTokenRef.current += 1; fetchMsgs(roomRef.current, { token: fetchTokenRef.current, resetFlag: true }) }}
+            style={{ marginLeft:'auto', background:'none', border:'none', color:'#444', cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
+            <RefreshCw size={12}/><span style={{ fontFamily:'var(--f-mono)', fontSize:9 }}>새로고침</span>
           </button>
         </div>
 
-        {/* 방 탭 */}
-        <div style={{ display:'flex', borderBottom:'1px solid rgba(255,255,255,0.06)',
-          background:'rgba(255,255,255,0.02)', flexShrink:0 }}>
-          {CHAT_ROOMS.map(r => (
-            <button key={r.id} onClick={() => setRoom(r.id)}
+        <div style={{ display:'flex', borderBottom:'1px solid rgba(255,255,255,0.06)', background:'rgba(255,255,255,0.02)', flexShrink:0 }}>
+          {CHAT_ROOMS.map(cr => (
+            <button key={cr.id} onClick={() => changeRoom(cr.id)}
               style={{ flex:1, background:'none', border:'none',
-                borderBottom: room===r.id ? `2px solid ${r.color}` : '2px solid transparent',
-                color: room===r.id ? r.color : '#555', padding:'8px 6px', cursor:'pointer',
+                borderBottom: room===cr.id ? `2px solid ${cr.color}` : '2px solid transparent',
+                color: room===cr.id ? cr.color : '#555', padding:'8px 6px', cursor:'pointer',
                 fontFamily:'var(--f-mono)', fontSize:9, letterSpacing:'0.5px',
                 display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-              <span style={{ fontSize:14 }}>{r.emoji}</span>
-              <span>{r.label}</span>
+              <span style={{ fontSize:14 }}>{cr.emoji}</span>
+              <span>{cr.label}</span>
             </button>
           ))}
         </div>
 
-        {/* 메시지 */}
         <div ref={msgListRef} style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:10 }}>
           {loading && <div style={{ textAlign:'center', color:'#444', fontFamily:'var(--f-mono)', fontSize:11, padding:20 }}>로딩 중…</div>}
           {!loading && messages.length === 0 && (
@@ -2130,7 +2227,6 @@ function StaffChatTab() {
           <div ref={bottomRef}/>
         </div>
 
-        {/* 입력창 */}
         <div style={{ borderTop:'1px solid rgba(255,255,255,0.06)', padding:'10px 12px',
           display:'flex', gap:8, flexShrink:0, background:'rgba(255,255,255,0.02)' }}>
           <textarea value={input} onChange={e => setInput(e.target.value)}
@@ -2141,16 +2237,15 @@ function StaffChatTab() {
               fontFamily:'inherit', lineHeight:1.5 }}/>
           <button onClick={sendMsg} disabled={sending || !input.trim()}
             style={{ background: sending||!input.trim() ? '#1a1a2e' : 'linear-gradient(135deg,#3B82F6,#818CF8)',
-              border:'none', borderRadius:8, padding:'0 14px', color: sending||!input.trim() ? '#444' : '#fff',
+              border:'none', borderRadius:8, padding:'0 14px',
+              color: sending||!input.trim() ? '#444' : '#fff',
               cursor: sending||!input.trim() ? 'not-allowed' : 'pointer', fontSize:18, flexShrink:0 }}>
             {sending ? <Loader size={14} style={{ animation:'spin 1s linear infinite' }}/> : <Send size={14}/>}
           </button>
         </div>
       </Panel>
 
-      {/* 오른쪽: 컨트롤 패널 */}
       <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-        {/* AI 토론 트리거 */}
         <Panel>
           <SectionHeader icon={Bot} label="AI 직원 토론 생성" color="#818CF8"/>
           <p style={{ fontSize:11, color:'var(--t3)', marginBottom:12, lineHeight:1.5 }}>
@@ -2163,52 +2258,68 @@ function StaffChatTab() {
               fontFamily:'inherit', boxSizing:'border-box', marginBottom:8 }}/>
           <button onClick={triggerDiscussion} disabled={triggering || !topic.trim()}
             className="btn btn-primary btn-sm" style={{ width:'100%', gap:6, justifyContent:'center' }}>
-            {triggering ? <><Loader size={12} style={{ animation:'spin 1s linear infinite' }}/> 생성 중…</> : <><Bot size={12}/> AI 토론 시작</>}
+            {triggering
+              ? <><Loader size={12} style={{ animation:'spin 1s linear infinite' }}/> 생성 중…</>
+              : <><Bot size={12}/> AI 토론 시작</>}
           </button>
           <Msg msg={msg}/>
         </Panel>
 
-        {/* 채팅방 안내 */}
         <Panel>
           <SectionHeader icon={MessageCircle} label="채팅방 안내" color="#60A5FA"/>
-          {CHAT_ROOMS.map(r => (
-            <div key={r.id} onClick={() => setRoom(r.id)}
+          {CHAT_ROOMS.map(cr => (
+            <div key={cr.id} onClick={() => changeRoom(cr.id)}
               style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 0',
                 borderBottom:'1px solid rgba(255,255,255,0.04)', cursor:'pointer',
-                opacity: room===r.id ? 1 : 0.6 }}>
-              <span style={{ fontSize:16 }}>{r.emoji}</span>
+                opacity: room===cr.id ? 1 : 0.6 }}>
+              <span style={{ fontSize:16 }}>{cr.emoji}</span>
               <div>
-                <div style={{ fontSize:11, fontWeight:600, color: room===r.id ? r.color : 'var(--t2)' }}>{r.label}</div>
+                <div style={{ fontSize:11, fontWeight:600, color: room===cr.id ? cr.color : 'var(--t2)' }}>{cr.label}</div>
               </div>
-              {room===r.id && <div style={{ marginLeft:'auto', width:6, height:6, borderRadius:'50%', background:r.color }}/>}
+              {room===cr.id && <div style={{ marginLeft:'auto', width:6, height:6, borderRadius:'50%', background:cr.color }}/>}
             </div>
           ))}
         </Panel>
 
-        {/* 빠른 업무 지시 */}
         <Panel>
           <SectionHeader icon={Terminal} label="빠른 업무 지시" color="#F59E0B"/>
           {[
-            { label:'피드백 검토 지시', msg:'📋 전팀 공지: 오늘 들어온 유저 피드백을 각 팀별로 검토하고 개선 사항을 ops 채널에 보고해주세요.', room:'ops' },
-            { label:'주간 전략 브리핑', msg:'🎯 이번 주 플랫폼 전략 방향을 논의합니다. 각 팀 선임 매니저분들 의견 부탁드립니다.', room:'strategy' },
-            { label:'피드백 처리 완료 보고 요청', msg:'📥 피드백 채널: 오늘 수신된 피드백 처리 현황을 공유해주세요.', room:'feedback' },
-            { label:'전체 공지: 이번 주 목표 공유', msg:'📢 전팀 공지: 이번 주 각 팀별 목표와 우선순위를 general 채널에 공유해주세요.', room:'general' },
+            { label:'피드백 검토 지시',         msg:'📋 전팀 공지: 오늘 들어온 유저 피드백을 각 팀별로 검토하고 개선 사항을 ops 채널에 보고해주세요.', room:'ops' },
+            { label:'주간 전략 브리핑',          msg:'🎯 이번 주 플랫폼 전략 방향을 논의합니다. 각 팀 선임 매니저분들 의견 부탁드립니다.',              room:'strategy' },
+            { label:'피드백 처리 완료 보고 요청', msg:'📥 피드백 채널: 오늘 수신된 피드백 처리 현황을 공유해주세요.',                                   room:'feedback' },
+            { label:'전체 공지: 이번 주 목표 공유', msg:'📢 전팀 공지: 이번 주 각 팀별 목표와 우선순위를 general 채널에 공유해주세요.',                 room:'general' },
           ].map(item => (
             <button key={item.label} onClick={async () => {
               const { data: { session } } = await supabase.auth.getSession()
-              const authHeader = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
-              await fetch(`/api/staff-chat?room=${item.room}`, {
-                method:'POST', headers:{'Content-Type':'application/json', ...authHeader},
-                body: JSON.stringify({ sender_key:'ai_max', sender_name:'MAX', sender_emoji:'🏛️',
-                  sender_color:'#F87171', sender_team:'관리팀', message:item.msg, msg_type:'task_directive' }),
-              })
-              setRoom(item.room)
-              await fetchMsgs()
-              // AI 직원 자동 반응 트리거
-              fetch('/api/staff-chat-auto', {
-                method:'POST', headers:{'Content-Type':'application/json', ...authHeader},
-                body: JSON.stringify({ action:'admin_message', room: item.room, message: item.msg }),
-              }).then(r=>r.json()).then(d=>{ if(d.handled>0) setTimeout(()=>fetchMsgs(),2000) }).catch(()=>{})
+              const auth = session?.access_token ? { Authorization: 'Bearer ' + session.access_token } : {}
+              let postOk = false
+              try {
+                const res = await fetch('/api/staff-chat?room=' + item.room, {
+                  method:'POST', headers:{'Content-Type':'application/json', ...auth},
+                  body: JSON.stringify({ sender_key:'ai_max', sender_name:'MAX', sender_emoji:'🏛️',
+                    sender_color:'#F87171', sender_team:'관리팀', message:item.msg, msg_type:'task_directive' }),
+                })
+                postOk = res.ok
+              } catch (_) {}
+              changeRoom(item.room)
+              if (postOk) {
+                const t = fetchTokenRef.current
+                setAiTyping(true)
+                clearTimeout(aiTypingTimerRef.current)
+                aiTypingTimerRef.current = setTimeout(() => setAiTyping(false), 30000)
+                fetch('/api/staff-chat-auto', {
+                  method:'POST', headers:{'Content-Type':'application/json', ...auth},
+                  body: JSON.stringify({ action:'admin_message', room: item.room, message: item.msg }),
+                })
+                  .then(r => r.ok ? r.json().catch(() => ({})) : {})
+                  .then(() => {
+                    clearTimeout(aiTypingTimerRef.current); setAiTyping(false)
+                    fetchMsgs(item.room, { silent:true, token:t })
+                    setTimeout(() => fetchMsgs(item.room, { silent:true, token:t }), 3000)
+                    setTimeout(() => fetchMsgs(item.room, { silent:true, token:t }), 6000)
+                  })
+                  .catch(() => { clearTimeout(aiTypingTimerRef.current); setAiTyping(false) })
+              }
             }}
               style={{ width:'100%', background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.2)',
                 borderRadius:6, padding:'7px 10px', color:'var(--t2)', fontSize:11, cursor:'pointer',

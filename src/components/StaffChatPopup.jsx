@@ -151,7 +151,7 @@ export default function StaffChatPopup() {
 
   // ── 메시지 조회 ─────────────────────────────────────────────────
   // ★ v5: debounce + in-flight 방지 + r.ok 체크 + finally로 잠금 해제 보장
-  const fetchMessages = useCallback((silent = false) => {
+  const fetchMessages = useCallback((silent = false, resetFlag = false) => {
     // debounce: 짧은 시간 내 여러 호출은 마지막 1개만 실행
     if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current)
     fetchDebounceRef.current = setTimeout(async () => {
@@ -209,9 +209,9 @@ export default function StaffChatPopup() {
             )
             const merged = [...d.messages, ...pending]
 
-            // ★ v5: 서버가 빈 배열 반환해도 화면 클리어 방지
-            // 일시적 서버 오류 or DB 지연으로 0개 반환 시 기존 메시지 유지
-            if (merged.length === 0 && prev.length > 0) return prev
+            // ★ v6: 빈배열 유지 방어 — 방 전환(resetFlag=true)이면 새 방 빈 상태 그대로 표시
+            // 일반 폴링에서만 빈배열 유지 방어 적용
+            if (!resetFlag && merged.length === 0 && prev.length > 0) return prev
 
             // 새 메시지 감지 → unread 증가
             const prevReal = prev.filter(m => !optimisticIds.current.has(m.id))
@@ -281,7 +281,7 @@ export default function StaffChatPopup() {
     shouldScrollRef.current = true
     fetchingRef.current    = false  // ★ v4: 방 변경 시 in-flight 리셋
     if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current)
-    fetchMessages(false)
+    fetchMessages(false, true)  // ★ v6: resetFlag=true → 빈 방이어도 이전 메시지 복원 방지
   }, [room]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 폴링 — open 상태에서만 ──────────────────────────────────────
@@ -290,7 +290,7 @@ export default function StaffChatPopup() {
       if (pollRef.current) clearInterval(pollRef.current)
       return
     }
-    pollRef.current = setInterval(() => fetchMessages(true), 4000)
+    pollRef.current = setInterval(() => fetchMessages(true), 5000)
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [open, fetchMessages])
 
