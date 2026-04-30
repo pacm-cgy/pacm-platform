@@ -18,6 +18,17 @@
 // runtime: Node.js serverless
 export const config = { maxDuration: 30 }
 
+// ══════════════════════════════════════════════════════════════════════
+// Top-level imports (ES Module 규칙: 반드시 파일 최상단)
+// ai-engine.js 통합 후 staff-brain.js 직접 사용
+// ══════════════════════════════════════════════════════════════════════
+import {
+  getPersona,
+  pickChatMessage,
+  generateConversationStarter,
+  generateDiscussionMessage,
+} from './staff-brain.js'
+
 // ── 입력값 sanitize (XSS / SQL Injection 방어) ──────────────────────
 const SAFE_KEY_RE  = /^[a-z0-9_]{1,64}$/i
 const SAFE_ROOM_RE = /^[a-z0-9_]{1,32}$/i
@@ -119,15 +130,7 @@ const ROOMS = {
 
 // ══════════════════════════════════════════════════════════════════════
 // 자체 AI 엔진 — 채팅 메시지 생성 (외부 API 없음)
-// ai-engine.js 통합 후 staff-brain.js 직접 사용
 // ══════════════════════════════════════════════════════════════════════
-
-import {
-  getPersona,
-  pickChatMessage,
-  generateConversationStarter,
-  generateDiscussionMessage,
-} from './staff-brain.js'
 
 // brain key 변환: ai_aria → ARIA, ai_ops_june → OPS_JUNE
 function _getBrainKey(senderUsername) {
