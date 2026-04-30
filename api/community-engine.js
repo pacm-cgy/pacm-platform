@@ -257,6 +257,10 @@ async function checkLikeMilestones() {
 }
 
 // ── 메인 핸들러 ──────────────────────────────────────────────────
+// ── UUID 검증 헬퍼 ─────────────────────────────────────────────────
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+function isValidUUID(v) { return typeof v === 'string' && UUID_RE.test(v) }
+
 export default async function handler(req) {
   const url = new URL(req.url)
   const action = url.searchParams.get('action')
@@ -265,24 +269,35 @@ export default async function handler(req) {
   if (req.method === 'GET' && action === 'feed') {
     const userId = url.searchParams.get('user_id')
     if (!userId) return json({ error: 'user_id required' }, 400)
-    const feed = await getFollowFeed(userId, Number(url.searchParams.get('limit')) || 20)
+    // ★ SECURITY: UUID 형식 검증 (IDOR 방지)
+    if (!isValidUUID(userId)) return json({ error: '유효하지 않은 user_id 형식입니다.' }, 400)
+    const limit = Math.min(Number(url.searchParams.get('limit')) || 20, 50)
+    const feed = await getFollowFeed(userId, limit)
     return json({ feed, count: feed.length })
   }
 
   // 인기 게시물 조회
   if (req.method === 'GET' && action === 'hot') {
-    const days = Number(url.searchParams.get('days')) || 7
-    const limit = Number(url.searchParams.get('limit')) || 10
+    const days  = Math.min(Number(url.searchParams.get('days')) || 7, 30)
+    const limit = Math.min(Number(url.searchParams.get('limit')) || 10, 50)
     const hot = await calcHotPosts(days, limit)
     return json({ hot, count: hot.length })
   }
 
-  // 배지 트리거
+  // 배지 트리거 — ★ SECURITY: 인증 추가
   if (req.method === 'POST' && action === 'badge_trigger') {
+    // 인증 확인 (CRON 또는 서비스 내부 호출만 허용)
+    const authH = req.headers.get('authorization') || ''
+    const isCron = req.headers.get('x-vercel-cron') === '1'
+    const isCronKey = authH === `Bearer ${CRON_SECRET}` || req.headers.get('x-cron-secret') === CRON_SECRET
+    if (!isCron && !isCronKey) return json({ error: 'Unauthorized' }, 401)
+
     let body = {}
     try { body = await req.json() } catch {}
     const userId = body.user_id
     if (!userId) return json({ error: 'user_id required' }, 400)
+    // ★ SECURITY: UUID 형식 검증
+    if (!isValidUUID(userId)) return json({ error: '유효하지 않은 user_id 형식입니다.' }, 400)
     await triggerBadgeCheck(userId)
     return json({ ok: true })
   }

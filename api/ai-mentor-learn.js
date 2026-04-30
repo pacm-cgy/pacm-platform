@@ -629,11 +629,16 @@ export default async function handler(req) {
       if (!logId || !['good', 'bad'].includes(rating)) {
         return json({ error: 'logId and rating(good|bad) required' }, 400)
       }
+      // ★ SECURITY: UUID 형식 검증 (IDOR 방지 — 임의 ID로 타인 피드백 조작 차단)
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      if (!UUID_RE.test(logId)) {
+        return json({ error: '유효하지 않은 logId 형식입니다.' }, 400)
+      }
       try {
         const result = await processFeedback(logId, rating)
         return json(result)
       } catch (e) {
-        return json({ error: e.message }, 500)
+        return json({ error: '피드백 처리 중 오류가 발생했습니다.' }, 500)
       }
     }
 

@@ -16,6 +16,20 @@
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
 // runtime: Node.js serverless
+export const config = { maxDuration: 30 }
+
+// ── 입력값 sanitize (XSS / SQL Injection 방어) ──────────────────────
+const SAFE_KEY_RE  = /^[a-z0-9_]{1,64}$/i
+const SAFE_ROOM_RE = /^[a-z0-9_]{1,32}$/i
+function sanitizeText(v, maxLen = 2000) {
+  if (typeof v !== 'string') return ''
+  return v
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, '')          // HTML 태그 제거
+    .replace(/['";\\]/g, c => ({ "'": '\u2019', '"': '\u201C', ';': '\uFF1B', '\\': '\uFF3C' }[c] ?? c))
+    .slice(0, maxLen)
+    .trim()
+}
 
 const SB_URL       = process.env.SUPABASE_URL
 const SB_KEY       = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -143,7 +157,7 @@ function _isMissingTable(status, body) {
 
 async function getMessages(room, limit = 60) {
   const r = await fetch(
-    `${SB_URL}/rest/v1/staff_chat_messages?room=eq.${room}&is_deleted=eq.false&order=created_at.desc&limit=${limit}&select=id,room,sender_key,sender_name,sender_emoji,sender_color,sender_team,message,msg_type,reply_to,created_at`,
+    `${SB_URL}/rest/v1/staff_chat_messages?room=eq.${room}&is_deleted=eq.false&order=created_at.asc&limit=${limit}&select=id,room,sender_key,sender_name,sender_emoji,sender_color,sender_team,message,msg_type,reply_to,created_at`,
     { headers: H() }
   )
   if (r.status === 404 || r.status === 400) {
@@ -156,7 +170,8 @@ async function getMessages(room, limit = 60) {
   if (!r.ok) return null
   const rows = await r.json().catch(() => null)
   if (!Array.isArray(rows)) return null
-  return rows.reverse()   // desc 정렬 → asc로
+  // asc 정렬로 가져오므로 reverse() 불필요 — 이미 시간순(오래된 것 먼저)
+  return rows
 }
 
 // Edge 런타임 모듈 스코프 캐시 (동일 워커 인스턴스 내 중복 호출만 방지)
@@ -374,15 +389,19 @@ export default async function handler(req) {
       team:         sender_team  || '관리자',
     }
 
+    // ★ SECURITY: 모든 입력값 sanitize (XSS / SQL Injection 방어)
+    const safeMessage = sanitizeText(String(message), 1000)
+    if (!safeMessage) return json({ error: '메시지 내용이 유효하지 않습니다.' }, 400)
+
     const row = await insertMessage({
       room,
-      sender_key:   senderInfo.username,
-      sender_name:  senderInfo.name,
-      sender_emoji: senderInfo.emoji,
-      sender_color: senderInfo.color,
-      sender_team:  senderInfo.team,
-      message:      String(message).slice(0, 1000),
-      msg_type:     msg_type || 'chat',
+      sender_key:   sanitizeText(senderInfo.username, 64),
+      sender_name:  sanitizeText(senderInfo.name, 100),
+      sender_emoji: sanitizeText(senderInfo.emoji || '💬', 10),
+      sender_color: /^#[0-9A-Fa-f]{3,6}$/.test(senderInfo.color) ? senderInfo.color : '#60A5FA',
+      sender_team:  sanitizeText(senderInfo.team || '직원', 50),
+      message:      safeMessage,
+      msg_type:     ['chat','admin_message','ai_auto','ai_discuss','announcement'].includes(msg_type) ? msg_type : 'chat',
       reply_to:     reply_to || null,
     })
 
@@ -403,7 +422,10 @@ export default async function handler(req) {
     if (!isAuthed) return json({ error: 'Unauthorized' }, 401)
 
     const msgId = url.searchParams.get('id')
-    if (!msgId)  return json({ error: 'id 필수' }, 400)
+    if (!msgId) return json({ error: 'id 필수' }, 400)
+    // ★ SECURITY: UUID 형식 검증 (SQL Injection / IDOR 방어)
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(msgId))
+      return json({ error: '유효하지 않은 메시지 ID 형식입니다.' }, 400)
 
     await fetch(
       `${SB_URL}/rest/v1/staff_chat_messages?id=eq.${msgId}`,

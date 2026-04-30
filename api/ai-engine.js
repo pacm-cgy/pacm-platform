@@ -477,6 +477,14 @@ export default async function handler(req) {
   }
 
   if (req.method === 'POST') {
+    // ★ SECURITY: POST 직접 호출은 CRON 또는 내부 서비스만 허용
+    const authH   = req.headers.get('authorization') || ''
+    const isCron  = req.headers.get('x-vercel-cron') === '1'
+    const CRON_SECRET = process.env.CRON_SECRET
+    const isCronKey = authH === `Bearer ${CRON_SECRET}` || req.headers.get('x-cron-secret') === CRON_SECRET
+    if (!isCron && !isCronKey) {
+      return jsonR({ error: 'Unauthorized — internal API' }, 401)
+    }
     let body = {}
     try { body = await req.json() } catch (_) {}
     const { username, type, topic, room, stats, post, recentMessages, context } = body

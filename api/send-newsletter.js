@@ -438,7 +438,22 @@ body{margin:0;padding:0;background:#080808}
 // §4. 메인 핸들러
 // ══════════════════════════════════════════════════════════════════════
 
+// ── CORS 헤더 ──────────────────────────────────────────────────────
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+function jsonRes(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status, headers: { 'Content-Type': 'application/json', ...CORS },
+  })
+}
+
 export default async function handler(req) {
+  // ★ CORS preflight
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
+
   if (req.method === 'GET') {
     // GET: 상태 + 최근 발송 로그
     let recentLogs = []
@@ -465,14 +480,25 @@ export default async function handler(req) {
   const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
   const isCronKey   = authHeader === `Bearer ${CRON_SECRET}`
     || req.headers.get('x-cron-secret') === CRON_SECRET
+  // ★ BUG FIX: user.id 먼저 조회 후 service_role 키로 profiles 확인 (RLS 우회)
+  // 이전 코드: profiles?select=role&limit=1 + user JWT → RLS로 빈 배열 반환 → 항상 false
   const isAdminJWT  = bearerToken && bearerToken !== CRON_SECRET
     ? await (async () => {
         try {
-          const r = await fetch(`${SB_URL}/rest/v1/profiles?select=role&limit=1`, {
+          // 1단계: user JWT로 auth.uid() 조회
+          const r1 = await fetch(`${SB_URL}/auth/v1/user`, {
             headers: { apikey: SB_KEY, Authorization: `Bearer ${bearerToken}` },
           })
-          if (!r.ok) return false
-          const rows = await r.json().catch(() => [])
+          if (!r1.ok) return false
+          const user = await r1.json().catch(() => null)
+          if (!user?.id) return false
+          // 2단계: service_role 키로 해당 user.id의 role 확인 (RLS 완전 우회)
+          const r2 = await fetch(
+            `${SB_URL}/rest/v1/profiles?id=eq.${user.id}&select=role&limit=1`,
+            { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
+          )
+          if (!r2.ok) return false
+          const rows = await r2.json().catch(() => [])
           return Array.isArray(rows) && rows[0]?.role === 'admin'
         } catch { return false }
       })()

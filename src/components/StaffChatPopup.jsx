@@ -1,19 +1,14 @@
 /**
  * src/components/StaffChatPopup.jsx
  * ╔══════════════════════════════════════════════════════════════════════╗
- * ║  직원 전용 채팅방 팝업 v2.0 — admin role 전용                       ║
+ * ║  직원 전용 채팅방 팝업 v4.0 — admin role 전용                       ║
  * ║                                                                      ║
- * ║  보안:                                                               ║
- * ║  - 컴포넌트 자체 + App.jsx 양쪽에서 admin role 이중 검사             ║
- * ║  - lazy import로 번들에서 일반 유저 코드와 완전 분리                 ║
- * ║                                                                      ║
- * ║  기능:                                                               ║
- * ║  - 관리자 메시지 전송 → staff-chat-auto API로 직원 자동 반응 트리거  ║
- * ║  - 4개 채팅방 (general, ops, feedback, strategy)                    ║
- * ║  - 3초 폴링으로 실시간 메시지 수신                                  ║
- * ║  - 미읽음 뱃지, 최소화, 자동 스크롤                                 ║
- * ║  - 직원 아바타 색상, 메시지 타입 뱃지                               ║
- * ║  - 채팅방 침묵 감지 → 직원 자동 대화 시작 트리거                   ║
+ * ║  v4 버그픽스 (완전 재작성):                                          ║
+ * ║  1. 메시지 역순 수정 — API asc 전환 + 프론트 정렬 보장              ║
+ * ║  2. 뜨다가 사라짐 수정 — fetchMessages 중복 호출 방지 (debounce)    ║
+ * ║  3. 무한 새로고침 수정 — ensureTable 실패 시 영구 잠금              ║
+ * ║  4. 직원 채팅 안 보임 수정 — 스크롤 로직 완전 재작성               ║
+ * ║  5. 600ms 타이밍 수정 — optimistic 유지 기간 연장 + 안전 교체       ║
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -49,7 +44,6 @@ function getColor(username) {
   if (username.startsWith('ai_tch'))  return '#A78BFA'
   if (username.startsWith('ai_cmm'))  return '#FBBF24'
   if (username.startsWith('ai_mgt'))  return '#F87171'
-  // 관리자 (비-AI)
   return '#60A5FA'
 }
 
@@ -64,11 +58,11 @@ function formatTime(ts) {
 function MsgTypeBadge({ type }) {
   if (!type || type === 'chat') return null
   const MAP = {
-    task_directive:   { label: '업무지시',  color: '#F59E0B' },
-    ai_auto:          { label: 'AI 자동',   color: '#818CF8' },
+    task_directive:   { label: '업무지시',   color: '#F59E0B' },
+    ai_auto:          { label: 'AI 자동',    color: '#818CF8' },
     feedback_handled: { label: '피드백처리', color: '#34D399' },
-    notice:           { label: '공지',      color: '#F43F5E' },
-    admin_message:    { label: '관리자',    color: '#60A5FA' },
+    notice:           { label: '공지',       color: '#F43F5E' },
+    admin_message:    { label: '관리자',     color: '#60A5FA' },
   }
   const m = MAP[type]
   if (!m) return null
@@ -83,18 +77,16 @@ function MsgTypeBadge({ type }) {
   )
 }
 
-// ── 타이핑 인디케이터 ───────────────────────────────────────────────
 function TypingDots() {
   return (
     <div style={{ display: 'flex', gap: 3, alignItems: 'center', padding: '4px 8px' }}>
       {[0, 1, 2].map(i => (
         <span key={i} style={{
-          width: 5, height: 5, borderRadius: '50%',
-          background: '#555',
+          width: 5, height: 5, borderRadius: '50%', background: '#555',
           animation: `typingBounce 1.2s ${i * 0.2}s ease-in-out infinite`,
         }} />
       ))}
-      <style>{`@keyframes typingBounce { 0%,60%,100% { transform:translateY(0) } 30% { transform:translateY(-5px) } }`}</style>
+      <style>{`@keyframes typingBounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}`}</style>
     </div>
   )
 }
@@ -102,41 +94,49 @@ function TypingDots() {
 // ══════════════════════════════════════════════════════════════════════
 // 메인 컴포넌트
 // ══════════════════════════════════════════════════════════════════════
-
 export default function StaffChatPopup() {
   const { profile } = useAuthStore()
-
-  // ── 이중 admin 보안 검사 ────────────────────────────────────────
   if (!profile || profile.role !== 'admin') return null
 
-  const [open,        setOpen]        = useState(false)
-  const [room,        setRoom]        = useState('general')
-  const [messages,    setMessages]    = useState([])
-  const [input,       setInput]       = useState('')
-  const [loading,     setLoading]     = useState(false)
-  const [sending,     setSending]     = useState(false)
-  const [unread,      setUnread]      = useState(0)
-  const [minimized,   setMinimized]   = useState(false)
-  const [aiTyping,    setAiTyping]    = useState(false)    // AI 직원 타이핑 표시
-  const [autoMsg,     setAutoMsg]     = useState(null)     // 자동 반응 결과 표시
-  const [tableSetup,  setTableSetup]  = useState(false)    // 테이블 초기화 중 표시
-  const [tableNotReady, setTableNotReady] = useState(false) // 테이블 없음 — 안내 표시
+  const [open,          setOpen]          = useState(false)
+  const [room,          setRoom]          = useState('general')
+  const [messages,      setMessages]      = useState([])
+  const [input,         setInput]         = useState('')
+  const [loading,       setLoading]       = useState(false)
+  const [sending,       setSending]       = useState(false)
+  const [unread,        setUnread]        = useState(0)
+  const [minimized,     setMinimized]     = useState(false)
+  const [aiTyping,      setAiTyping]      = useState(false)
+  const [autoMsg,       setAutoMsg]       = useState(null)
+  const [tableSetup,    setTableSetup]    = useState(false)
+  const [tableNotReady, setTableNotReady] = useState(false)
 
-  const bottomRef       = useRef(null)
-  const msgListRef      = useRef(null)   // 스크롤 컨테이너 ref
-  const pollRef         = useRef(null)
-  const prevCountRef    = useRef(0)
-  const roomRef         = useRef(room)   // 폴링에서 최신 room 참조
-  const openRef         = useRef(open)   // 폴링에서 최신 open 참조
-  const userScrolledRef = useRef(false)  // 사용자가 위로 스크롤했는지 (강제 스크롤 방지)
-  const prevMsgLen      = useRef(0)      // 이전 메시지 수 (새 메시지 감지용)
-  // 테이블 초기화 상태 추적 — 컴포넌트 생명주기 동안 1회만 ensureTable 실행
-  const tableInitRef    = useRef(false)   // ensureTable 실행 중
-  const tableMissingRef = useRef(false)   // 테이블 없음 확정 (반복 ensureTable 방지)
+  const bottomRef        = useRef(null)
+  const msgListRef       = useRef(null)
+  const pollRef          = useRef(null)
+  const roomRef          = useRef(room)
+  const openRef          = useRef(open)
 
-  // ref 동기화
+  // ★ v4 핵심: optimistic 메시지 관리
+  const optimisticIds    = useRef(new Set())
+
+  // ★ v4 핵심: fetchMessages 중복 호출 방지 — in-flight 플래그
+  const fetchingRef      = useRef(false)
+  // debounce 타이머
+  const fetchDebounceRef = useRef(null)
+
+  // ★ v4 핵심: ensureTable 무한루프 방지 — 실패 후 영구 잠금
+  const tableInitRef     = useRef(false)   // 현재 초기화 중
+  const tableMissingRef  = useRef(false)   // 테이블 없음 감지됨
+  const tableFailedRef   = useRef(false)   // ★ 초기화 실패 → 재시도 금지
+  const ensureTableRef   = useRef(null)
+
+  // 이전 메시지 수 (스크롤용)
+  const prevMsgLenRef    = useRef(0)
+  const shouldScrollRef  = useRef(true)    // ★ 최초 로드 + 신규 메시지 시 스크롤
+
   useEffect(() => { roomRef.current = room }, [room])
-  useEffect(() => { openRef.current = open  }, [open])
+  useEffect(() => { openRef.current = open }, [open])
 
   // ── admin JWT 헤더 반환 ──────────────────────────────────────────
   const getAuthHeader = useCallback(async () => {
@@ -148,156 +148,190 @@ export default function StaffChatPopup() {
     } catch { return {} }
   }, [])
 
-  // fetchMessages ref — 순환 참조 없이 ensureTable → fetchMessages 호출용
-  const fetchMessagesRef = useRef(null)
+  // ── 메시지 조회 ─────────────────────────────────────────────────
+  // ★ v4: debounce + in-flight 방지로 중복 호출 제거
+  const fetchMessages = useCallback((silent = false) => {
+    // debounce: 짧은 시간 내 여러 호출은 마지막 1개만 실행
+    if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current)
+    fetchDebounceRef.current = setTimeout(async () => {
+      // in-flight 중이면 스킵
+      if (fetchingRef.current) return
+      fetchingRef.current = true
+      if (!silent) setLoading(true)
 
-  // ── 테이블 자동 생성 (table_missing 감지 시 1회만 호출) ────────
-  // ★ 폴링마다 호출되지 않도록 tableInitRef / tableMissingRef 이중 가드
+      try {
+        const currentRoom = roomRef.current
+        const r = await fetch(`/api/staff-chat?room=${currentRoom}&limit=80`)
+        const d = await r.json().catch(() => ({}))
+
+        // 테이블 없음 감지
+        if (d.table_missing === true || d.table_ready === false) {
+          if (!tableMissingRef.current) {
+            tableMissingRef.current = true
+            setTableNotReady(true)
+            // ★ v4: 실패 플래그 없을 때만 ensureTable 호출
+            if (!tableInitRef.current && !tableFailedRef.current) {
+              ensureTableRef.current?.()
+            }
+          }
+          if (!silent) setLoading(false)
+          fetchingRef.current = false
+          return
+        }
+
+        // 테이블 정상
+        tableMissingRef.current = false
+        setTableNotReady(false)
+
+        if (Array.isArray(d.messages)) {
+          setMessages(prev => {
+            // ★ v4: 서버 메시지는 이미 asc 정렬로 옴 (API 수정됨)
+            // pending optimistic 메시지만 뒤에 붙임
+            const serverIds = new Set(d.messages.map(m => m.id))
+            const pending   = prev.filter(m =>
+              optimisticIds.current.has(m.id) && !serverIds.has(m.id)
+            )
+            const merged = [...d.messages, ...pending]
+
+            // 새 메시지 감지 → unread 증가
+            const prevReal  = prev.filter(m => !optimisticIds.current.has(m.id))
+            const newCount  = d.messages.length - prevReal.length
+            if (!openRef.current && newCount > 0) setUnread(u => u + newCount)
+
+            // ★ v4: 새 메시지가 있으면 스크롤 플래그 세팅
+            if (newCount > 0 || merged.length !== prevMsgLenRef.current) {
+              shouldScrollRef.current = true
+            }
+
+            return merged
+          })
+        }
+      } catch (_) {}
+
+      if (!silent) setLoading(false)
+      fetchingRef.current = false
+    }, silent ? 80 : 0) // 폴링은 80ms debounce, 최초 로드는 즉시
+  }, []) // 의존성 없음 — 모두 ref로 접근
+
+  // ── 테이블 자동 생성 ────────────────────────────────────────────
   const ensureTable = useCallback(async () => {
-    if (tableInitRef.current) return          // 이미 진행 중
-    if (!tableMissingRef.current) return      // 테이블 없음이 확인된 적 없음
+    if (tableInitRef.current) return      // 이미 진행 중
+    if (tableFailedRef.current) return    // ★ v4: 실패 후 재시도 금지
+    if (!tableMissingRef.current) return
+
     tableInitRef.current = true
     setTableSetup(true)
     try {
       const authH = await getAuthHeader()
-      if (authH.Authorization) {
-        const r = await fetch('/api/db-setup-staff', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json', ...authH },
-        })
-        const d = await r.json().catch(() => ({}))
-        if (d.ok || d.table_exists) {
-          // 테이블 생성(또는 이미 존재) 확인 → 안내 해제 후 즉시 재조회
-          tableMissingRef.current = false
-          setTableNotReady(false)
-          fetchMessagesRef.current?.(true)
-        }
-        // 실패해도 tableMissingRef 유지 → 버튼 재시도 시 다시 ensureTable 호출 가능
-      }
-    } catch (_) {}
-    setTableSetup(false)
-    tableInitRef.current = false
-  }, [getAuthHeader])
-
-  // ── 메시지 조회 ─────────────────────────────────────────────────
-  const fetchMessages = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true)
-    try {
-      const currentRoom = roomRef.current
-      const r = await fetch(`/api/staff-chat?room=${currentRoom}&limit=80`)
-      const d = await r.json().catch(() => ({}))
-
-      // table_missing=true → 테이블 없음 확정
-      // tableMissingRef를 true로 세팅 후 ensureTable 1회만 호출
-      if (d.table_missing === true || d.table_ready === false) {
-        if (!tableMissingRef.current) {
-          // 최초 감지 시에만 ensureTable 트리거
-          tableMissingRef.current = true
-          setTableNotReady(true)
-          // 진행 중이 아닐 때만 ensureTable 호출 (중복 방지)
-          if (!tableInitRef.current) ensureTable()
-        }
-        if (!silent) setLoading(false)
+      if (!authH.Authorization) {
+        tableFailedRef.current = true     // 인증 실패 → 재시도 금지
         return
       }
-      // 테이블이 있음 확인되면 missing 상태 해제
-      tableMissingRef.current = false
-      setTableNotReady(false)
-
-      if (Array.isArray(d.messages)) {
-        setMessages(prev => {
-          if (d.messages.length === 0 && prev.length > 0) return prev
-          const realPrev = prev.filter(m => !m.id?.startsWith('optimistic-'))
-          const newCount = d.messages.length - realPrev.length
-          if (!openRef.current && newCount > 0) setUnread(u => u + newCount)
-          return d.messages
-        })
+      const r = await fetch('/api/db-setup-staff', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', ...authH },
+      })
+      const d = await r.json().catch(() => ({}))
+      if (d.ok || d.table_exists) {
+        tableMissingRef.current = false
+        tableFailedRef.current  = false
+        setTableNotReady(false)
+        fetchMessages(true)
+      } else {
+        // ★ v4: 실패 시 영구 잠금 (무한 루프 방지)
+        tableFailedRef.current = true
       }
-    } catch (_) {}
-    if (!silent) setLoading(false)
-  }, [ensureTable])
+    } catch (_) {
+      tableFailedRef.current = true       // ★ v4: 예외 시에도 영구 잠금
+    } finally {
+      setTableSetup(false)
+      tableInitRef.current = false
+    }
+  }, [getAuthHeader, fetchMessages])
 
-  // 방 변경 시 메시지 로드
+  // ensureTable ref 동기화
+  useEffect(() => { ensureTableRef.current = ensureTable }, [ensureTable])
+
+  // ── 방 변경 시 메시지 로드 ──────────────────────────────────────
   useEffect(() => {
     setMessages([])
-    prevCountRef.current = 0
-    fetchMessages()
-  }, [room])  // eslint-disable-line
+    optimisticIds.current.clear()
+    prevMsgLenRef.current  = 0
+    shouldScrollRef.current = true
+    fetchingRef.current    = false  // ★ v4: 방 변경 시 in-flight 리셋
+    if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current)
+    fetchMessages(false)
+  }, [room]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // fetchMessagesRef 동기화 — ensureTable에서 역참조용
-  useEffect(() => {
-    fetchMessagesRef.current = fetchMessages
-  }, [fetchMessages])
-
-  // 폴링 — open 상태에서만 실행, 팝업이 닫히면 폴링 중단하여 불필요한 요청 제거
-  // 간격: open 시 4초 (3초→4초로 상향해 서버 부하 감소)
+  // ── 폴링 — open 상태에서만 ──────────────────────────────────────
   useEffect(() => {
     if (!open) {
-      clearInterval(pollRef.current)
+      if (pollRef.current) clearInterval(pollRef.current)
       return
     }
     pollRef.current = setInterval(() => fetchMessages(true), 4000)
-    return () => clearInterval(pollRef.current)
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [open, fetchMessages])
 
-  // 새 메시지 시 자동 스크롤 — 사용자가 위로 스크롤 중이면 강제 이동하지 않음
+  // ── 새 메시지 자동 스크롤 ───────────────────────────────────────
+  // ★ v4: shouldScrollRef로 불필요한 스크롤 방지
   useEffect(() => {
     if (!open || minimized) return
     const newLen = messages.length
     if (newLen === 0) return
 
-    // 사용자 스크롤 위치 확인 (하단 80px 이내면 팔로우, 아니면 유지)
     const container = msgListRef.current
-    if (container) {
-      const { scrollTop, scrollHeight, clientHeight } = container
-      const distFromBottom = scrollHeight - scrollTop - clientHeight
-      const isNearBottom = distFromBottom < 80
-      // 새 메시지가 실제로 추가됐을 때만 스크롤
-      if (newLen > prevMsgLen.current && isNearBottom) {
-        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 60)
-      }
-    } else if (newLen > prevMsgLen.current) {
-      // 컨테이너 ref 없으면 처음 로드 시에만
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 60)
+    const isAtBottom = !container ||
+      (container.scrollHeight - container.scrollTop - container.clientHeight < 100)
+
+    // 새 메시지 있고 (바닥 근처이거나 최초 로드)이면 스크롤
+    if (shouldScrollRef.current && (isAtBottom || newLen > prevMsgLenRef.current)) {
+      setTimeout(() => {
+        bottomRef.current?.scrollIntoView({ behavior: newLen <= 5 ? 'auto' : 'smooth' })
+      }, 60)
+      shouldScrollRef.current = false
     }
-    prevMsgLen.current = newLen
+    prevMsgLenRef.current = newLen
   }, [messages, open, minimized])
 
-  // 열면 읽음 처리
   useEffect(() => {
-    if (open) setUnread(0)
+    if (open) { setUnread(0); shouldScrollRef.current = true }
   }, [open])
 
   // ── 관리자 메시지 전송 ─────────────────────────────────────────
   const sendMessage = async () => {
     if (!input.trim() || sending) return
-    const msg = input.trim()
+    const msg      = input.trim()
+    const roomSnap = roomRef.current
     setSending(true)
     setInput('')
 
-    try {
-      // 1) Optimistic update — 즉시 화면에 표시 (DB 응답 기다리지 않음)
-      const optimisticMsg = {
-        id:           `optimistic-${Date.now()}`,
-        room,
-        sender_key:   profile.username || 'admin',
-        sender_name:  profile.display_name || profile.username || '관리자',
-        sender_emoji: '👤',
-        sender_color: '#60A5FA',
-        sender_team:  '관리자',
-        message:      msg,
-        msg_type:     'admin_message',
-        created_at:   new Date().toISOString(),
-      }
-      setMessages(prev => [...prev, optimisticMsg])
+    // 1) Optimistic 메시지 추가
+    const optimisticId  = `opt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    const optimisticMsg = {
+      id:           optimisticId,
+      room:         roomSnap,
+      sender_key:   'admin',
+      sender_name:  profile.display_name || profile.username || '관리자',
+      sender_emoji: '👤',
+      sender_color: '#60A5FA',
+      sender_team:  '관리자',
+      message:      msg,
+      msg_type:     'admin_message',
+      created_at:   new Date().toISOString(),
+    }
+    optimisticIds.current.add(optimisticId)
+    shouldScrollRef.current = true
+    setMessages(prev => [...prev, optimisticMsg])
 
-      // 2) 서버에 실제 저장
-      const authH = await getAuthHeader()
-      const postRes = await fetch(`/api/staff-chat?room=${room}`, {
+    try {
+      // 2) 서버 저장
+      const authH   = await getAuthHeader()
+      const postRes = await fetch(`/api/staff-chat?room=${roomSnap}`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', ...authH },
         body: JSON.stringify({
-          sender_key:   profile.username || 'admin',
+          sender_key:   'admin',
           sender_name:  profile.display_name || profile.username || '관리자',
           sender_emoji: '👤',
           sender_color: '#60A5FA',
@@ -309,74 +343,80 @@ export default function StaffChatPopup() {
       const postData = await postRes.json().catch(() => ({}))
 
       if (postData.ok && postData.message) {
-        // optimistic 메시지를 실제 서버 메시지로 교체 (id 교체)
+        // ★ v4: optimistic → 서버 메시지 교체 (즉시, fetchMessages 호출 없이)
+        optimisticIds.current.delete(optimisticId)
+        shouldScrollRef.current = true
         setMessages(prev => prev.map(m =>
-          m.id === optimisticMsg.id ? postData.message : m
+          m.id === optimisticId ? postData.message : m
         ))
       } else {
-        // 저장 실패 시 optimistic 메시지 제거 후 재조회
-        setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id))
-        await fetchMessages(true)
+        // 저장 실패: optimistic 제거
+        optimisticIds.current.delete(optimisticId)
+        setMessages(prev => prev.filter(m => m.id !== optimisticId))
       }
-      // 서버 상태 동기화 (AI 직원 반응 포함)
-      setTimeout(() => fetchMessages(true), 500)
 
-      // 2) staff-chat-auto API로 직원 자동 반응 트리거
+      // 3) staff-chat-auto 트리거 (fire & forget)
       setAiTyping(true)
-      const cronSecret = import.meta.env.VITE_CRON_SECRET
       const authH2 = await getAuthHeader()
-      const autoHeaders = { 'Content-Type': 'application/json', ...authH2 }
-      if (cronSecret) autoHeaders['x-cron-secret'] = cronSecret
-
       fetch('/api/staff-chat-auto', {
         method:  'POST',
-        headers: autoHeaders,
-        body: JSON.stringify({ action: 'admin_message', room, message: msg }),
+        headers: { 'Content-Type': 'application/json', ...authH2 },
+        body: JSON.stringify({ action: 'admin_message', room: roomSnap, message: msg }),
       })
-        .then(r => r.json())
+        .then(r => r.json().catch(() => ({})))
         .then(d => {
           setAiTyping(false)
           if (d.handled > 0) {
             setAutoMsg(`${d.responders?.join(', ')} 이(가) 반응했어요`)
             setTimeout(() => setAutoMsg(null), 6000)
-            // 1차 반응 확인
-            fetchMessages(true)
-            // 2차 웨이브(토론 이어받기) 확인 — 서버 측 2초 딜레이 고려
-            setTimeout(() => fetchMessages(true), 4000)
-          } else {
-            fetchMessages(true)
           }
+          // ★ v4: AI 응답 후 1회만 fetchMessages (debounce로 중복 방지됨)
+          fetchMessages(true)
         })
-        .catch(() => setAiTyping(false))
+        .catch(() => {
+          setAiTyping(false)
+          fetchMessages(true)
+        })
 
-    } catch (_) { setSending(false) }
-    setSending(false)
+    } catch (_) {
+      // 전송 오류: optimistic 제거
+      optimisticIds.current.delete(optimisticId)
+      setMessages(prev => prev.filter(m => m.id !== optimisticId))
+    } finally {
+      setSending(false)
+    }
   }
 
   const handleKey = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
   }
 
-  // ── 침묵 시 자연 대화 수동 트리거 ──────────────────────────────
+  // ── 침묵 시 자연 대화 트리거 ────────────────────────────────────
   const triggerNaturalChat = async () => {
     setAiTyping(true)
     try {
-      const cronSecret = import.meta.env.VITE_CRON_SECRET
-      const authH3 = await getAuthHeader()
-      const h = { 'Content-Type': 'application/json', ...authH3 }
-      if (cronSecret) h['x-cron-secret'] = cronSecret
+      const authH = await getAuthHeader()
       const r = await fetch('/api/staff-chat-auto', {
-        method: 'POST', headers: h,
-        body: JSON.stringify({ action: 'initiate', room }),
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', ...authH },
+        body: JSON.stringify({ action: 'initiate', room: roomRef.current }),
       })
       const d = await r.json().catch(() => ({}))
       if (d.initiated) {
         setAutoMsg(`${d.initiator} 이(가) 대화를 시작했어요`)
         setTimeout(() => setAutoMsg(null), 4000)
-        fetchMessages(true)
+        setTimeout(() => fetchMessages(true), 1500)
       }
     } catch (_) {}
     setAiTyping(false)
+  }
+
+  // ── 수동 ensureTable 재시도 ──────────────────────────────────────
+  const retryEnsureTable = () => {
+    tableInitRef.current   = false
+    tableFailedRef.current = false
+    tableMissingRef.current = true
+    ensureTable()
   }
 
   const currentRoom = ROOMS.find(r => r.id === room)
@@ -397,8 +437,14 @@ export default function StaffChatPopup() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           transition: 'transform .2s, box-shadow .2s',
         }}
-        onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)'; e.currentTarget.style.boxShadow = '0 6px 28px rgba(59,130,246,0.6)' }}
-        onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)';   e.currentTarget.style.boxShadow = '0 4px 20px rgba(59,130,246,0.4)' }}
+        onMouseEnter={e => {
+          e.currentTarget.style.transform = 'scale(1.1)'
+          e.currentTarget.style.boxShadow = '0 6px 28px rgba(59,130,246,0.6)'
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.transform = 'scale(1)'
+          e.currentTarget.style.boxShadow = '0 4px 20px rgba(59,130,246,0.4)'
+        }}
       >
         <span style={{ fontSize: 20 }}>💼</span>
         {unread > 0 && (
@@ -449,17 +495,23 @@ export default function StaffChatPopup() {
             </span>
             <div style={{ marginLeft:'auto', display:'flex', gap:6, alignItems:'center' }}>
               {unread > 0 && (
-                <span style={{ background:'#F43F5E', color:'#fff', borderRadius:'50%', width:15, height:15,
-                  fontSize:9, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--f-mono)' }}>
+                <span style={{
+                  background:'#F43F5E', color:'#fff', borderRadius:'50%',
+                  width:15, height:15, fontSize:9,
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  fontFamily:'var(--f-mono)',
+                }}>
                   {unread}
                 </span>
               )}
               <button
                 onClick={e => { e.stopPropagation(); triggerNaturalChat() }}
                 title="직원 자연 대화 시작"
-                style={{ background:'rgba(96,165,250,0.1)', border:'1px solid rgba(96,165,250,0.2)',
-                  borderRadius:4, color:'#60A5FA', cursor:'pointer', fontSize:10, padding:'2px 6px',
-                  fontFamily:'var(--f-mono)' }}
+                style={{
+                  background:'rgba(96,165,250,0.1)', border:'1px solid rgba(96,165,250,0.2)',
+                  borderRadius:4, color:'#60A5FA', cursor:'pointer', fontSize:10,
+                  padding:'2px 6px', fontFamily:'var(--f-mono)',
+                }}
               >
                 대화↑
               </button>
@@ -507,16 +559,14 @@ export default function StaffChatPopup() {
                   flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8,
                 }}>
                   <div style={{ display:'flex', alignItems:'center', gap:6, fontWeight:700 }}>
-                    <span>⚠️</span>
-                    <span>staff_chat_messages 테이블 없음</span>
+                    <span>⚠️</span><span>staff_chat_messages 테이블 없음</span>
                   </div>
                   <div style={{ fontSize:10, color:'#fca5a5', lineHeight:1.6 }}>
-                    Supabase에 테이블을 생성해야 채팅이 활성화됩니다.<br/>
-                    <strong>Admin 시스템 탭</strong>에서 SQL을 복사 후 Supabase SQL Editor에서 실행하세요.
+                    Supabase에 테이블을 생성해야 채팅이 활성화됩니다.
                   </div>
                   <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                     <button
-                      onClick={() => { tableInitRef.current = false; tableMissingRef.current = true; ensureTable() }}
+                      onClick={retryEnsureTable}
                       style={{
                         background:'rgba(244,63,94,0.15)', border:'1px solid rgba(244,63,94,0.3)',
                         borderRadius:4, color:'#F87171', cursor:'pointer', fontSize:10, padding:'4px 10px',
@@ -528,26 +578,15 @@ export default function StaffChatPopup() {
                       style={{
                         background:'rgba(129,140,248,0.15)', border:'1px solid rgba(129,140,248,0.3)',
                         borderRadius:4, color:'#a78bfa', cursor:'pointer', fontSize:10, padding:'4px 10px',
-                        textDecoration:'none', display:'inline-block'
+                        textDecoration:'none', display:'inline-block',
                       }}
                     >
-                      🔧 Admin 시스템 탭 이동
-                    </a>
-                    <a href="https://supabase.com/dashboard/project/itcbantrpkjpkfhnriom/sql/new"
-                      target="_blank" rel="noopener noreferrer"
-                      style={{
-                        background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.2)',
-                        borderRadius:4, color:'#4ade80', cursor:'pointer', fontSize:10, padding:'4px 10px',
-                        textDecoration:'none', display:'inline-block'
-                      }}
-                    >
-                      🔗 SQL Editor 열기
+                      🔧 Admin 시스템 탭
                     </a>
                   </div>
                 </div>
               )}
 
-              {/* ── 테이블 초기화 중 배너 ─────────────────────── */}
               {tableSetup && (
                 <div style={{
                   background: 'rgba(251,191,36,0.08)', borderBottom: '1px solid rgba(251,191,36,0.2)',
@@ -555,11 +594,10 @@ export default function StaffChatPopup() {
                   fontFamily: 'var(--f-mono)', letterSpacing: '0.5px', flexShrink: 0,
                   display: 'flex', alignItems: 'center', gap: 6,
                 }}>
-                  <span>⚙️</span> 채팅 DB 초기화 중… (최초 1회)
+                  <span>⚙️</span> 채팅 DB 초기화 중…
                 </div>
               )}
 
-              {/* ── 자동 반응 알림 ─────────────────────────────── */}
               {autoMsg && (
                 <div style={{
                   background: 'rgba(96,165,250,0.08)', borderBottom: '1px solid rgba(96,165,250,0.15)',
@@ -578,8 +616,9 @@ export default function StaffChatPopup() {
                   flex: 1, overflowY: 'auto', padding: '10px 12px',
                   display: 'flex', flexDirection: 'column', gap: 9,
                   scrollbarWidth: 'thin', scrollbarColor: '#222 transparent',
-                }}>
-                {loading && (
+                }}
+              >
+                {loading && messages.length === 0 && (
                   <div style={{ textAlign:'center', color:'#333', fontFamily:'var(--f-mono)', fontSize:10, padding:20 }}>
                     로딩 중…
                   </div>
@@ -593,19 +632,20 @@ export default function StaffChatPopup() {
                 )}
 
                 {messages.map((msg, idx) => {
-                  const isAdmin = !msg.sender_key?.startsWith('ai_')
-                  const color   = getColor(msg.sender_key)
+                  const isAdmin   = !msg.sender_key?.startsWith('ai_')
+                  const color     = getColor(msg.sender_key)
+                  const isPending = optimisticIds.current.has(msg.id)
                   return (
-                    <div key={msg.id || idx} style={{
+                    <div key={msg.id || `msg-${idx}`} style={{
                       display: 'flex', gap: 8, alignItems: 'flex-start',
-                      // 관리자 메시지는 우측 정렬
                       flexDirection: isAdmin ? 'row-reverse' : 'row',
+                      opacity: isPending ? 0.65 : 1,
+                      transition: 'opacity .3s',
                     }}>
                       {/* 아바타 */}
                       <div style={{
                         width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                        background: `${color}18`,
-                        border: `1px solid ${color}35`,
+                        background: `${color}18`, border: `1px solid ${color}35`,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: 12,
                       }}>
@@ -613,7 +653,6 @@ export default function StaffChatPopup() {
                       </div>
 
                       <div style={{ flex: 1, minWidth: 0, maxWidth: '85%' }}>
-                        {/* 발신자 정보 */}
                         <div style={{
                           display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3,
                           flexDirection: isAdmin ? 'row-reverse' : 'row',
@@ -627,13 +666,15 @@ export default function StaffChatPopup() {
                             </span>
                           )}
                           <MsgTypeBadge type={msg.msg_type} />
-                          <span style={{ marginLeft: isAdmin ? 0 : 'auto', marginRight: isAdmin ? 'auto' : 0,
-                            fontSize:9, color:'#2a2a3a', fontFamily:'var(--f-mono)' }}>
-                            {formatTime(msg.created_at)}
+                          <span style={{
+                            marginLeft: isAdmin ? 0 : 'auto',
+                            marginRight: isAdmin ? 'auto' : 0,
+                            fontSize:9, color:'#2a2a3a', fontFamily:'var(--f-mono)',
+                          }}>
+                            {isPending ? '전송 중…' : formatTime(msg.created_at)}
                           </span>
                         </div>
 
-                        {/* 메시지 버블 */}
                         <div style={{
                           fontSize: 12, color: isAdmin ? '#D0E8FF' : '#B8B8C8',
                           lineHeight: 1.55,
@@ -643,8 +684,8 @@ export default function StaffChatPopup() {
                           borderRadius: isAdmin ? '12px 3px 12px 12px' : '3px 12px 12px 12px',
                           padding: '7px 11px',
                           whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                          borderLeft: isAdmin ? 'none' : `2px solid ${color}25`,
-                          borderRight: isAdmin ? `2px solid ${color}40` : 'none',
+                          borderLeft:  isAdmin ? 'none'                  : `2px solid ${color}25`,
+                          borderRight: isAdmin ? `2px solid ${color}40`  : 'none',
                         }}>
                           {msg.message}
                         </div>
@@ -653,21 +694,28 @@ export default function StaffChatPopup() {
                   )
                 })}
 
-                {/* AI 타이핑 인디케이터 */}
                 {aiTyping && (
                   <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                    <div style={{ width:28, height:28, borderRadius:'50%', background:'rgba(129,140,248,0.15)',
-                      border:'1px solid rgba(129,140,248,0.3)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12 }}>
+                    <div style={{
+                      width:28, height:28, borderRadius:'50%',
+                      background:'rgba(129,140,248,0.15)',
+                      border:'1px solid rgba(129,140,248,0.3)',
+                      display:'flex', alignItems:'center', justifyContent:'center', fontSize:12,
+                    }}>
                       ⚙️
                     </div>
-                    <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:'3px 12px 12px 12px',
-                      padding:'4px 10px', borderLeft:'2px solid rgba(129,140,248,0.3)' }}>
+                    <div style={{
+                      background:'rgba(255,255,255,0.04)',
+                      borderRadius:'3px 12px 12px 12px',
+                      padding:'4px 10px',
+                      borderLeft:'2px solid rgba(129,140,248,0.3)',
+                    }}>
                       <TypingDots />
                     </div>
                   </div>
                 )}
 
-                <div ref={bottomRef} />
+                <div ref={bottomRef} style={{ height: 1 }} />
               </div>
 
               {/* ── 입력창 ──────────────────────────────────────── */}
@@ -681,21 +729,14 @@ export default function StaffChatPopup() {
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={handleKey}
-                  placeholder={`${currentRoom?.label}에 지시/공유 (Enter 전송, 직원들이 반응해요)`}
+                  placeholder={`${currentRoom?.label}에 지시/공유 (Enter 전송)`}
                   rows={2}
                   style={{
-                    flex: 1,
-                    background: 'rgba(255,255,255,0.04)',
+                    flex: 1, background: 'rgba(255,255,255,0.04)',
                     border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: 10,
-                    color: '#D8D8E8',
-                    fontSize: 12,
-                    padding: '7px 11px',
-                    resize: 'none',
-                    outline: 'none',
-                    fontFamily: 'inherit',
-                    lineHeight: 1.5,
-                    transition: 'border-color .15s',
+                    borderRadius: 10, color: '#D8D8E8', fontSize: 12,
+                    padding: '7px 11px', resize: 'none', outline: 'none',
+                    fontFamily: 'inherit', lineHeight: 1.5, transition: 'border-color .15s',
                   }}
                   onFocus={e => e.target.style.borderColor = 'rgba(96,165,250,0.4)'}
                   onBlur={e  => e.target.style.borderColor = 'rgba(255,255,255,0.08)'}
@@ -703,7 +744,7 @@ export default function StaffChatPopup() {
                 <button
                   onClick={sendMessage}
                   disabled={sending || !input.trim()}
-                  title="전송 (직원들이 자동으로 반응합니다)"
+                  title="전송"
                   style={{
                     background: (sending || !input.trim())
                       ? '#0f0f1a'
@@ -711,20 +752,16 @@ export default function StaffChatPopup() {
                     border: 'none', borderRadius: 10, padding: '0 14px',
                     color: (sending || !input.trim()) ? '#333' : '#fff',
                     cursor: (sending || !input.trim()) ? 'not-allowed' : 'pointer',
-                    fontSize: 18, flexShrink: 0,
-                    transition: 'background .2s',
-                    minWidth: 40,
+                    fontSize: 18, flexShrink: 0, transition: 'background .2s', minWidth: 40,
                   }}
                 >
                   {sending ? '…' : '↑'}
                 </button>
               </div>
 
-              {/* ── 하단 힌트 ────────────────────────────────────── */}
               <div style={{
-                padding: '4px 14px 6px',
-                fontSize: 9, color: '#2a2a3a', fontFamily: 'var(--f-mono)',
-                display: 'flex', justifyContent: 'space-between',
+                padding: '4px 14px 6px', fontSize: 9, color: '#2a2a3a',
+                fontFamily: 'var(--f-mono)', display: 'flex', justifyContent: 'space-between',
                 flexShrink: 0,
               }}>
                 <span>💼 admin 전용 채팅방</span>
