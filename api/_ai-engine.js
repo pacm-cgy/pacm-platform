@@ -24,7 +24,7 @@ import {
   generateFeedbackReply as brainFeedbackReply,
   generateComment,
   generatePostContent,
-} from './staff-brain.js'
+} from './_staff-brain.js'
 
 // ══════════════════════════════════════════════════════════════════════
 // 채팅 다양성 가드 — 페르소나별 최근 메시지 지문 추적

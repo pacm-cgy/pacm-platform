@@ -96,7 +96,7 @@ import {
   generateWeeklyDiscussion,
   generateMentoringTip,
   generateInsightArticle,
-} from './staff-brain.js'
+} from './_staff-brain.js'
 
 
 // ══════════════════════════════════════════════════════════════════════

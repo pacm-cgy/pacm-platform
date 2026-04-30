@@ -7,7 +7,7 @@
  * /api/analyze-trend, /api/report
  */
 import { generateReport, generateCommunityPost, generateChat, generateText } from './_ai-engine.js'
-import { generateFeedbackReply } from './staff-brain.js'
+import { generateFeedbackReply } from './_staff-brain.js'
 import {
   requireAdmin, isCronAuth,
   json as authJson, ok as authOk, forbidden, unauthorized, serverError, badRequest,

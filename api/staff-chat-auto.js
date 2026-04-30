@@ -28,7 +28,7 @@ import {
   generateConversationStarter,
   generateReactionToAdmin,
   generateDiscussionMessage,
-} from './staff-brain.js'
+} from './_staff-brain.js'
 
 import {
   getMood,
@@ -50,7 +50,7 @@ import {
   decideNextAction,
   getPersonaStatus,
   getCurrentGoal,
-} from './staff-persona-engine.js'
+} from './_staff-persona-engine.js'
 
 // ══════════════════════════════════════════════════════════════════════
 // 반복 대화 방지 메모리 (런타임 캐시)
