@@ -1,11 +1,12 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════╗
- * ║  INSIGHTSHIP 뉴스 롱폼 품질 검증 + 재처리 엔진 v1.0                 ║
+ * ║  INSIGHTSHIP 뉴스 롱폼 품질 검증 + 재처리 엔진 v2.0                 ║
  * ║                                                                      ║
  * ║  검증 기준:                                                          ║
  * ║   - ai_summary 최소 800자 이상 (롱폼 기준)                          ║
+ * ║   - 구버전 패턴([핵심 내용], [배경 및 분석]) → 강제 재처리           ║
+ * ║   - HTML 엔티티(&amp;, &gt;) → 자동 정제                           ║
  * ║   - 800자 미만 → summarize-news 재호출하여 재생성                   ║
- * ║   - 본문(body) 없고 요약도 없으면 excerpt로 보완                    ║
  * ║   - 롱폼 점수 산출: 섹션 수, 질문 포함 여부, 용어 설명 여부         ║
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
@@ -20,6 +21,21 @@ const H = () => ({
   Authorization: `Bearer ${SB_KEY}`,
   'Content-Type': 'application/json',
 })
+
+// ── 구버전 패턴 감지 ──────────────────────────────────────────────
+const LEGACY_PATTERNS = [
+  '[핵심 내용]', '[배경 및 분석]', '[투자 시장 심층 분석',
+  '[청소년 창업가를 위한', '[청소년 창업가 관점]',
+  '이번 투자 소식은 해당 기업의 기술력과 성장 가능성을 시장이 인정한',
+  '스타트업 투자는 보통 시드(초기) →',
+  '투자금은 통상 제품 개발 가속화, 핵심 인재 채용',
+  '투자자는 창업가의 비전을 검증해주는 파트너',
+  '&amp;', '&gt;', '&lt;',
+]
+function isLegacy(text) {
+  if (!text) return false
+  return LEGACY_PATTERNS.some(p => text.includes(p))
+}
 
 // ── 롱폼 품질 점수 계산 ──────────────────────────────────────────
 function calcLongformScore(text) {
@@ -115,11 +131,13 @@ export async function handleLongformQuality(req) {
   for (const art of articles) {
     const sumLen = (art.ai_summary || '').length
     const score = calcLongformScore(art.ai_summary || '')
+    const legacy = isLegacy(art.ai_summary || '')
 
-    stats.quality_scores.push({ id: art.id, len: sumLen, score })
+    stats.quality_scores.push({ id: art.id, len: sumLen, score, legacy })
 
-    if (!art.ai_summary || sumLen < minLen) {
+    if (!art.ai_summary || sumLen < minLen || legacy) {
       if (!art.ai_summary) stats.missing++
+      else if (legacy) stats.legacy = (stats.legacy || 0) + 1
       else stats.short++
       toReprocess.push(art)
     } else {
