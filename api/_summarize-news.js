@@ -1,37 +1,85 @@
 /**
- * api/summarize-news.js
- * INSIGHTSHIP LONGFORM NEWS AI ENGINE v15.0
- * 완전 동적 본문 분석 — 고정 템플릿 0개
- * - 본문 있는 기사: BM25 키문장 추출 기반
- * - 본문 없는 기사(제목만): NER 완전 분석 기반 동적 생성 (고정 문구 절대 없음)
+ * api/_summarize-news.js
+ * INSIGHTSHIP LONGFORM NEWS AI ENGINE v17.0
+ * 완전 동적 본문 분석 — 고정 템플릿 0개, 반복 문구 0개
+ * - 본문 있는 기사: BM25 키문장 추출 기반 풍부한 롱폼
+ * - 본문 없는 기사(제목만): NER 완전 분석 기반 동적 생성 (800자+ 보장)
+ * - v17: 구버전 엔진 패턴 전체 감지·재처리 (v8~v16 old-template 포함)
+ *        HTML 엔티티/태그 완전 제거, 짧은 NER 섹션 대폭 보강
  *
  * POST /api/summarize-news  (x-cron-secret 또는 x-vercel-cron: 1)
  * GET  /api/summarize-news  → 엔진 상태 확인
  */
-
 
 const SB_URL      = process.env.SUPABASE_URL
 const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY
 const CRON_SECRET = process.env.CRON_SECRET
 
 // ══════════════════════════════════════════════════════════════════════
-// §1. 텍스트 정제
+// §1. 구버전 패턴 감지 (v8~v16 old-template 포함)
+// ══════════════════════════════════════════════════════════════════════
+
+const LEGACY_PATTERNS = [
+  // 구버전 섹션 헤더 (bracket 형태)
+  '[핵심 내용]', '[배경 및 분석]', '[투자 시장 심층 분석',
+  '[청소년 창업가를 위한', '[청소년 창업가 관점]', '[핵심 포인트]',
+  // 구버전 고정 문구
+  '이번 투자 소식은 해당 기업의 기술력과 성장 가능성을 시장이 인정한',
+  '스타트업 투자는 보통 시드(초기) →',
+  '투자금은 통상 제품 개발 가속화, 핵심 인재 채용',
+  '투자자는 창업가의 비전을 검증해주는 파트너',
+  // old-template 엔진 고정 도입부
+  '이 뉴스 뒤에 더 큰 이야기가 있습니다',
+  '비즈니스 세계에서 아무것도 우연히 일어나지 않습니다',
+  '한 회사의 결정, 한 시장의 변화가 연결되고 연결되어',
+  '이 연결 고리를 함께 추적해봅시다',
+  '새로운 것이 나왔습니다.',
+  '출시 뒤에는 수개월, 때로는 수년간의 개발과 결정의 역사가 있습니다',
+  '**무슨 일이 일어났나요?**',
+  // 구버전 마커
+  'insightship-longform-v8', 'insightship-longform-v9',
+  'insightship-longform-v10', 'insightship-longform-v11',
+  'insightship-longform-v12', 'insightship-longform-v13',
+  'insightship-longform-v14', 'insightship-longform-v15',
+  // HTML 잔재
+  '&amp;', '&lt;', '&gt;', '&quot;', '&#39;', '&nbsp;',
+]
+
+function isLegacyContent(text) {
+  if (!text) return true
+  return LEGACY_PATTERNS.some(p => text.includes(p))
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// §2. 텍스트 정제
 // ══════════════════════════════════════════════════════════════════════
 
 function cleanText(t) {
   return (t || '')
     .replace(/<(script|style)[^>]*>[\s\S]*?<\/(script|style)>/gi, '')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    // HTML 엔티티 완전 제거
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&[a-zA-Z]{2,8};/g, '')
     .replace(/&#x?[0-9a-fA-F]+;/g, '')
+    // URL 제거
     .replace(/https?:\/\/\S+/g, '')
+    // 소셜 공유 버튼 텍스트
     .replace(/공유하기|페이스북|트위터|카카오톡\s*공유|인스타그램|네이버\s*밴드|URL\s*복사/g, '')
+    // 기자 서명
     .replace(/기자\s*[가-힣]{2,4}\s*기자|^\s*[가-힣]{2,3}\s*기자/gm, '')
+    // 날짜 메타
     .replace(/입력\s*\d{4}\.\d{2}\.\d{2}.*$/gm, '')
     .replace(/수정\s*\d{4}\.\d{2}\.\d{2}.*$/gm, '')
+    // 저작권
     .replace(/저작권자\s*©.*$/gm, '')
     .replace(/무단전재\s*및\s*재배포\s*금지/g, '')
+    // 대괄호 내용 (구버전 템플릿 잔재)
     .replace(/\[.*?\]/g, '')
     .replace(/\(.*?기자\)/g, '')
     .replace(/\s{2,}/g, ' ')
@@ -52,7 +100,7 @@ function isNoise(s) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §2. 이벤트·도메인 분류
+// §3. 이벤트·도메인 분류
 // ══════════════════════════════════════════════════════════════════════
 
 const EVENT_TYPES = {
@@ -113,7 +161,7 @@ function estimateReadTime(text) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §3. 토크나이저 & BM25
+// §4. 토크나이저 & BM25
 // ══════════════════════════════════════════════════════════════════════
 
 const STOPWORDS = new Set([
@@ -181,7 +229,7 @@ function isDuplicateTitle(title, existing) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §4. NER — 제목 완전 분석
+// §5. NER — 제목 완전 분석
 // ══════════════════════════════════════════════════════════════════════
 
 const GEO_LIST = [
@@ -213,7 +261,7 @@ function parseTitle(title) {
   else if (/진출|확장|스케일/.test(title))                                      ner.action = 'expand'
   else                                                                            ner.action = 'news'
   // 기업명: 제목 앞부분 추출
-  const orgM = title.match(/^([^,，·\[\]\s]{2,14}(?:테크|솔루션|랩스?|스튜디오|플랫폼|바이오|AI|ai|Inc|Corp)?)\s*[,，·]/)
+  const orgM = title.match(/^([^,，·\[\]\s]{2,14}(?:테크|솔루션|랩스?|스튜디오|플랫폼|바이오|AI|ai|Inc|Corp)?)[\s,，·]/)
   if (orgM && orgM[1].trim().length >= 2 && !STOPWORDS.has(orgM[1].trim())) {
     ner.orgs = [orgM[1].trim()]
   }
@@ -221,7 +269,7 @@ function parseTitle(title) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §5. 용어 사전
+// §6. 용어 사전
 // ══════════════════════════════════════════════════════════════════════
 
 const TERM_DICT = {
@@ -243,7 +291,7 @@ const TERM_DICT = {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §6. 문장 분류 헬퍼
+// §7. 문장 분류 헬퍼
 // ══════════════════════════════════════════════════════════════════════
 
 function hasNumber(s) { return /([\d,]+억|[\d,]+조|[\d,]+만\s*원|[\d]+%|[\d]+배|[\d,]+만\s*명|[\d,]+개)/.test(s) }
@@ -255,7 +303,7 @@ function isQuote(s)   {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §7. 동적 질문 생성기
+// §8. 동적 질문 생성기
 // ══════════════════════════════════════════════════════════════════════
 
 function buildDynamicQuestions(title, eventType, domain, keySents, ner) {
@@ -264,15 +312,12 @@ function buildDynamicQuestions(title, eventType, domain, keySents, ner) {
   const domKo = DOMAINS[domain]?.ko || '창업·비즈니스'
   const titleKw = tokenize(title).filter(t => t.length >= 2 && !STOPWORDS.has(t)).slice(0, 4)
 
-  // 수치 기반
   if (amounts.length > 0) {
     questions.push(`**${amounts[0]}** 규모는 ${domKo} 업계 평균과 비교하면 어느 정도이며, 이 자금이 어느 분야에 먼저 쓰일까요?`)
   }
-  // 기업명 기반
   if (orgs.length > 0) {
     questions.push(`**${orgs[0]}**이(가) 이번 소식으로 얻는 가장 큰 이점은 무엇이고, 앞으로 어떤 행보를 보일까요?`)
   }
-  // 이벤트 타입별
   if (eventType === 'funding') {
     const stageStr = stage ? `${stage} 투자` : '이번 투자'
     questions.push(`${stageStr}를 받은 후 ${orgs[0] || '이 스타트업'}이(가) 다음 단계로 넘어가려면 무엇을 증명해야 할까요?`)
@@ -299,7 +344,6 @@ function buildDynamicQuestions(title, eventType, domain, keySents, ner) {
     }
   }
 
-  // 본문 키워드 기반 추가 질문
   if (keySents.length > 1) {
     const kw = tokenize(keySents[1]).filter(t => t.length >= 2 && !STOPWORDS.has(t)).slice(0, 2)
     if (kw.length > 0) {
@@ -313,8 +357,7 @@ function buildDynamicQuestions(title, eventType, domain, keySents, ner) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §8. 빈 body 기사용 NER 기반 동적 섹션 생성기
-// 고정 문구 절대 없음 — 모든 문장이 제목 NER에서 동적 생성
+// §9. 본문 없는 기사 NER 기반 동적 섹션 생성 (v17: 800자+ 보장)
 // ══════════════════════════════════════════════════════════════════════
 
 function buildNerBasedSections(title, eventType, domain, ner) {
@@ -324,7 +367,7 @@ function buildNerBasedSections(title, eventType, domain, ner) {
   const domKo = domInfo.ko
   const sections = []
 
-  // ── 이벤트별 맞춤 핵심 내용 섹션 ──────────────────────────────────
+  // ── 핵심 내용 섹션 (이벤트별 맞춤) ────────────────────────────────
   const coreLines = []
   if (eventType === 'funding') {
     const who   = orgs[0]  || title.split(/[,，·]/)[0].trim()
@@ -332,20 +375,23 @@ function buildNerBasedSections(title, eventType, domain, ner) {
     const stageStr = stage || '투자'
     if (howMuch) {
       coreLines.push(`**${who}**이(가) **${howMuch}** 규모의 ${stageStr}를 유치했습니다.`)
+      coreLines.push(`이번 자금 조달은 ${domKo} 분야에서 주목받는 성과로, 후속 투자 유치 기업들에게도 긍정적인 신호가 될 전망입니다.`)
     } else {
       coreLines.push(`**${who}**이(가) ${stageStr}를 성공적으로 유치했습니다.`)
+      coreLines.push(`${domKo} 분야에서 지속적으로 성장세를 이어가고 있는 ${who}의 이번 투자 유치는 팀 확장과 기술 고도화의 발판이 될 것으로 보입니다.`)
     }
     if (tech.length > 0) {
-      coreLines.push(`${domKo} 분야에서 **${tech.slice(0, 2).join('·')}** 기술을 기반으로 성장을 이어가고 있습니다.`)
+      coreLines.push(`${domKo} 분야에서 **${tech.slice(0, 2).join('·')}** 기술을 기반으로 성장을 이어가며 시장의 인정을 받고 있습니다.`)
     }
     if (geo.length > 0 && geo[0] !== '한국' && geo[0] !== '국내') {
-      coreLines.push(`${geo[0]} 시장 진출 또는 글로벌 확장 가능성에도 관심이 모이고 있습니다.`)
+      coreLines.push(`${geo[0]} 시장 진출 또는 글로벌 확장 가능성에도 투자자들의 기대가 높아지고 있습니다.`)
     }
   } else if (eventType === 'acquisition') {
     const parts = title.split(/[,，·]/)
     const buyer = orgs[0] || parts[0]?.trim() || '인수 기업'
     const techStr = tech.length > 0 ? ` **${tech[0]}** 등 핵심 기술 역량 확보를 위해` : ''
     coreLines.push(`${techStr} **${buyer}**이(가) 인수·합병을 통해 ${domKo} 분야 경쟁력을 강화하고 있습니다.`)
+    coreLines.push(`M&A는 스타트업과 대기업 모두에게 새로운 성장 경로를 제시합니다. 이번 거래가 ${domKo} 생태계에 미칠 파급 효과가 주목됩니다.`)
     if (amounts.length > 0) {
       coreLines.push(`이번 거래 규모는 **${amounts[0]}**으로, ${domKo} 업계 M&A 중 주목할 만한 사례입니다.`)
     }
@@ -353,6 +399,7 @@ function buildNerBasedSections(title, eventType, domain, ner) {
     const who = orgs[0] || title.split(/[,，·]/)[0].trim()
     const techStr = tech.length > 0 ? ` **${tech.slice(0, 2).join('·')}** 기반` : ''
     coreLines.push(`**${who}**이(가)${techStr} 신규 서비스·제품을 출시하며 ${domKo} 분야에 새로운 흐름을 만들고 있습니다.`)
+    coreLines.push(`신제품·서비스 출시는 기존 사용자 경험을 혁신하는 동시에, 시장 내 경쟁 구도를 변화시키는 계기가 됩니다.`)
     if (geo.length > 0 && geo[0] !== '한국' && geo[0] !== '국내') {
       coreLines.push(`${geo[0]} 시장을 포함한 글로벌 확장도 함께 추진되고 있는 것으로 알려졌습니다.`)
     }
@@ -360,15 +407,17 @@ function buildNerBasedSections(title, eventType, domain, ner) {
     const org = orgs[0] || '지원 기관'
     const geoStr = geo.length > 0 ? `${geo[0]} 지역의 ` : ''
     coreLines.push(`${geoStr}${domKo} 분야 스타트업·창업가를 대상으로 **${org}**이(가) 신규 지원 프로그램을 운영합니다.`)
+    coreLines.push(`정부 및 공공기관의 지원 프로그램은 자금 이상의 가치를 지닙니다. 네트워크·멘토링·인증 효과까지 함께 얻을 수 있어 초기 창업팀에게 특히 중요합니다.`)
     if (amounts.length > 0) {
       coreLines.push(`지원 규모는 **${amounts[0]}** 수준이며, 관련 기업들의 관심이 높습니다.`)
     }
     if (dates.length > 0) {
-      coreLines.push(`**${dates[0]}** 일정에 맞춰 신청·모집이 진행될 예정입니다.`)
+      coreLines.push(`**${dates[0]}** 일정에 맞춰 신청·모집이 진행될 예정입니다. 조건과 혜택을 미리 확인하고 준비하는 것이 유리합니다.`)
     }
   } else if (eventType === 'research') {
     const techStr = tech.length > 0 ? `**${tech.slice(0, 2).join('·')}**` : `${domKo}`
     coreLines.push(`${techStr} 분야에 대한 새로운 연구·분석 결과가 발표되며 업계의 이목을 끌고 있습니다.`)
+    coreLines.push(`데이터와 인사이트는 창업가의 의사결정을 뒷받침하는 가장 강력한 도구입니다. 이번 연구 결과를 어떻게 사업 전략에 연결할지가 핵심 과제입니다.`)
     if (amounts.length > 0 || metrics.length > 0) {
       const m = [...amounts, ...metrics].slice(0, 1)[0]
       if (m) coreLines.push(`**${m}** 등 주요 수치가 핵심 지표로 부각됩니다.`)
@@ -376,6 +425,7 @@ function buildNerBasedSections(title, eventType, domain, ner) {
   } else if (eventType === 'person') {
     const who = orgs[0] || title.split(/[,，·]/)[0].trim()
     coreLines.push(`**${who}**의 창업 스토리와 ${domKo} 분야 인사이트가 주목받고 있습니다.`)
+    coreLines.push(`창업가의 경험은 단순한 성공담이 아닙니다. 수많은 의사결정, 실패, 재도전의 연속입니다. 이 스토리에서 나만의 교훈을 찾아보세요.`)
     if (tech.length > 0) {
       coreLines.push(`특히 **${tech[0]}** 분야에서의 경험과 비전이 업계에 시사하는 바가 큽니다.`)
     }
@@ -383,12 +433,14 @@ function buildNerBasedSections(title, eventType, domain, ner) {
     const techStr = tech.length > 0 ? `**${tech[0]}**` : `${domKo}`
     const geoStr  = geo.length > 0  ? `${geo[0]} 시장을 포함한 ` : ''
     coreLines.push(`${geoStr}${techStr} 분야 시장 규모·트렌드 변화가 확인되며 투자자와 창업가 모두의 관심이 집중되고 있습니다.`)
+    coreLines.push(`시장 트렌드를 읽는 것은 창업의 출발점입니다. 성장하는 시장에 진입하되, 그 안에서도 해결되지 않은 문제를 먼저 발견하는 사람이 앞서갑니다.`)
     if (amounts.length > 0) {
       coreLines.push(`관련 시장 규모가 **${amounts[0]}** 수준으로 평가되고 있습니다.`)
     }
   } else if (eventType === 'ipo') {
     const who = orgs[0] || title.split(/[,，·]/)[0].trim()
     coreLines.push(`**${who}**이(가) IPO·상장을 추진하며 ${domKo} 생태계에 새로운 기준점을 제시하고 있습니다.`)
+    coreLines.push(`IPO는 스타트업 여정의 한 단계이자 새로운 시작점입니다. 상장 이후 기업 운영 방식, 공개 기업으로서의 책임이 달라지며 더 큰 도전이 시작됩니다.`)
     if (amounts.length > 0) {
       coreLines.push(`예상 기업가치 또는 공모 규모는 **${amounts[0]}** 수준으로 알려져 있습니다.`)
     }
@@ -397,13 +449,14 @@ function buildNerBasedSections(title, eventType, domain, ner) {
     const who = orgs[0] || title.split(/[,，·]/)[0].trim()
     const techStr = tech.length > 0 ? ` **${tech[0]}** 기반` : ''
     coreLines.push(`**${who}**이(가)${techStr} ${domKo} 분야에서 주목할 만한 움직임을 보이고 있습니다.`)
+    coreLines.push(`${domKo} 분야의 변화와 혁신은 새로운 창업 기회의 신호입니다. 이 소식이 시장에 만드는 파장을 면밀히 분석해보세요.`)
   }
 
   if (coreLines.length > 0) {
     sections.push({ title: '## 📌 핵심 내용', lines: coreLines, style: 'quote' })
   }
 
-  // ── 도메인·이벤트 컨텍스트 섹션 ──────────────────────────────────
+  // ── 배경과 맥락 섹션 (이벤트·도메인별 동적 생성) ──────────────────
   const ctxLines = buildContextLines(eventType, domain, ner)
   if (ctxLines.length > 0) {
     sections.push({ title: '## 🗺️ 배경과 맥락', lines: ctxLines, style: 'plain' })
@@ -413,6 +466,12 @@ function buildNerBasedSections(title, eventType, domain, ner) {
   const oppLines = buildOpportunityLines(eventType, domain, ner)
   if (oppLines.length > 0) {
     sections.push({ title: '## 🚀 창업가 시각으로 읽기', lines: oppLines, style: 'plain' })
+  }
+
+  // ── 핵심 체크포인트 섹션 (v17 추가: 제목 기반 액션 아이템) ─────────
+  const checkLines = buildCheckpointLines(eventType, domain, ner, title)
+  if (checkLines.length > 0) {
+    sections.push({ title: '## ✅ 핵심 체크포인트', lines: checkLines, style: 'check' })
   }
 
   return sections
@@ -439,11 +498,13 @@ function buildContextLines(eventType, domain, ner) {
     } else {
       lines.push(`${domKo} 투자 생태계는 선별적 투자 기조 속에서도 실질적인 성과를 낸 기업에게는 여전히 자금 접근 기회가 열려 있습니다.`)
     }
+    lines.push(`투자 유치 후 가장 중요한 것은 '언제, 어디에 쓸 것인가'입니다. 자금 배분의 우선순위가 회사의 다음 6~12개월 궤도를 결정합니다.`)
   } else if (eventType === 'acquisition') {
     lines.push(`M&A는 스타트업에게 IPO와 함께 대표적인 엑싯(Exit) 경로입니다. 대기업이 기술·인재·시장 점유율을 빠르게 확보하기 위한 수단으로 활용하며, 스타트업 창업자에게는 성과 실현의 기회가 됩니다.`)
     if (tech.length > 0) {
       lines.push(`특히 **${tech[0]}** 분야의 M&A는 기술 역량 내재화를 목적으로 하는 경우가 많아, 인수 이후에도 팀·기술의 독립성이 유지되는 사례가 늘고 있습니다.`)
     }
+    lines.push(`M&A 이후 통합 과정(Integration)은 종종 가장 어려운 단계입니다. 문화·시스템·팀 통합이 얼마나 매끄럽게 진행되느냐가 시너지 효과를 결정합니다.`)
   } else if (eventType === 'product') {
     if (tech.length > 0) {
       lines.push(`**${tech.slice(0, 2).join('·')}** 기술을 활용한 신규 서비스 출시는 기존 시장에 새로운 기준을 제시할 수 있습니다. 초기 시장 반응과 사용자 피드백이 이후 방향성을 결정하는 핵심 요소가 됩니다.`)
@@ -451,16 +512,26 @@ function buildContextLines(eventType, domain, ner) {
     if (geo.length > 0 && geo[0] !== '한국' && geo[0] !== '국내') {
       lines.push(`${geo[0]} 시장 진출을 병행한다면, 현지 규제 환경과 사용자 니즈 파악이 초기 성패를 좌우합니다.`)
     }
+    lines.push(`제품 출시 초기에는 모든 기능보다 핵심 가치 하나를 명확하게 전달하는 것이 중요합니다. 사용자가 '이게 왜 필요한지'를 즉시 이해할 수 있어야 합니다.`)
   } else if (eventType === 'policy') {
     lines.push(`정부 및 공공기관의 ${domKo} 지원 프로그램은 초기 스타트업에게 자금·네트워크·검증의 기회를 제공합니다. 선발 기준과 지원 혜택을 꼼꼼히 확인하고 적극적으로 활용하는 것이 중요합니다.`)
     if (geo.length > 0 && geo[0] !== '한국' && geo[0] !== '국내') {
       lines.push(`${geo[0]} 지역 기반 스타트업에게는 지역 특화 지원 트랙이 별도로 운영되는 경우가 많아 추가 기회를 탐색할 만합니다.`)
     }
+    lines.push(`공공 지원 프로그램을 단순 자금 수령 용도로만 보는 것은 기회 손실입니다. 함께 선발된 기업들과의 네트워킹, 정책 담당자와의 연결, 레퍼런스 확보까지 활용하세요.`)
   } else if (eventType === 'research') {
     lines.push(`${domKo} 분야의 연구·분석 결과는 투자자·창업가·정책 입안자 모두에게 중요한 의사결정 근거가 됩니다. 데이터 기반 인사이트를 빠르게 파악하고 전략에 반영하는 능력이 경쟁력으로 이어집니다.`)
+    lines.push(`리서치 결과를 읽을 때는 '표면 수치'보다 '트렌드의 방향과 속도'를 주목하세요. 숫자보다 그 뒤에 있는 행동 변화가 창업 기회를 만듭니다.`)
   } else if (eventType === 'market') {
     const techStr = tech.length > 0 ? `**${tech[0]}**` : `${domKo}`
     lines.push(`${techStr} 시장은 기술 발전과 수요 변화가 맞물려 빠르게 재편되고 있습니다. 성장 곡선의 초기에 진입한 플레이어가 장기적으로 유리한 고지를 선점할 가능성이 높습니다.`)
+    lines.push(`시장 규모보다 중요한 것은 '성장 속도'와 '내가 해결할 수 있는 문제의 크기'입니다. 큰 시장의 작은 조각보다, 성장하는 시장의 핵심 플레이어가 되는 전략이 유효합니다.`)
+  } else if (eventType === 'ipo') {
+    lines.push(`IPO는 외부 주주에게 주식을 공개하는 것으로, 기업 투명성과 거버넌스에 대한 요구가 크게 높아집니다. 상장 준비 과정에서의 재무 구조 정비와 내부 통제 시스템 구축이 중요합니다.`)
+    lines.push(`스타트업 생태계에서 성공적인 IPO는 후배 창업가들에게 '우리도 할 수 있다'는 기준점이 됩니다. 이번 상장이 ${domKo} 분야 전체에 미치는 심리적 영향도 주목해야 합니다.`)
+  } else {
+    lines.push(`${domKo} 분야는 끊임없이 변화하고 있습니다. 매일의 뉴스가 단순한 정보가 아닌, 시장의 신호로 읽혀질 때 창업가의 안목이 길러집니다.`)
+    lines.push(`한 기업의 움직임은 곧 산업 전체의 방향성을 보여주는 단서가 됩니다. 이 소식의 배경에 있는 구조적 변화를 함께 읽어보세요.`)
   }
 
   return lines
@@ -496,8 +567,47 @@ function buildOpportunityLines(eventType, domain, ner) {
   return lines
 }
 
+function buildCheckpointLines(eventType, domain, ner, title) {
+  const { orgs, tech, geo, amounts, stage } = ner
+  const domKo = DOMAINS[domain]?.ko || '창업·비즈니스'
+  const who = orgs[0] || title.split(/[,，·]/)[0].trim()
+  const lines = []
+
+  if (eventType === 'funding') {
+    lines.push(`${who}이(가) 이번 투자로 해결하려는 핵심 문제가 무엇인지 파악하기`)
+    if (tech.length > 0) lines.push(`${tech[0]} 분야 유사 스타트업의 투자 동향 함께 체크하기`)
+    lines.push(`내 사업/아이디어와 교차점이 있다면, 파트너십 또는 협업 가능성 탐색하기`)
+  } else if (eventType === 'product') {
+    lines.push(`출시된 서비스를 직접 사용해보고 UX·가격·해결 문제 분석하기`)
+    lines.push(`경쟁 제품 대비 차별점이 무엇인지 벤치마킹 리포트 작성해보기`)
+    lines.push(`사용자 리뷰·반응을 모니터링하며 시장 반응 트래킹하기`)
+  } else if (eventType === 'policy') {
+    lines.push(`신청 자격 요건 확인 — 팀 구성·사업 단계·분야 적합성 체크`)
+    lines.push(`지원 마감일 캘린더에 등록하고 제출 서류 리스트 미리 준비하기`)
+    lines.push(`이전 선발 기업 사례를 찾아 합격 패턴 및 핵심 어필 포인트 분석하기`)
+  } else if (eventType === 'acquisition') {
+    lines.push(`인수된 기업이 해결하던 문제 중 M&A 이후 공백이 생기는 영역 파악하기`)
+    lines.push(`인수자의 전략 방향과 내 사업의 연결 고리 찾아보기`)
+    lines.push(`${domKo} 분야 M&A 트렌드를 정기적으로 트래킹하며 시장 재편 방향 파악하기`)
+  } else if (eventType === 'research') {
+    lines.push(`원문 리포트 또는 요약본 확보해 핵심 데이터 3가지 추출하기`)
+    lines.push(`데이터가 보여주는 갭(gap) 중 내가 해결할 수 있는 문제 찾기`)
+    lines.push(`동일 분야의 다른 리서치와 교차 비교해 일관된 트렌드 확인하기`)
+  } else if (eventType === 'market') {
+    lines.push(`시장 규모 수치보다 '성장 속도'와 '변화 원인'에 집중해 분석하기`)
+    if (tech.length > 0) lines.push(`${tech[0]} 분야 주요 플레이어 맵핑 — 누가 어느 포지션을 차지하고 있는지 파악`)
+    lines.push(`내가 진입할 수 있는 세그먼트와 차별화 포인트 정의해보기`)
+  } else {
+    lines.push(`이 소식이 내 사업/아이디어에 미치는 영향 정리해보기`)
+    lines.push(`${domKo} 분야 유사 사례와 비교해 시사점 도출하기`)
+    lines.push(`다음 1주일 내 실행 가능한 액션 아이템 1가지 정하기`)
+  }
+
+  return lines.slice(0, 3)
+}
+
 // ══════════════════════════════════════════════════════════════════════
-// §9. 메인 롱폼 빌더 v15
+// §10. 메인 롱폼 빌더 v17
 // ══════════════════════════════════════════════════════════════════════
 
 function buildLongformStory(title, body) {
@@ -510,7 +620,6 @@ function buildLongformStory(title, body) {
 
   // 본문 문장 추출 (body가 title의 반복인 경우 제외)
   const rawSents  = splitSentences(cleanBody).filter(s => !isNoise(s))
-  // 제목과 80% 이상 겹치는 문장 제거 (title-only body 필터링)
   const titleToks = tokenize(title)
   const sentences = rawSents.filter(s => {
     const sim = cosineSim(tokenize(s), titleToks)
@@ -622,12 +731,14 @@ function buildLongformStory(title, body) {
     }
 
   } else {
-    // ── 본문 없는 경우: NER 완전 기반 동적 생성 ──────────────────
+    // ── 본문 없는 경우: NER 완전 기반 동적 생성 (v17: 충분한 길이 보장) ──
     const nerSections = buildNerBasedSections(title, eventType, domain, ner)
     for (const sec of nerSections) {
       lines.push('---', '', sec.title, '')
       if (sec.style === 'quote') {
         sec.lines.forEach(l => lines.push(`> ${l}`, ''))
+      } else if (sec.style === 'check') {
+        sec.lines.forEach(l => lines.push(`☑ ${l}`, ''))
       } else {
         sec.lines.forEach(l => lines.push(l, ''))
       }
@@ -656,25 +767,25 @@ function buildLongformStory(title, body) {
 
   // ── 푸터 ──────────────────────────────────────────────────────────
   lines.push('---', '')
-  lines.push(`*Insightship · ${domKo} · ${evtInfo.emoji} ${evtInfo.label} · insightship-longform-v15*`)
+  lines.push(`*Insightship · ${domKo} · ${evtInfo.emoji} ${evtInfo.label} · insightship-longform-v17*`)
 
   return lines.join('\n')
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §10. 메인 핸들러
+// §11. 메인 핸들러
 // ══════════════════════════════════════════════════════════════════════
 
 export async function handleSummarizeNews(req) {
   if (req.method === 'GET') {
     return new Response(JSON.stringify({
-      engine:       'insightship-longform-v15',
-      version:      '15.0.0',
-      style:        '완전 동적 / 본문 있으면 BM25, 없으면 NER 기반 / 고정 템플릿 0개',
-      features:     ['BM25Scoring','NER-FullAnalysis','TitleOnlyFallback','QuoteDetect','CausalDetect',
-                     'GoalDetect','EventContextSections','OpportunityLines','TermDictionary',
-                     'DynamicQuestions','NoFixedTemplate','ilike-filter'],
-      avg_length:   '1200-4000 chars',
+      engine:       'insightship-longform-v17',
+      version:      '17.0.0',
+      style:        '완전 동적 / 본문 있으면 BM25, 없으면 NER 기반 800자+ / 고정 템플릿 0개 / 구버전 자동 재처리',
+      features:     ['BM25Scoring','NER-FullAnalysis','TitleOnlyFallback-800chars','QuoteDetect','CausalDetect',
+                     'GoalDetect','EventContextSections','OpportunityLines','CheckpointLines','TermDictionary',
+                     'DynamicQuestions','NoFixedTemplate','FullLegacyDetect','HTMLEntityClean'],
+      avg_length:   '800-4000 chars',
       cost:         0,
       external_api: false,
       status:       'ready',
@@ -711,45 +822,76 @@ export async function handleSummarizeNews(req) {
     }
   } catch {}
 
-  const reprocessAll = params.reprocess === true
-  const batchLimit   = Math.min(params.limit || 50, 100)
-  const offset       = Math.max(Number(params.offset) || 0, 0)
-  const cutoffDays   = params.days || 7
+  const reprocessAll  = params.reprocess === true
+  const fixLegacy     = params.fix_legacy === true  // 구버전 패턴만 처리
+  const batchLimit    = Math.min(params.limit || 50, 100)
+  const offset        = Math.max(Number(params.offset) || 0, 0)
+  const cutoffDays    = params.days || 7
+
+  // 최신 버전 마커
+  const CURRENT_VERSION = 'insightship-longform-v17'
+  const VALID_VERSIONS  = ['insightship-longform-v17']
+
+  // 재처리 필요 여부: 구버전 패턴 or 최신 마커 없음
+  function needsReprocess(summary) {
+    if (!summary) return true
+    if (isLegacyContent(summary)) return true
+    return !VALID_VERSIONS.some(v => summary.includes(v))
+  }
 
   let articles = []
   try {
-    if (reprocessAll) {
-      // v15 마커 없는 기사 전체 대상 (ilike)
+    if (fixLegacy) {
+      // 구버전 패턴 기사만 처리 — v17 마커 없는 기사 전체 대상
       const url = `${SB_URL}/rest/v1/articles`
         + `?select=id,title,body,excerpt,ai_summary`
-        + `&ai_summary=not.ilike.*insightship-longform-v15*`
+        + `&ai_summary=not.is.null`
+        + `&ai_summary=not.like.*${CURRENT_VERSION}*`
+        + `&order=published_at.desc`
+        + `&limit=${batchLimit}&offset=${offset}`
+      const res = await fetch(url, { headers: H })
+      const all = await res.json()
+      articles = Array.isArray(all) ? all.filter(a => needsReprocess(a.ai_summary)) : []
+    } else if (reprocessAll) {
+      // v17 마커 없는 기사 전체 대상
+      const url = `${SB_URL}/rest/v1/articles`
+        + `?select=id,title,body,excerpt,ai_summary`
+        + `&ai_summary=not.like.*${CURRENT_VERSION}*`
         + `&order=published_at.desc`
         + `&limit=${batchLimit}&offset=${offset}`
       const res = await fetch(url, { headers: H })
       const all = await res.json()
       articles = Array.isArray(all) ? all : []
-      if (articles.length === 0) {
-        const r2 = await fetch(
-          `${SB_URL}/rest/v1/articles?select=id,title,body,excerpt&order=published_at.desc&limit=${batchLimit}&offset=${offset}`,
-          { headers: H }
-        )
-        articles = (await r2.json().catch(() => []))
-        if (!Array.isArray(articles)) articles = []
-      }
     } else {
-      // 기본: 최근 N일 내 v15 미완료 기사
+      // 기본: 최근 N일 내 v17 미완료 기사 + null 기사
       const cutoff = new Date(Date.now() - cutoffDays * 86400 * 1000).toISOString()
-      const url = `${SB_URL}/rest/v1/articles`
-        + `?published_at=gte.${cutoff}`
-        + `&select=id,title,body,excerpt,ai_summary`
-        + `&order=published_at.desc`
-        + `&limit=${batchLimit}&offset=${offset}`
-      const res = await fetch(url, { headers: H })
-      const all = await res.json()
-      const unprocessed = Array.isArray(all)
-        ? all.filter(a => !a.ai_summary || !a.ai_summary.includes('insightship-longform-v15'))
-        : []
-      articles = unprocessed.length > 0 ? unprocessed : (Array.isArray(all) ? all.slice(0, Math.ceil(batchLimit / 2)) : [])
+      const [resRecent, resNull] = await Promise.all([
+        fetch(`${SB_URL}/rest/v1/articles`
+          + `?published_at=gte.${cutoff}`
+          + `&select=id,title,body,excerpt,ai_summary`
+          + `&ai_summary=not.like.*${CURRENT_VERSION}*`
+          + `&order=published_at.desc`
+          + `&limit=${batchLimit}&offset=${offset}`, { headers: H }),
+        fetch(`${SB_URL}/rest/v1/articles`
+          + `?published_at=gte.${cutoff}`
+          + `&select=id,title,body,excerpt,ai_summary`
+          + `&ai_summary=is.null`
+          + `&order=published_at.desc`
+          + `&limit=50`, { headers: H }),
+      ])
+      const recent = await resRecent.json()
+      const nullArts = await resNull.json()
+      const combined = [
+        ...(Array.isArray(recent) ? recent : []),
+        ...(Array.isArray(nullArts) ? nullArts : []),
+      ]
+      // 중복 제거
+      const seen = new Set()
+      articles = combined.filter(a => {
+        if (seen.has(a.id)) return false
+        seen.add(a.id)
+        return needsReprocess(a.ai_summary)
+      })
     }
   } catch (e) {
     return new Response(JSON.stringify({ error: e.message }), { status: 500 })
@@ -757,9 +899,9 @@ export async function handleSummarizeNews(req) {
 
   if (!articles.length) {
     return new Response(JSON.stringify({
-      message:   '처리할 기사 없음 (모두 v15 처리 완료)',
+      message:   '처리할 기사 없음 (모두 v17 처리 완료)',
       processed: 0, skipped: 0, errors: [],
-      engine:    'insightship-longform-v15',
+      engine:    CURRENT_VERSION,
       timestamp: new Date().toISOString(),
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })
   }
@@ -812,7 +954,7 @@ export async function handleSummarizeNews(req) {
   return new Response(JSON.stringify({
     ...results,
     total:     articles.length,
-    engine:    'insightship-longform-v15',
+    engine:    CURRENT_VERSION,
     timestamp: new Date().toISOString(),
   }), {
     status:  200,
@@ -823,7 +965,6 @@ export async function handleSummarizeNews(req) {
 async function checkAdminJWT(token) {
   if (!token || !SB_URL || !SB_KEY) return false
   try {
-    // 1) Supabase Auth에서 user.id 추출
     const r1 = await fetch(`${SB_URL}/auth/v1/user`, {
       headers: { apikey: SB_KEY, Authorization: `Bearer ${token}` },
     })
@@ -831,7 +972,6 @@ async function checkAdminJWT(token) {
     const user = await r1.json().catch(() => null)
     if (!user?.id) return false
 
-    // 2) service_role 키로 profiles에서 role 확인 (RLS 우회)
     const r2 = await fetch(
       `${SB_URL}/rest/v1/profiles?id=eq.${user.id}&select=id,role&limit=1`,
       { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }

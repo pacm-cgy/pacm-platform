@@ -1,588 +1,573 @@
-import os, urllib.request, urllib.error, json, re, time, random
+#!/usr/bin/env python3
+"""
+롱폼 재처리 스크립트 v16
+- 구버전 패턴([핵심 내용], [배경 및 분석]) 기사 → v16 엔진으로 재생성
+- HTML 잔재(&amp; 등) 제거
+- 배치 처리 (100개씩)
+"""
 
-SB_URL   = os.environ.get('SUPABASE_URL', '').rstrip('/')
-SB_KEY   = os.environ.get('SUPABASE_SERVICE_KEY', '')
-BATCH    = int(os.environ.get('BATCH_SIZE', '80'))
-ROUNDS   = int(os.environ.get('ROUNDS', '20'))
+import urllib.request, urllib.parse, json, re, sys, time
+from datetime import datetime
 
-if not SB_URL or not SB_KEY:
-    print("환경변수 없음")
-    exit(1)
+SB_URL = 'https://itcbantrpkjpkfhnriom.supabase.co'
+SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0Y2JhbnRycGtqcGtmaG5yaW9tIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzU4NDkwNywiZXhwIjoyMDg5MTYwOTA3fQ.WTi9QnNyerC6X9xxcJgOJ0TpVk7VVzXqf85r3rN-o20'
 
 H = {
     'apikey': SB_KEY,
-    'Authorization': 'Bearer ' + SB_KEY,
+    'Authorization': f'Bearer {SB_KEY}',
     'Content-Type': 'application/json',
 }
 
-# ──────────────────────────────────────────────────────────
-# 텍스트 정제
-# ──────────────────────────────────────────────────────────
-def clean_text(text):
-    if not text:
-        return ''
-    text = re.sub(r'<(script|style)[^>]*>[\s\S]*?</(script|style)>', '', text, flags=re.I)
-    text = re.sub(r'<[^>]+>', ' ', text)
-    text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<')
-    text = text.replace('&gt;', '>').replace('&quot;', '"').replace('&#39;', "'")
-    text = re.sub(r'https?://\S+', '', text)
-    text = re.sub(r'공유하기|페이스북|트위터|카카오|무단전재|재배포\s*금지|저작권자|무단 복제', '', text)
-    text = re.sub(r'\s{2,}', ' ', text).strip()
-    return text
+LEGACY_PATTERNS = [
+    '[핵심 내용]', '[배경 및 분석]', '[투자 시장 심층 분석',
+    '[청소년 창업가를 위한', '[청소년 창업가 관점]', '[핵심 포인트]',
+    '이번 투자 소식은 해당 기업의 기술력과 성장 가능성을 시장이 인정한',
+    '스타트업 투자는 보통 시드(초기) →',
+    '투자금은 통상 제품 개발 가속화, 핵심 인재 채용',
+    '투자자는 창업가의 비전을 검증해주는 파트너',
+    '스타트업 생태계의 변화는 새로운 창업 기회의 신호입니다',
+    '스타트업 관련 업계에서 중요한 소식이 전해졌습니다',
+    '투자·펀딩 관련 업계에서 중요한 소식이 전해졌습니다',
+    'insightship-longform-v8', 'insightship-longform-v9',
+    'insightship-longform-v10', 'insightship-longform-v11',
+    'insightship-longform-v12', 'insightship-longform-v13',
+    'insightship-longform-v14',
+]
 
-def split_sentences(text):
-    text = re.sub(r'([.!?])\s+', r'\1\n', text)
-    text = re.sub(r'([다요임음었겠])\s+', r'\1\n', text)
-    sents = [s.strip() for s in text.split('\n')]
-    return [s for s in sents if 15 <= len(s) <= 350]
+def is_legacy(text):
+    if not text: return True
+    return any(p in text for p in LEGACY_PATTERNS)
 
-STOPWORDS = set('이 그 저 것 수 들 및 등 에서 로서 으로 에게 하지만 그러나 또한 그리고 따라서 때문에 위해 통해 있는 없는 되는 하는 있다 없다 된다 한다 이다 있으며 되며 하며 이번 지난 올해 작년 최근 현재 특히 또 더 가장 매우 모두 함께 이미 아직 약 총 기자 특파원 뉴스 보도 발표 밝혔다 말했다 전했다 이라고 라고 했다 이다'.split())
+# ── 텍스트 정제 ────────────────────────────────────────────────────────
+def clean_text(t):
+    if not t: return ''
+    t = re.sub(r'<(script|style)[^>]*>[\s\S]*?</(script|style)>', '', t, flags=re.I)
+    t = re.sub(r'<[^>]+>', ' ', t)
+    t = t.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<')
+    t = t.replace('&gt;', '>').replace('&quot;', '"').replace('&#39;', "'")
+    t = re.sub(r'&#x?[0-9a-fA-F]+;', '', t)
+    t = re.sub(r'https?://\S+', '', t)
+    t = re.sub(r'공유하기|페이스북|트위터|카카오톡\s*공유|인스타그램|네이버\s*밴드|URL\s*복사', '', t)
+    t = re.sub(r'기자\s*[가-힣]{2,4}\s*기자|^\s*[가-힣]{2,3}\s*기자', '', t, flags=re.M)
+    t = re.sub(r'입력\s*\d{4}\.\d{2}\.\d{2}.*$', '', t, flags=re.M)
+    t = re.sub(r'수정\s*\d{4}\.\d{2}\.\d{2}.*$', '', t, flags=re.M)
+    t = re.sub(r'저작권자\s*©.*$', '', t, flags=re.M)
+    t = re.sub(r'무단전재\s*및\s*재배포\s*금지', '', t)
+    t = re.sub(r'\[.*?\]', '', t)
+    t = re.sub(r'\(.*?기자\)', '', t)
+    t = re.sub(r'\s{2,}', ' ', t)
+    return t.strip()
 
-def tokenize(text):
-    if not text:
-        return []
-    tokens = re.findall(r'[가-힣]{2,}|[A-Za-z]{3,}|[0-9]+', text)
-    return [t for t in tokens if t.lower() not in STOPWORDS and len(t) >= 2]
-
-# ──────────────────────────────────────────────────────────
-# 분류기
-# ──────────────────────────────────────────────────────────
+# ── 이벤트/도메인 감지 ─────────────────────────────────────────────────
 EVENT_TYPES = {
-    'funding':     {'kw': ['투자','펀딩','시리즈','유치','억원','조원','라운드','시드','VC','엔젤','투자금'], 'label':'투자 유치','emoji':'💰'},
-    'product':     {'kw': ['출시','론칭','선보','공개','베타','서비스','앱','플랫폼','오픈','런칭'], 'label':'제품/서비스 출시','emoji':'🚀'},
-    'policy':      {'kw': ['정부','지원','공모','선발','과기부','중기부','창진원','예산','규제','정책','공고','모집'], 'label':'정책/지원','emoji':'📋'},
-    'acquisition': {'kw': ['인수','합병','M&A','지분','매각','합류'], 'label':'인수/합병','emoji':'🤝'},
-    'research':    {'kw': ['연구','논문','결과','조사','분석','보고서','통계','조사결과'], 'label':'연구/조사','emoji':'🔬'},
-    'person':      {'kw': ['대표','CEO','창업자','설립자','인터뷰','스토리','수상','공동창업'], 'label':'창업가 스토리','emoji':'👤'},
-    'market':      {'kw': ['시장','성장','규모','트렌드','전망','예측','확대','글로벌'], 'label':'시장/트렌드','emoji':'📊'},
+    'funding':     {'kw': ['투자','펀딩','시리즈','유치','억원','조원','라운드','시드','VC','엔젤','달러','Pre-A','CVC','브릿지'], 'label': '투자 유치', 'emoji': '💰'},
+    'product':     {'kw': ['출시','론칭','선보','공개','베타','서비스','앱','플랫폼','오픈','런칭','배포','상용화','신기능'], 'label': '제품/서비스 출시', 'emoji': '🚀'},
+    'policy':      {'kw': ['정부','지원','공모','선발','과기부','중기부','창진원','예산','규제','정책','공고','모집','개최','경진대회','프로그램','유니콘','바우처','R&D'], 'label': '정책/지원', 'emoji': '📋'},
+    'acquisition': {'kw': ['인수','합병','M&A','지분','매각','인수합병','피인수','전략적투자'], 'label': '인수/합병', 'emoji': '🤝'},
+    'research':    {'kw': ['연구','논문','결과','조사','분석','보고서','데이터','통계','발표','리포트','영향','설문'], 'label': '리서치/분석', 'emoji': '🔬'},
+    'person':      {'kw': ['대표','CEO','창업자','설립자','인터뷰','스토리','수상','선정','창업가','강연','멘토'], 'label': '창업가 스토리', 'emoji': '👤'},
+    'market':      {'kw': ['시장','성장','규모','트렌드','전망','예측','확대','점유율','글로벌','산업','진출','수출'], 'label': '시장/트렌드', 'emoji': '📊'},
+    'ipo':         {'kw': ['IPO','상장','코스닥','코스피','증권','기업공개'], 'label': 'IPO/상장', 'emoji': '📈'},
 }
 DOMAINS = {
-    'investment': {'kw':['투자','펀딩','시리즈A','시리즈B','억원','조원','VC','벤처'],'ko':'투자·금융','cat':'trend'},
-    'tech':       {'kw':['AI','인공지능','딥러닝','반도체','GPU','클라우드','SaaS','LLM','생성형'],'ko':'기술·AI','cat':'trend'},
-    'youth':      {'kw':['청소년','청년','대학생','고등학생','창업교육','해커톤','비즈쿨'],'ko':'청소년·교육','cat':'insight'},
-    'policy':     {'kw':['정부','지원','공모','과기부','중기부','창진원'],'ko':'정책·지원','cat':'insight'},
-    'esg':        {'kw':['ESG','탄소중립','친환경','임팩트','소셜벤처'],'ko':'ESG·임팩트','cat':'insight'},
-    'startup':    {'kw':['스타트업','창업','유니콘','피봇','글로벌'],'ko':'창업·비즈니스','cat':'news'},
-    'edutech':    {'kw':['에듀테크','교육플랫폼','학습','온라인교육'],'ko':'에듀테크','cat':'insight'},
-    'fintech':    {'kw':['핀테크','결제','금융','블록체인','토큰'],'ko':'핀테크','cat':'trend'},
-    'health':     {'kw':['헬스케어','의료','바이오','건강','제약'],'ko':'헬스케어','cat':'trend'},
-    'climate':    {'kw':['기후','탄소','친환경','에너지','태양광','수소'],'ko':'기후·에너지','cat':'insight'},
+    'investment': {'kw': ['투자','펀딩','시리즈A','시리즈B','시리즈C','억원','조원','달러','VC','엑셀러레이터','벤처','자본','CVC'], 'ko': '투자·금융'},
+    'tech':       {'kw': ['AI','인공지능','딥러닝','반도체','GPU','클라우드','SaaS','소프트웨어','로봇','자율주행','LLM','생성형'], 'ko': '기술·AI'},
+    'youth':      {'kw': ['청소년','청년','대학생','고등학생','창업교육','해커톤','비즈쿨','학생창업','경진대회','여성창업'], 'ko': '청소년·교육'},
+    'policy':     {'kw': ['정부','지원','공모','과기부','중기부','창진원','규제','정책','지자체','공공','유니콘','바우처','R&D'], 'ko': '정책·지원'},
+    'esg':        {'kw': ['ESG','탄소중립','친환경','임팩트','소셜벤처','그린','지속가능','기후테크'], 'ko': 'ESG·임팩트'},
+    'startup':    {'kw': ['스타트업','창업','유니콘','피봇','글로벌','스케일업'], 'ko': '창업·비즈니스'},
+    'health':     {'kw': ['헬스케어','의료','바이오','디지털헬스','건강','제약','메디컬','신약'], 'ko': '헬스케어·바이오'},
+    'fintech':    {'kw': ['핀테크','결제','금융','블록체인','암호화폐','뱅크'], 'ko': '핀테크'},
+    'climate':    {'kw': ['기후','탄소','친환경','에너지','태양광','수소','배터리','전기차'], 'ko': '기후·에너지'},
 }
+STOPWORDS = {'이','그','저','것','수','들','및','등','에서','로서','으로','에게','하지만','그러나','또한','그리고','따라서','때문에','위해','통해','있는','없는','되는','하는','있다','없다','된다','한다','이다','있으며','되며','하며','이번','지난','올해','작년','최근','현재','특히','또','더','가장','매우','모두','함께','이미','아직','약','총','기자','특파원','뉴스','보도','발표','밝혔다','말했다','전했다','대한','관련','따른','이달','오늘','어제','지금','전','후','당','각','제','본','해당','설명했다','밝혀졌다','알려졌다','한편'}
 
-def detect_event(title, body):
-    text = (title + ' ' + (body or '')[:500]).lower()
-    priority = ['funding','acquisition','product','policy','research','person','market']
+def tokenize(text):
+    if not text: return []
+    tokens = re.findall(r'[가-힣]{2,}|[a-zA-Z]{3,}|[0-9]+', text.lower().replace('[', '').replace(']', ''))
+    return [t for t in tokens if t not in STOPWORDS and len(t) >= 2]
+
+def detect_event(title, body=''):
+    text = (title + ' ' + (body or '')[:600]).lower()
+    priority = ['funding','ipo','acquisition','product','policy','research','person','market']
     scores = {}
-    for t in priority:
-        kw = EVENT_TYPES[t]['kw']
-        scores[t] = sum(1 for k in kw if k.lower() in text)
-        scores[t] += sum(2 for k in kw if k.lower() in title.lower())
+    for evt_type in priority:
+        score = sum(1 for k in EVENT_TYPES[evt_type]['kw'] if k.lower() in text)
+        score += sum(1.5 for k in EVENT_TYPES[evt_type]['kw'] if k.lower() in title.lower())
+        scores[evt_type] = score
     best = max(priority, key=lambda t: scores[t])
     return best if scores[best] > 0 else 'general'
 
-def detect_domain(title, body):
+def detect_domain(title, body=''):
     text = (title + ' ' + (body or '')[:800]).lower()
     best, best_score = 'startup', 0
     for domain, info in DOMAINS.items():
         score = sum(1 for k in info['kw'] if k.lower() in text)
-        score += sum(2 for k in info['kw'] if k.lower() in title.lower())
         if score > best_score:
             best, best_score = domain, score
     return best
 
-def map_category(domain, evt):
-    if evt in ('policy',) or domain in ('youth','policy'): return 'insight'
-    if evt in ('funding','market'): return 'trend'
-    if evt == 'person': return 'magazine'
-    return DOMAINS.get(domain, {}).get('cat', 'news')
+def map_category(domain, event_type):
+    if event_type == 'policy' or domain in ('youth','policy'): return 'insight'
+    if event_type in ('funding','market','ipo'): return 'trend'
+    if event_type == 'person': return 'magazine'
+    return 'news'
 
-def extract_numbers(text):
-    patterns = [
-        r'[\d,]+억\s*원', r'[\d,]+조\s*원', r'[\d,]+만\s*원',
-        r'\d+\s*%', r'\d+\s*배', r'[\d,]+만\s*명',
-        r'\d+[\d,]*\s*개\s*사', r'\d+[\d,]*\s*개월',
-    ]
-    nums = []
-    for p in patterns:
-        nums.extend(re.findall(p, text))
-    return list(dict.fromkeys(nums))[:5]
+def estimate_read_time(text):
+    return max(3, (len(text or '') + 299) // 300)
 
-def extract_entities(title, body):
-    """기사에서 핵심 고유명사(회사명, 인명) 추출"""
-    combined = title + ' ' + body
-    # 회사/브랜드 패턴: 한글+테크, 한글+랩스, etc.
-    companies = re.findall(r'[가-힣A-Za-z]+(?:테크|랩스|소프트|웍스|시스템|플랫폼|캐피탈|파트너스|벤처스|코리아|글로벌|그룹|홀딩스)', combined)
-    # 영문 대문자 시작 단어 (회사/브랜드)
-    eng_brands = re.findall(r'\b[A-Z][A-Za-z]{2,}\b', combined)
-    # 직함 앞 인명
-    persons = re.findall(r'([가-힣]{2,4})\s*(?:대표|CEO|창업자|설립자|이사|부사장|회장)', combined)
-    all_entities = list(dict.fromkeys(companies[:3] + eng_brands[:2] + persons[:2]))
-    return [e for e in all_entities if len(e) >= 2][:5]
+GEO_LIST = ['서울','부산','대구','인천','광주','대전','울산','세종','수원','성남','고양','용인','천안','충남','충북','경기','강원','전북','전남','경북','경남','제주','아프리카','중동','동남아','유럽','미국','중국','일본','베트남','인도','싱가포르','영국','독일','이스라엘','브라질','프랑스','호주','캐나다','UAE','글로벌','해외','국내','한국']
+TECH_LIST = ['AI','인공지능','GPT','LLM','머신러닝','딥러닝','자연어처리','컴퓨터비전','빅데이터','클라우드','SaaS','API','블록체인','핀테크','에듀테크','헬스테크','바이오','반도체','GPU','로봇','드론','자율주행','IoT','AR','VR','그린바이오','건기식']
+INV_STAGES = ['시드','Pre-A','시리즈A','시리즈B','시리즈C','시리즈D','프리IPO','IPO']
+
+def parse_title(title):
+    ner = {'amounts': [], 'geo': [], 'tech': [], 'dates': [], 'metrics': [], 'stage': None, 'orgs': [], 'action': None}
+    ner['amounts'] = re.findall(r'[\d,]+억\s*달러|[\d,]+만\s*달러|[\d,]+조\s*원|[\d,]+억\s*원|[\d,]+만\s*원|\d+억|\d+조|\d[\d,]*\s*달러', title)
+    ner['geo'] = [g for g in GEO_LIST if g in title]
+    ner['tech'] = [t for t in TECH_LIST if t.lower() in title.lower()]
+    ner['dates'] = re.findall(r'\d+월\s*\d+일|\d+월|\d+분기|\d{4}년|상반기|하반기|올해|내년', title)
+    ner['metrics'] = re.findall(r'유니콘|데카콘|IPO|상장|[\d]+위|[\d]+%|[\d]+배|[\d,]+만\s*명', title)
+    for s in INV_STAGES:
+        if s in title:
+            ner['stage'] = s
+            break
+    if re.search(r'투자|펀딩|유치', title): ner['action'] = 'invest'
+    elif re.search(r'인수|합병|M&A', title): ner['action'] = 'acquire'
+    elif re.search(r'출시|론칭|공개|배포', title): ner['action'] = 'launch'
+    elif re.search(r'개최|공모|모집|접수|선발|선정|합류|유니콘|육성|경진대회', title): ner['action'] = 'contest'
+    elif re.search(r'분석|영향|전망|예측|조사', title): ner['action'] = 'analysis'
+    elif re.search(r'진출|확장|스케일', title): ner['action'] = 'expand'
+    else: ner['action'] = 'news'
+    org_m = re.match(r'^([^,，·\[\]\s]{2,14}(?:테크|솔루션|랩스?|스튜디오|플랫폼|바이오|AI|Inc|Corp)?)\s*[,，·]', title)
+    if org_m and len(org_m.group(1).strip()) >= 2 and org_m.group(1).strip() not in STOPWORDS:
+        ner['orgs'] = [org_m.group(1).strip()]
+    return ner
 
 TERM_DICT = {
-    'IPO':    ('IPO(기업공개)', 'IPO란 기업이 주식시장에 처음으로 주식을 상장하는 것입니다. 일반 투자자들이 해당 기업의 주주가 될 수 있는 첫 기회입니다.'),
-    'VC':     ('VC(벤처캐피털)', 'VC는 성장 가능성이 높은 스타트업에 투자하는 전문 투자사입니다. 단순 자금 외에 네트워크와 경영 자문도 제공합니다.'),
-    '시리즈A': ('시리즈A(초기 대규모 투자)', '시리즈A는 PMF(제품-시장 적합성)를 입증한 후 받는 첫 번째 대규모 투자 단계입니다. 보통 수십억 원 규모로 팀 확장과 마케팅에 씁니다.'),
-    '시리즈B': ('시리즈B(성장 단계 투자)', '시리즈B는 사업 모델이 검증된 스타트업이 본격적인 규모 확장을 위해 받는 투자입니다. 보통 수백억 원 이상 규모입니다.'),
-    '유니콘':  ('유니콘(기업가치 1조원 이상 스타트업)', '유니콘 기업은 비상장 스타트업 중 기업가치가 1조 원(약 10억 달러) 이상인 회사입니다. 전 세계에 1,000개 이상 존재합니다.'),
-    'SaaS':   ('SaaS(구독형 소프트웨어)', 'SaaS는 소프트웨어를 설치 없이 인터넷으로 구독료를 내고 사용하는 방식입니다. 슬랙, 노션, 줌이 대표적입니다.'),
-    'MVP':    ('MVP(최소 기능 제품)', 'MVP는 핵심 기능만 갖춘 초기 버전의 제품입니다. 빠르게 출시해 실제 고객 반응으로 방향을 검증합니다.'),
-    'PMF':    ('PMF(제품-시장 적합성)', 'PMF는 만든 제품이 시장의 수요와 딱 맞아떨어지는 상태입니다. \"유저들이 없으면 아쉬워한다\"는 느낌이 PMF의 신호입니다.'),
-    'M&A':    ('M&A(기업 인수·합병)', 'M&A는 한 기업이 다른 기업을 사거나 합치는 것입니다. 스타트업의 주요 EXIT(투자 회수) 전략 중 하나입니다.'),
-    'TIPS':   ('TIPS(정부 창업 지원 프로그램)', 'TIPS는 민간 투자사가 먼저 투자한 스타트업에 정부가 최대 7억 원을 매칭 지원하는 한국의 대표 창업 프로그램입니다.'),
-    '피봇':   ('피봇(사업 방향 전환)', '피봇은 초기 아이디어가 시장에서 통하지 않을 때 사업 방향을 크게 바꾸는 것입니다. 유튜브는 원래 데이팅 앱이었습니다.'),
-    'ARR':    ('ARR(연간 반복 수익)', 'ARR은 구독 기반 비즈니스에서 1년간 반복 발생하는 매출입니다. SaaS 기업의 성장 지표로 가장 많이 쓰입니다.'),
-    'ESG':    ('ESG(환경·사회·지배구조)', 'ESG는 기업이 환경 보호, 사회적 책임, 투명한 지배구조를 얼마나 실천하는지 평가하는 기준입니다. 투자자들의 필수 고려 항목입니다.'),
-    'AI':     ('AI(인공지능)', '인공지능은 컴퓨터가 학습·추론·판단하는 기술입니다. GPT, 이미지 생성, 자율주행 등이 모두 AI 기술의 산물입니다.'),
+    'IPO':          ('IPO (기업공개)', '처음으로 주식시장에 상장해 일반 투자자에게 주식을 파는 것. 스타트업이 성장해 코스닥·코스피에 입성하는 과정입니다.'),
+    'VC':           ('VC (벤처캐피털)', '스타트업 전문 투자회사. 고위험 고수익을 목표로 초기 기업에 집중 투자합니다.'),
+    '시리즈A':      ('시리즈A (초기 대규모 투자)', '제품이 시장에서 검증된 후 팀·마케팅 확장을 위한 첫 번째 대규모 투자 단계(보통 수십억~수백억 원).'),
+    '시리즈B':      ('시리즈B (성장 투자)', '매출이 증명되고 사업 확장을 위한 투자 단계. 시리즈A 이후 더 큰 규모로 진행됩니다.'),
+    '유니콘':       ('유니콘 (기업가치 1조원+)', '기업가치가 1조원 이상인 비상장 스타트업. 국내 토스·야놀자 등이 대표적입니다.'),
+    'SaaS':         ('SaaS (구독형 소프트웨어)', '월정액을 내고 인터넷으로 쓰는 소프트웨어 모델. 어도비·슬랙 등이 대표적입니다.'),
+    'B2B':          ('B2B (기업간 거래)', '기업이 기업에게 제품·서비스를 파는 비즈니스 모델.'),
+    'MVP':          ('MVP (최소 기능 제품)', '핵심 기능만 넣은 첫 번째 버전. 시장 반응을 빠르게 확인하기 위해 만듭니다.'),
+    'M&A':          ('M&A (인수·합병)', '한 기업이 다른 기업을 사거나 합치는 것. 스타트업에겐 IPO 외 주요 출구 전략입니다.'),
+    'ESG':          ('ESG (환경·사회·지배구조)', '기업이 환경, 사회적 책임, 투명한 지배구조를 얼마나 잘 지키는지 평가하는 기준.'),
+    '피봇':         ('피봇 (사업 방향 전환)', '초기 아이디어가 통하지 않을 때 방향을 바꾸는 것. 유튜브·슬랙이 피봇으로 성공한 대표 사례.'),
+    '엑셀러레이터': ('엑셀러레이터 (창업 가속화)', '초기 스타트업에 투자·멘토링·네트워크를 제공하는 기관.'),
+    'LLM':          ('LLM (대규모 언어 모델)', 'GPT, Gemini 같은 대용량 AI 언어 모델. 텍스트를 읽고 생성하는 핵심 AI 기술입니다.'),
 }
 
-# ──────────────────────────────────────────────────────────
-# 핵심 문장 추출
-# ──────────────────────────────────────────────────────────
-def extract_key_sentences(title, clean_body, n=8):
-    sents = [s for s in split_sentences(clean_body)
-             if not re.search(r'무단\s*(전재|배포|복제)|copyright|구독|광고|협찬|저작권', s, re.I)]
-    if not sents:
-        return []
-    title_toks = set(tokenize(title))
-    scored = []
-    for i, s in enumerate(sents):
-        stoks = tokenize(s)
-        overlap = sum(1 for t in stoks if t in title_toks)
-        pos_b = 1.5 if i < 3 else 1.2 if i < 6 else 1.0
-        num_b = 1.6 if re.search(r'[\d,]+억|[\d,]+조|\d+%|\d+배', s) else 1.0
-        cau_b = 1.3 if re.search(r'때문에|이유로|배경에는|결과로|따라서|통해서', s) else 1.0
-        len_b = 1.2 if 30 <= len(s) <= 200 else 1.0
-        scored.append((s, (overlap + 1) * pos_b * num_b * cau_b * len_b, i))
-    scored.sort(key=lambda x: -x[1])
-    return [x[0] for x in sorted(scored[:n], key=lambda x: x[2])]
+def split_sentences(text):
+    text = re.sub(r'([.!?])\s+', r'\1\n', text)
+    text = re.sub(r'([다요임음])\s+', r'\1\n', text)
+    return [s.strip() for s in text.split('\n') if 20 <= len(s.strip()) <= 400]
 
-# ──────────────────────────────────────────────────────────
-# 동적 제목 생성
-# ──────────────────────────────────────────────────────────
-def make_insight_title(title, evt, dom, nums, entities, key_sents):
-    """원문 제목을 기반으로 인사이트 중심의 새 제목을 생성"""
-    dom_ko = DOMAINS.get(dom, {}).get('ko', '창업·비즈니스')
+def is_noise(s):
+    return bool(re.search(r'무단\s*(전재|배포|복제)|copyright|all rights reserved|구독|좋아요|댓글|광고|협찬|PR\b', s, re.I))
 
-    # 숫자가 있는 경우 수치를 강조한 제목
-    if nums and evt == 'funding':
-        n = nums[0]
-        entity = entities[0] if entities else ''
-        if entity:
-            templates = [
-                f"{entity}, {n} 투자 유치 — 왜 투자자들이 선택했나",
-                f"{n}의 의미: {entity}가 증명한 것들",
-                f"{entity} {n} 투자 — 창업가가 봐야 할 3가지",
-            ]
+def cosine_sim(a_set, b_set):
+    if not a_set or not b_set: return 0
+    inter = len(a_set & b_set)
+    denom = (len(a_set) ** 0.5) * (len(b_set) ** 0.5)
+    return inter / denom if denom > 0 else 0
+
+def has_number(s):
+    return bool(re.search(r'[\d,]+억|[\d,]+조|[\d,]+만\s*원|[\d]+%|[\d]+배|[\d,]+만\s*명|[\d,]+개', s))
+
+def is_causal(s):
+    return bool(re.search(r'때문에|이유로|원인은|배경에는|결과로|따라서|이로\s*인해|덕분에|영향으로', s))
+
+def is_goal(s):
+    return bool(re.search(r'목표|계획|예정|방침|전략|추진|노력|위해', s))
+
+def is_quote(s):
+    return ('"' in s or '\u201c' in s or '\u201d' in s) and bool(re.search(r'밝혔다|말했다|전했다|강조했다|설명했다|덧붙였다|언급했다', s))
+
+def bm25_score(q_toks, d_toks, avg_len, n, df):
+    K1, BP = 1.5, 0.75
+    tf = {}
+    for t in d_toks: tf[t] = tf.get(t, 0) + 1
+    score = 0
+    for q in q_toks:
+        if q not in tf: continue
+        idf = (n - df.get(q, 0) + 0.5) / (df.get(q, 0) + 0.5) + 1
+        import math
+        idf = math.log(idf)
+        tfw = (tf[q] * (K1 + 1)) / (tf[q] + K1 * (1 - BP + BP * len(d_toks) / avg_len))
+        score += idf * tfw
+    return score
+
+def build_context_lines(event_type, domain, ner):
+    tech = ner.get('tech', [])
+    geo = ner.get('geo', [])
+    stage = ner.get('stage')
+    dom_ko = DOMAINS.get(domain, {}).get('ko', '창업·비즈니스')
+    lines = []
+    if event_type == 'funding':
+        stage_ctx = {
+            '시드':    '시드 투자는 아이디어 검증 단계의 첫 번째 외부 자금입니다. 이 시점에서 투자자들은 팀의 역량과 문제 해결 방향성을 가장 중요하게 봅니다.',
+            'Pre-A':   'Pre-A 투자는 초기 제품·서비스를 시장에서 검증하기 직전 단계입니다. MVP(최소 기능 제품)를 고도화하는 데 활용됩니다.',
+            '시리즈A': '시리즈A는 제품·시장 적합성(PMF)이 검증된 후 팀·마케팅 확장을 위한 첫 번째 대규모 투자입니다. 보통 수십억~수백억 원 규모로 진행됩니다.',
+            '시리즈B': '시리즈B는 검증된 수익 모델을 바탕으로 빠른 성장을 추진하는 단계입니다. 인력 채용·해외 확장·신사업 투자에 활용됩니다.',
+            '시리즈C': '시리즈C 이상은 이미 규모 있는 매출을 가진 기업이 IPO 또는 글로벌 확장을 준비하는 단계입니다.',
+        }
+        if stage and stage in stage_ctx:
+            lines.append(stage_ctx[stage])
+        if tech:
+            lines.append(f'현재 글로벌 VC 시장에서 **{tech[0]}** 분야는 집중 투자 대상 중 하나입니다. 금리 환경과 무관하게 실질 수익 모델이 있는 기업에 자금이 몰리는 추세입니다.')
         else:
-            templates = [
-                f"{n} 투자 유치의 이면 — 무엇이 투자자를 움직였나",
-                f"이번 {n} 투자, 창업 생태계에 던지는 시그널",
-                f"{dom_ko}에 {n}이 들어온 이유",
-            ]
-        return random.choice(templates)
+            lines.append(f'{dom_ko} 투자 생태계는 선별적 투자 기조 속에서도 실질적인 성과를 낸 기업에게는 여전히 자금 접근 기회가 열려 있습니다.')
+    elif event_type == 'acquisition':
+        lines.append('M&A는 스타트업에게 IPO와 함께 대표적인 엑싯(Exit) 경로입니다. 대기업이 기술·인재·시장 점유율을 빠르게 확보하기 위한 수단으로 활용합니다.')
+        if tech:
+            lines.append(f'특히 **{tech[0]}** 분야의 M&A는 기술 역량 내재화를 목적으로 하는 경우가 많아, 인수 이후에도 팀·기술의 독립성이 유지되는 사례가 늘고 있습니다.')
+    elif event_type == 'policy':
+        lines.append(f'정부 및 공공기관의 {dom_ko} 지원 프로그램은 초기 스타트업에게 자금·네트워크·검증의 기회를 제공합니다. 선발 기준과 지원 혜택을 꼼꼼히 확인하고 적극적으로 활용하는 것이 중요합니다.')
+    elif event_type == 'product':
+        if tech:
+            lines.append(f'**{"·".join(tech[:2])}** 기술을 활용한 신규 서비스 출시는 기존 시장에 새로운 기준을 제시할 수 있습니다. 초기 시장 반응과 사용자 피드백이 이후 방향성을 결정하는 핵심 요소가 됩니다.')
+    elif event_type == 'research':
+        lines.append(f'{dom_ko} 분야의 연구·분석 결과는 투자자·창업가·정책 입안자 모두에게 중요한 의사결정 근거가 됩니다.')
+    elif event_type == 'market':
+        tech_str = f'**{tech[0]}**' if tech else dom_ko
+        lines.append(f'{tech_str} 시장은 기술 발전과 수요 변화가 맞물려 빠르게 재편되고 있습니다. 성장 곡선의 초기에 진입한 플레이어가 장기적으로 유리한 고지를 선점할 가능성이 높습니다.')
+    return lines
 
-    if evt == 'product':
-        entity = entities[0] if entities else ''
-        product_kw = re.findall(r'[가-힣]{2,}(?:앱|서비스|플랫폼|솔루션|시스템)', title)
-        product = product_kw[0] if product_kw else (entity if entity else '이 서비스')
-        templates = [
-            f"{product} 출시가 가져올 변화 — 창업가의 시선",
-            f"왜 지금 {product}인가: 타이밍의 교훈",
-            f"{product}에서 배우는 문제 해결의 기술",
-        ]
-        return random.choice(templates)
+def build_opportunity_lines(event_type, domain, ner):
+    tech = ner.get('tech', [])
+    dom_ko = DOMAINS.get(domain, {}).get('ko', '창업·비즈니스')
+    lines = []
+    if event_type == 'funding':
+        lines.append(f'투자를 받은 기업의 행보를 주목하세요. 어떤 문제를 해결하려는지, 자금을 어떤 우선순위에 쓰는지 관찰하면 {dom_ko} 분야의 핵심 병목이 보입니다.')
+    elif event_type == 'acquisition':
+        lines.append('인수된 기업이 해결하던 문제 중 아직 미완성인 부분이 있다면, 그것이 새로운 창업 기회가 될 수 있습니다.')
+    elif event_type == 'product':
+        lines.append('새로운 서비스 출시는 경쟁사 분석의 좋은 기회입니다. 직접 써보고 아직 해결하지 못한 불편함을 찾아보세요.')
+    elif event_type == 'policy':
+        lines.append('지원 프로그램 신청 기간과 조건을 확인하고, 팀 빌딩·멘토링·네트워크 기회까지 최대한 활용하는 전략을 세우세요.')
+    elif event_type == 'research':
+        lines.append('연구 결과에서 아직 해결되지 않은 문제를 찾는 연습을 하세요. 데이터가 보여주는 갭(gap)이 바로 창업 기회입니다.')
+    elif event_type == 'market':
+        tech_str = tech[0] if tech else dom_ko
+        lines.append(f'{tech_str} 시장이 성장한다는 것은, 그 시장에서 해결해야 할 문제도 함께 커진다는 뜻입니다.')
+    elif event_type == 'person':
+        lines.append('성공한 창업가의 스토리에서 패턴을 찾아보세요. 문제를 인식한 시점, 첫 번째 행동, 실패를 극복한 방식에서 나만의 교훈을 추출하세요.')
+    else:
+        lines.append(f'이 소식이 {dom_ko} 분야에 만드는 변화를 세 가지 관점으로 분석해보세요: ① 기회 ② 위협 ③ 아직 해결 안 된 문제.')
+    return lines
 
-    if evt == 'policy':
-        templates = [
-            f"정부 지원, 제대로 받는 법 — 이번 공모가 주는 힌트",
-            f"창업 지원 정책 읽는 법 — 기회를 잡는 창업가의 전략",
-            f"이번 정책 지원이 가리키는 곳 — 어디에 기회가 있나",
-        ]
-        return random.choice(templates)
+def build_dynamic_questions(title, event_type, domain, key_sents, ner):
+    questions = []
+    amounts = ner.get('amounts', [])
+    orgs = ner.get('orgs', [])
+    tech = ner.get('tech', [])
+    geo = ner.get('geo', [])
+    stage = ner.get('stage')
+    dom_ko = DOMAINS.get(domain, {}).get('ko', '창업·비즈니스')
+    title_kw = [t for t in tokenize(title) if len(t) >= 2][:4]
 
-    if evt == 'acquisition':
-        entity = entities[0] if entities else '이 스타트업'
-        templates = [
-            f"{entity} 인수의 이면 — EXIT 전략을 어떻게 설계할까",
-            f"왜 {entity}를 샀나 — M&A에서 배우는 창업 전략",
-            f"인수되는 스타트업의 공통점 — {dom_ko} 생태계의 신호",
-        ]
-        return random.choice(templates)
+    if amounts:
+        questions.append(f'**{amounts[0]}** 규모는 {dom_ko} 업계 평균과 비교하면 어느 정도이며, 이 자금이 어느 분야에 먼저 쓰일까요?')
+    if orgs:
+        questions.append(f'**{orgs[0]}**이(가) 이번 소식으로 얻는 가장 큰 이점은 무엇이고, 앞으로 어떤 행보를 보일까요?')
+    if event_type == 'funding':
+        stage_str = f'{stage} 투자' if stage else '이번 투자'
+        questions.append(f'{stage_str}를 받은 후 {orgs[0] if orgs else "이 스타트업"}이(가) 다음 단계로 넘어가려면 무엇을 증명해야 할까요?')
+    elif event_type == 'product':
+        questions.append('이 서비스가 기존 경쟁 제품 대비 실제로 해결하는 핵심 문제는 무엇이며, 어떤 사용자에게 가장 필요할까요?')
+    elif event_type == 'policy':
+        questions.append(f'이 정책·지원 프로그램을 가장 효과적으로 활용할 수 있는 스타트업 유형은 무엇일까요?')
+    elif event_type == 'market':
+        tech_str = tech[0] if tech else dom_ko
+        questions.append(f'{tech_str} 시장 변화가 5년 후에도 지속된다면, 지금 어떤 포지션을 선점하는 것이 유리할까요?')
+    elif event_type == 'ipo':
+        questions.append(f'이번 IPO·상장이 {dom_ko} 생태계 전반에 주는 신호는 무엇이며, 후속 상장 기업에게 어떤 영향을 줄까요?')
+    else:
+        if len(title_kw) >= 2:
+            questions.append(f"'{', '.join(title_kw[:2])}' 관련 소식이 {dom_ko} 분야 창업가에게 주는 기회와 위협은 각각 무엇일까요?")
+        else:
+            questions.append(f'이 소식이 {dom_ko} 분야 전반에 미치는 영향을 어떻게 평가할 수 있을까요?')
+    return questions[:3]
 
-    if evt == 'person':
-        person = entities[0] if entities else '이 창업가'
-        templates = [
-            f"{person}의 선택 — 그 결정이 의미하는 것",
-            f"창업가 {person}에게 배우는 실행력의 비밀",
-            f"{person} 스토리 — 실패와 성공 사이의 진짜 교훈",
-        ]
-        return random.choice(templates)
+def build_ner_sections(title, event_type, domain, ner):
+    amounts = ner.get('amounts', [])
+    orgs = ner.get('orgs', [])
+    tech = ner.get('tech', [])
+    geo = ner.get('geo', [])
+    stage = ner.get('stage')
+    dates = ner.get('dates', [])
+    metrics = ner.get('metrics', [])
+    dom_ko = DOMAINS.get(domain, {}).get('ko', '창업·비즈니스')
+    evt_info = EVENT_TYPES.get(event_type, {'emoji': '📰', 'label': '주요 소식'})
+    sections = []
 
-    if evt == 'market':
-        templates = [
-            f"{dom_ko} 시장의 변화 — 지금이 기회인 이유",
-            f"이 트렌드가 만드는 창업 기회 — {dom_ko}의 미래",
-            f"{dom_ko} 생태계 지금 무슨 일이 — 창업가 시선 분석",
-        ]
-        return random.choice(templates)
+    core_lines = []
+    if event_type == 'funding':
+        who = orgs[0] if orgs else title.split(',')[0].strip()[:20]
+        stage_str = stage or '투자'
+        if amounts:
+            core_lines.append(f'**{who}**이(가) **{amounts[0]}** 규모의 {stage_str}를 유치했습니다.')
+        else:
+            core_lines.append(f'**{who}**이(가) {stage_str}를 성공적으로 유치했습니다.')
+        if tech:
+            core_lines.append(f'{dom_ko} 분야에서 **{"·".join(tech[:2])}** 기술을 기반으로 성장을 이어가고 있습니다.')
+    elif event_type == 'acquisition':
+        buyer = orgs[0] if orgs else (title.split(',')[0].strip()[:20] or '인수 기업')
+        tech_str = f' **{tech[0]}** 등 핵심 기술 역량 확보를 위해' if tech else ''
+        core_lines.append(f'{tech_str} **{buyer}**이(가) 인수·합병을 통해 {dom_ko} 분야 경쟁력을 강화하고 있습니다.')
+        if amounts:
+            core_lines.append(f'이번 거래 규모는 **{amounts[0]}**으로, {dom_ko} 업계 M&A 중 주목할 만한 사례입니다.')
+    elif event_type == 'product':
+        who = orgs[0] if orgs else (title.split(',')[0].strip()[:20] or '해당 기업')
+        tech_str = f' **{"·".join(tech[:2])}** 기반' if tech else ''
+        core_lines.append(f'**{who}**이(가){tech_str} 신규 서비스·제품을 출시하며 {dom_ko} 분야에 새로운 흐름을 만들고 있습니다.')
+    elif event_type == 'policy':
+        org = orgs[0] if orgs else '지원 기관'
+        geo_str = f'{geo[0]} 지역의 ' if geo else ''
+        core_lines.append(f'{geo_str}{dom_ko} 분야 스타트업·창업가를 대상으로 **{org}**이(가) 신규 지원 프로그램을 운영합니다.')
+        if amounts:
+            core_lines.append(f'지원 규모는 **{amounts[0]}** 수준이며, 관련 기업들의 관심이 높습니다.')
+        if dates:
+            core_lines.append(f'**{dates[0]}** 일정에 맞춰 신청·모집이 진행될 예정입니다.')
+    elif event_type == 'research':
+        tech_str = f'**{"·".join(tech[:2])}**' if tech else dom_ko
+        core_lines.append(f'{tech_str} 분야에 대한 새로운 연구·분석 결과가 발표되며 업계의 이목을 끌고 있습니다.')
+    elif event_type == 'person':
+        who = orgs[0] if orgs else (title.split(',')[0].strip()[:20] or '창업가')
+        core_lines.append(f'**{who}**의 창업 스토리와 {dom_ko} 분야 인사이트가 주목받고 있습니다.')
+    elif event_type == 'market':
+        tech_str = f'**{tech[0]}**' if tech else dom_ko
+        geo_str = f'{geo[0]} 시장을 포함한 ' if geo else ''
+        core_lines.append(f'{geo_str}{tech_str} 분야 시장 규모·트렌드 변화가 확인되며 투자자와 창업가 모두의 관심이 집중되고 있습니다.')
+    elif event_type == 'ipo':
+        who = orgs[0] if orgs else (title.split(',')[0].strip()[:20] or '해당 기업')
+        core_lines.append(f'**{who}**이(가) IPO·상장을 추진하며 {dom_ko} 생태계에 새로운 기준점을 제시하고 있습니다.')
+    else:
+        who = orgs[0] if orgs else (title.split(',')[0].strip()[:20] or '해당 기업')
+        tech_str = f' **{tech[0]}** 기반' if tech else ''
+        core_lines.append(f'**{who}**이(가){tech_str} {dom_ko} 분야에서 주목할 만한 움직임을 보이고 있습니다.')
 
-    if evt == 'research':
-        templates = [
-            f"데이터가 말하는 것 — {dom_ko} 생태계의 진짜 현실",
-            f"숫자로 보는 {dom_ko} — 창업 기회는 어디에 있나",
-            f"이 연구 결과가 가리키는 창업 방향",
-        ]
-        return random.choice(templates)
+    if core_lines:
+        sections.append({'title': '## 📌 핵심 내용', 'lines': core_lines, 'style': 'quote'})
 
-    # general: 원문 제목을 가공
-    # 기사 키워드 추출해서 인사이트 제목 만들기
-    kws = [t for t in tokenize(title) if len(t) >= 2][:3]
-    if kws:
-        kw_str = ' '.join(kws[:2])
-        templates = [
-            f"{kw_str} — 창업가가 주목해야 할 이유",
-            f"이 소식이 {dom_ko}에 던지는 시사점",
-            f"{kw_str}에서 찾는 창업 인사이트",
-        ]
-        return random.choice(templates)
+    ctx_lines = build_context_lines(event_type, domain, ner)
+    if ctx_lines:
+        sections.append({'title': '## 🗺️ 배경과 맥락', 'lines': ctx_lines, 'style': 'plain'})
 
-    return title  # fallback: 원문 그대로
+    opp_lines = build_opportunity_lines(event_type, domain, ner)
+    if opp_lines:
+        sections.append({'title': '## 🚀 창업가 시각으로 읽기', 'lines': opp_lines, 'style': 'plain'})
 
-# ──────────────────────────────────────────────────────────
-# 동적 롱폼 생성 (핵심: 고정 템플릿 없음, 기사 내용 기반)
-# ──────────────────────────────────────────────────────────
+    return sections
+
 def build_longform(title, body):
     clean_body = clean_text(body or '')
-    evt  = detect_event(title, clean_body)
-    dom  = detect_domain(title, clean_body)
-    sents = extract_key_sentences(title, clean_body, n=10)
-    nums  = extract_numbers(title + ' ' + clean_body)
-    entities = extract_entities(title, clean_body)
-    dom_ko = DOMAINS.get(dom, {}).get('ko', '창업·비즈니스')
-    evt_info = EVENT_TYPES.get(evt, {'label': '주요 소식', 'emoji': '📰'})
+    event_type = detect_event(title, clean_body)
+    domain = detect_domain(title, clean_body)
+    ner = parse_title(title)
+    dom_ko = DOMAINS.get(domain, {}).get('ko', '창업·비즈니스')
+    evt_info = EVENT_TYPES.get(event_type, {'emoji': '📰', 'label': '주요 소식'})
 
-    # 사용된 용어 검색
-    used_terms = []
-    combined = title + ' ' + clean_body
-    for term, (short, long_) in TERM_DICT.items():
-        if term in combined:
-            used_terms.append((short, long_))
-        if len(used_terms) >= 3:
-            break
-
-    # 인사이트 제목 생성
-    insight_title = make_insight_title(title, evt, dom, nums, entities, sents)
+    # 문장 분리
+    raw_sents = [s for s in split_sentences(clean_body) if not is_noise(s)]
+    title_toks = set(tokenize(title))
+    sentences = [s for s in raw_sents if cosine_sim(set(tokenize(s)), title_toks) < 0.75]
+    has_real_body = len(sentences) >= 3
 
     lines = []
+    used = set()
 
-    # ── 헤더 (기사별로 다른 인사이트 제목) ──
-    lines.append('# ' + insight_title)
+    # 헤더
+    lines.append(f'## {evt_info["emoji"]} {evt_info["label"]} · {dom_ko}')
     lines.append('')
-
-    # ── §1 오프닝: 기사의 핵심 팩트를 먼저 ──
-    # 원문 제목 출처 표시
-    lines.append('> **원문:** ' + title)
-    lines.append('')
-
-    # 리드 문장: 기사에서 가장 임팩트 있는 문장으로 시작
-    if sents:
-        lines.append(sents[0])
+    if ner['amounts']:
+        lines.append(f'🔢 **핵심 수치**: {" / ".join(ner["amounts"])}')
         lines.append('')
-    elif nums:
-        lines.append('이번 소식의 핵심은 **' + nums[0] + '**입니다.')
+    if ner['stage']:
+        lines.append(f'🏷️ **투자 단계**: {ner["stage"]}')
         lines.append('')
-
-    # 수치가 있으면 강조
-    if nums:
-        lines.append('**핵심 수치**')
+    if ner['tech']:
+        lines.append(f'🔧 **기술 키워드**: {" · ".join(ner["tech"][:3])}')
         lines.append('')
-        for n in nums[:3]:
-            lines.append('- **' + n + '**')
+    if ner['geo']:
+        lines.append(f'📍 **지역**: {" · ".join(ner["geo"][:2])}')
         lines.append('')
 
-    # 추가 핵심 문장들 (있으면)
-    if len(sents) > 1:
-        for s in sents[1:3]:
-            lines.append(s)
-        lines.append('')
+    if has_real_body:
+        import math
+        toks_list = [tokenize(s) for s in sentences]
+        n = len(sentences) or 1
+        df = {}
+        for ts in toks_list:
+            for t in set(ts): df[t] = df.get(t, 0) + 1
+        avg_len = sum(len(t) for t in toks_list) / n or 1
 
-    # ── §2 무슨 일이 있었나 (원문 요약, 고정 문구 없이) ──
-    lines.append('---')
-    lines.append('')
-    lines.append('## ' + evt_info['emoji'] + ' 무슨 일이 있었나')
-    lines.append('')
+        scored = []
+        for i, (sent, toks) in enumerate(zip(sentences, toks_list)):
+            bm = bm25_score(list(title_toks), toks, avg_len, n, df)
+            pos = 1.5 if i < 2 else (1.25 if i < 5 else 1.0)
+            l = len(sent)
+            len_b = 1.3 if 40 <= l <= 180 else (0.7 if l > 250 else 1.0)
+            num_b = 1.4 if has_number(sent) else 1.0
+            cau_b = 1.25 if is_causal(sent) else 1.0
+            scored.append((sent, bm * pos * len_b * num_b * cau_b, i))
 
-    # 남은 핵심 문장들로 본문 요약
-    if len(sents) > 3:
-        for s in sents[3:7]:
-            if s not in sents[:3]:
-                lines.append(s)
-                lines.append('')
-    elif clean_body:
-        # 원문 앞부분 활용
-        short_body = clean_body[:300].strip()
-        if short_body:
-            lines.append(short_body)
+        scored_f = [(s, sc, i) for s, sc, i in scored if sc >= 0]
+        scored_f.sort(key=lambda x: -x[1])
+        top_idx = set(x[2] for x in scored_f[:10])
+        key_lines = [s for s, sc, i in sorted([(s, sc, i) for s, sc, i in scored_f if i in top_idx], key=lambda x: x[2])][:6]
+        num_lines = [s for s in sentences if has_number(s) and s not in key_lines][:5]
+        cau_lines = [s for s in sentences if is_causal(s) and s not in key_lines and s not in num_lines][:3]
+        goal_lines = [s for s in sentences if is_goal(s) and s not in key_lines and s not in num_lines and s not in cau_lines][:3]
+        quote_lines = [s for s in sentences if is_quote(s) and s not in key_lines][:3]
+
+        # §1 도입
+        if key_lines and len(key_lines[0]) >= 25:
+            used.add(key_lines[0])
+            lines.append(key_lines[0])
             lines.append('')
+        # §2 핵심 내용
+        main_sents = [s for s in key_lines if s not in used][:5]
+        if main_sents:
+            lines += ['---', '', '## 📌 핵심 내용', '']
+            for s in main_sents:
+                if s not in used: used.add(s); lines += [f'> {s}', '']
+        # §3 주요 수치
+        if num_lines:
+            lines += ['---', '', '## 📊 주요 수치 & 데이터', '']
+            for s in num_lines:
+                if s not in used: used.add(s); lines.append(f'→ {s}')
+            lines.append('')
+        # §4 현장의 목소리
+        if quote_lines:
+            lines += ['---', '', '## 💬 현장의 목소리', '']
+            for s in quote_lines:
+                if s not in used: used.add(s); lines += [f'> {s}', '']
+        # §5 배경과 맥락
+        if cau_lines:
+            lines += ['---', '', '## 🗺️ 배경과 맥락', '']
+            for s in cau_lines:
+                if s not in used: used.add(s); lines += [s, '']
+        # §6 향후 방향
+        if goal_lines:
+            lines += ['---', '', '## 🎯 향후 방향', '']
+            for s in goal_lines:
+                if s not in used: used.add(s); lines += [f'• {s}', '']
+        # 동적 질문
+        questions = build_dynamic_questions(title, event_type, domain, key_lines, ner)
+        if questions:
+            lines += ['---', '', '## 💭 생각해볼 질문', '']
+            for q in questions: lines += [f'• **Q.** {q}', '']
+    else:
+        ner_sections = build_ner_sections(title, event_type, domain, ner)
+        for sec in ner_sections:
+            lines += ['---', '', sec['title'], '']
+            if sec['style'] == 'quote':
+                for l in sec['lines']: lines += [f'> {l}', '']
+            else:
+                for l in sec['lines']: lines += [l, '']
+        questions = build_dynamic_questions(title, event_type, domain, [], ner)
+        if questions:
+            lines += ['---', '', '## 💭 생각해볼 질문', '']
+            for q in questions: lines += [f'• **Q.** {q}', '']
 
-    # 엔티티(회사/인물) 언급
-    if entities:
-        lines.append('**주요 등장인물/기업:** ' + ', '.join(entities))
-        lines.append('')
-
-    # ── §3 창업가 시선 분석 (이벤트 타입별로 다르게) ──
-    lines.append('---')
-    lines.append('')
-
-    if evt == 'funding':
-        lines.append('## 💡 투자 유치에서 배우는 것')
-        lines.append('')
-        investor_q = '이 기업은 어떤 문제를 해결했기에 투자자들이 선택했을까?'
-        lines.append('**창업가 시선의 핵심 질문:** ' + investor_q)
-        lines.append('')
-        if nums:
-            lines.append('**' + nums[0] + '**의 투자 유치는 단순한 자금 확보가 아닙니다.')
-            lines.append('투자자들은 수백 개의 기업을 검토한 후 소수에만 투자합니다.')
-            lines.append('이 기업이 선택된 이유를 역분석하는 것이 창업가의 공부입니다.')
-        else:
-            lines.append('투자는 시장이 이 문제와 팀을 인정했다는 신호입니다.')
-            lines.append('어떤 문제를, 어떤 팀이, 어떻게 풀고 있는지가 핵심입니다.')
-        lines.append('')
-        lines.append('**지금 당장 해볼 것:**')
-        lines.append('')
-        lines.append('- 이 기업의 홈페이지와 제품을 직접 살펴보세요')
-        lines.append('- 같은 문제를 해결하려는 경쟁자는 누가 있나요?')
-        lines.append('- 왜 이 투자자가 이 기업을 선택했는지 생각해보세요')
-
-    elif evt == 'product':
-        lines.append('## 💡 제품 출시에서 배우는 것')
-        lines.append('')
-        lines.append('**핵심 질문:** 기존에 이 문제를 해결하던 방법과 무엇이 다른가?')
-        lines.append('')
-        lines.append('새로운 서비스의 출시는 두 가지를 동시에 말합니다.')
-        lines.append('첫째, 이 문제가 충분히 크다는 것. 둘째, 기존 해결책이 부족하다는 것.')
-        lines.append('')
-        lines.append('**지금 당장 해볼 것:**')
-        lines.append('')
-        lines.append('- 이 서비스를 직접 사용해보고 불편한 점을 찾아보세요')
-        lines.append('- 이 서비스가 없다면 사용자들은 어떻게 이 문제를 해결했을까요?')
-        lines.append('- 아직 해결되지 않은 빈틈은 어디인가요?')
-
-    elif evt == 'policy':
-        lines.append('## 💡 정책 지원을 활용하는 법')
-        lines.append('')
-        lines.append('**핵심:** 정책 자금은 창업 초기 가장 저렴한 자본입니다.')
-        lines.append('')
-        lines.append('지분을 내주지 않고 초기 자금을 마련할 수 있는 방법 중 하나가 정부 지원입니다.')
-        lines.append('지원 자격, 선발 기준, 지원 내용을 꼼꼼히 파악하는 것이 중요합니다.')
-        lines.append('')
-        lines.append('**지금 당장 해볼 것:**')
-        lines.append('')
-        lines.append('- K-스타트업 창업지원포털(k-startup.go.kr)을 즐겨찾기하세요')
-        lines.append('- 지원 자격을 확인하고 해당 여부를 파악하세요')
-        lines.append('- 사업계획서 작성 연습을 지금부터 시작하세요')
-
-    elif evt == 'acquisition':
-        lines.append('## 💡 인수·합병에서 배우는 EXIT 전략')
-        lines.append('')
-        lines.append('**핵심 질문:** 왜 이 기업이 인수됐을까?')
-        lines.append('')
-        lines.append('M&A는 스타트업의 중요한 출구 전략입니다.')
-        lines.append('인수한 기업이 이 스타트업에서 원한 것이 무엇인지 분석하면,')
-        lines.append('\"어떤 스타트업이 가치 있는가\"를 역으로 이해할 수 있습니다.')
-        lines.append('')
-        lines.append('**지금 당장 해볼 것:**')
-        lines.append('')
-        lines.append('- 인수 기업이 원한 자산(기술·유저·팀)을 분석해보세요')
-        lines.append('- 나중에 어떤 기업에 인수되고 싶은지 역발상으로 창업 방향을 잡아보세요')
-
-    elif evt == 'person':
-        person = entities[0] if entities else '이 창업가'
-        lines.append('## 💡 ' + person + '의 이야기에서 배우는 것')
-        lines.append('')
-        lines.append('성공한 창업가의 이야기에서 가장 중요한 것은 성공 비결이 아닙니다.')
-        lines.append('\"어디서 실패했고, 어떻게 극복했는가\"가 진짜 교훈입니다.')
-        lines.append('')
-        lines.append('**지금 당장 해볼 것:**')
-        lines.append('')
-        lines.append('- 이 창업가가 겪은 가장 큰 위기가 무엇인지 찾아보세요')
-        lines.append('- 같은 상황에서 나라면 어떤 선택을 했을지 생각해보세요')
-        lines.append('- 나의 창업 방향과 어떤 접점이 있는지 메모해보세요')
-
-    elif evt == 'market':
-        lines.append('## 💡 이 시장 트렌드를 어떻게 읽을까')
-        lines.append('')
-        lines.append('**핵심 질문:** 이 시장이 지금 성장하는 이유는 무엇인가?')
-        lines.append('')
-        lines.append('트렌드를 읽는 능력은 창업 타이밍의 핵심입니다.')
-        lines.append('너무 이르면 시장이 없고, 너무 늦으면 경쟁이 치열합니다.')
-        lines.append('지금 이 시장의 변화 신호를 포착하는 것이 기회입니다.')
-        lines.append('')
-        lines.append('**지금 당장 해볼 것:**')
-        lines.append('')
-        lines.append('- 이 시장의 주요 플레이어 3~5개를 조사해보세요')
-        lines.append('- 5년 후 이 시장은 어떤 모습일지 시나리오를 써보세요')
-        lines.append('- 아직 해결되지 않은 빈 공간(white space)을 찾아보세요')
-
-    elif evt == 'research':
-        lines.append('## 💡 데이터에서 창업 기회 읽기')
-        lines.append('')
-        lines.append('**핵심 질문:** 이 연구 결과가 사실이라면, 어떤 새로운 기회가 생기나?')
-        lines.append('')
-        lines.append('숫자와 데이터는 막연한 아이디어를 검증해주는 도구입니다.')
-        lines.append('이 연구가 발견한 것이 무엇인지, 그것이 무엇을 의미하는지를 창업가 시선으로 읽어야 합니다.')
-        lines.append('')
-        lines.append('**지금 당장 해볼 것:**')
-        lines.append('')
-        lines.append('- 이 데이터를 바탕으로 창업 아이디어 2~3개를 떠올려보세요')
-        lines.append('- 이 연구 결과와 반대되는 시각은 없는지 찾아보세요')
-        lines.append('- 5년 전과 비교했을 때 무엇이 달라졌는지 확인해보세요')
-
-    else:  # general
-        lines.append('## 💡 이 소식이 가져올 변화')
-        lines.append('')
-        lines.append('**핵심 질문:** 이 소식이 ' + dom_ko + ' 생태계에 어떤 변화를 가져올까?')
-        lines.append('')
-        lines.append('창업 생태계의 모든 변화는 누군가에겐 기회입니다.')
-        lines.append('이 소식이 어떤 문제를 드러내고, 어떤 빈자리를 만드는지 생각해보세요.')
-        lines.append('')
-        lines.append('**지금 당장 해볼 것:**')
-        lines.append('')
-        lines.append('- 이 변화로 가장 이익을 보는 사람은 누구인가요?')
-        lines.append('- 이 소식에서 창업 아이디어 하나를 뽑아보세요')
-
-    lines.append('')
-
-    # ── §4 배경 지식 (용어 설명) ──
+    # 용어 해설
+    full_text = title + ' ' + clean_body
+    used_terms = []
+    for term, (short, explain) in TERM_DICT.items():
+        if term in full_text and len(used_terms) < 3:
+            used_terms.append((short, explain))
     if used_terms:
-        lines.append('---')
-        lines.append('')
-        lines.append('## 📚 이 기사를 읽기 위한 배경 지식')
-        lines.append('')
-        for short, long_ in used_terms:
-            lines.append('**' + short + '**')
-            lines.append('')
-            lines.append(long_)
-            lines.append('')
+        lines += ['---', '', '## 📚 핵심 용어 정리', '']
+        for short, explain in used_terms:
+            lines += [f'**{short}**', '', explain, '']
 
-    # ── §5 생각해볼 질문 (이벤트별 맞춤) ──
-    DEEP_Q = {
-        'funding':     ['이 기업이 투자받은 후 다음 단계에서 증명해야 할 것은 무엇일까요?', '나라면 이 기업에 투자했을까요? 그 이유는?', '이 분야에서 아직 아무도 투자하지 않은 문제는 무엇일까요?'],
-        'product':     ['이 제품이 없었다면 사용자들은 이 문제를 어떻게 해결했을까요?', '1년 후 이 서비스의 가장 큰 경쟁자는 누가 될까요?', '이 서비스에서 아직 해결하지 못한 불편함은 무엇인가요?'],
-        'policy':      ['이 지원을 받기 위해 지금 준비해야 할 것은 무엇인가요?', '정부가 이 분야를 지원하는 진짜 이유는 무엇일까요?', '이 지원을 가장 잘 활용할 수 있는 팀의 조건은?'],
-        'acquisition': ['인수된 창업가는 왜 IPO 대신 M&A를 선택했을까요?', '이 인수로 기존 경쟁자들은 어떤 영향을 받을까요?', '당신이 이 스타트업을 창업했다면, 팔겠습니까 아니면 계속 키우겠습니까?'],
-        'research':    ['이 데이터가 5년 전과 다른 이유는 무엇일까요?', '이 연구 결과와 반대되는 의견은 없을까요?', '이 데이터를 바탕으로 지금 창업할 수 있는 아이디어 3개는?'],
-        'person':      ['이 창업가의 가장 큰 실패는 무엇이고 어떻게 극복했나요?', '같은 상황에서 나라면 다른 선택을 했을까요?', '이 창업가처럼 되기 위해 지금 당장 할 수 있는 가장 작은 행동은?'],
-        'market':      ['이 시장이 10배 성장했을 때 가장 큰 수혜자는 누구일까요?', '이 트렌드가 거품이 될 수 있을까요? 그 징후는?', '이 시장에서 아직 아무도 해결하지 못한 문제는?'],
-        'general':     ['이 소식이 미치는 영향을 가장 많이 받는 사람은?', '5년 후 이 분야는 어떤 모습일까요?', '이 뉴스에서 창업 기회를 하나 뽑는다면 무엇인가요?'],
-    }
-    deep_q = DEEP_Q.get(evt, DEEP_Q['general'])
-
-    lines.append('---')
-    lines.append('')
-    lines.append('## 💭 스스로에게 던져볼 질문')
-    lines.append('')
-    for q in deep_q:
-        lines.append('- ' + q)
-    lines.append('')
-
+    # 푸터
+    lines += ['---', '', f'*Insightship · {dom_ko} · {evt_info["emoji"]} {evt_info["label"]} · insightship-longform-v16*']
     return '\n'.join(lines)
 
-# ──────────────────────────────────────────────────────────
-# Supabase 헬퍼
-# ──────────────────────────────────────────────────────────
-def sb_get(path, params=''):
-    url = SB_URL + '/rest/v1/' + path + '?' + params
-    req = urllib.request.Request(url, headers={**H, 'Prefer':'count=exact'})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.loads(r.read()), r.headers.get('content-range','')
-
-def sb_patch(path, data):
-    url = SB_URL + '/rest/v1/' + path
-    req = urllib.request.Request(url, data=json.dumps(data).encode(),
-                                 headers={**H,'Prefer':'return=minimal'}, method='PATCH')
+def sb_request(url, method='GET', data=None):
+    headers = {**H}
+    if method in ('PATCH', 'POST'):
+        headers['Prefer'] = 'return=minimal'
+    body = json.dumps(data).encode('utf-8') if data else None
+    req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=15) as r:
-            return r.status
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status, r.read()
     except urllib.error.HTTPError as e:
-        return e.code
-
-# ──────────────────────────────────────────────────────────
-# 메인 루프
-# ──────────────────────────────────────────────────────────
-total_done = 0
-total_fail = 0
-
-for rnd in range(1, ROUNDS + 1):
-    try:
-        arts, cr = sb_get('articles',
-            'status=eq.published&source_name=not.is.null'
-            '&select=id,title,body,excerpt,ai_summary'
-            '&order=published_at.desc&limit=' + str(BATCH))
+        return e.code, e.read()
     except Exception as e:
-        print('[R' + str(rnd) + '] 조회 실패: ' + str(e))
-        break
+        return 0, str(e).encode()
 
-    if not isinstance(arts, list) or not arts:
-        print('[R' + str(rnd) + '] 기사 없음 — 완료')
-        break
+def fetch_batch(offset, limit=100):
+    url = (f'{SB_URL}/rest/v1/articles'
+           f'?select=id,title,body,excerpt,ai_summary'
+           f'&ai_summary=not.is.null'
+           f'&ai_summary=not.like.*insightship-longform-v16*'
+           f'&order=published_at.desc'
+           f'&limit={limit}&offset={offset}')
+    status, body = sb_request(url)
+    if status != 200:
+        return []
+    return json.loads(body) or []
 
-    # 롱폼이 아닌 것 필터 (500자 미만 또는 ## 섹션 없는 것)
-    pending = [a for a in arts if len(a.get('ai_summary') or '') < 500
-               or '##' not in (a.get('ai_summary') or '')]
-    if not pending:
-        print('[R' + str(rnd) + '] 모두 롱폼 완료 — 종료')
-        break
+def patch_article(article_id, summary, category, dom):
+    url = f'{SB_URL}/rest/v1/articles?id=eq.{article_id}'
+    data = {
+        'ai_summary': summary,
+        'category': category,
+        'ai_processed_at': datetime.utcnow().isoformat() + 'Z',
+        'read_time': estimate_read_time(summary),
+        'ai_category': dom,
+    }
+    status, body = sb_request(url, method='PATCH', data=data)
+    return status in (200, 204)
 
-    done, fail = 0, 0
-    for a in pending:
-        art_id = a['id']
-        title  = a.get('title') or ''
-        body   = a.get('body') or a.get('excerpt') or title
+# ── 메인 실행 ─────────────────────────────────────────────────────────
+if __name__ == '__main__':
+    BATCH = 100
+    MAX_BATCHES = int(sys.argv[1]) if len(sys.argv) > 1 else 5  # 기본 5배치(500개)
+    offset = int(sys.argv[2]) if len(sys.argv) > 2 else 0
 
-        if not title:
-            fail += 1
-            continue
+    total_processed = 0
+    total_skipped = 0
+    total_errors = 0
 
-        try:
+    for batch_num in range(MAX_BATCHES):
+        current_offset = offset + batch_num * BATCH
+        articles = fetch_batch(current_offset, BATCH)
+        if not articles:
+            print(f"[배치 {batch_num+1}] 더 이상 처리할 기사 없음. 종료.")
+            break
+
+        # legacy 패턴이거나 v16 없는 기사만
+        to_process = [a for a in articles if is_legacy(a.get('ai_summary',''))]
+        print(f"[배치 {batch_num+1}] offset={current_offset}, 가져옴={len(articles)}, 재처리대상={len(to_process)}")
+
+        ok = 0
+        fail = 0
+        for a in to_process:
+            title = a.get('title','')
+            if not title:
+                total_skipped += 1
+                continue
+            body = a.get('body','') or a.get('excerpt','') or ''
             summary = build_longform(title, body)
-            evt     = detect_event(title, clean_text(body))
-            dom     = detect_domain(title, clean_text(body))
-            cat     = map_category(dom, evt)
-            read_t  = max(3, len(summary) // 350)
-
-            status = sb_patch(
-                'articles?id=eq.' + str(art_id),
-                {
-                    'ai_summary': summary,
-                    'ai_processed_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-                    'ai_category': dom,
-                    'category': cat,
-                    'read_time': read_t,
-                }
-            )
-            if status in (200, 204):
-                done += 1
+            event_type = detect_event(title, clean_text(body))
+            domain = detect_domain(title, clean_text(body))
+            category = map_category(domain, event_type)
+            if patch_article(a['id'], summary, category, domain):
+                ok += 1
             else:
                 fail += 1
-                if fail <= 3:
-                    print('  PATCH 실패 ' + str(status) + ': ' + str(art_id))
-        except Exception as e:
-            fail += 1
-            if fail <= 3:
-                print('  처리 오류: ' + str(e))
+            time.sleep(0.05)  # rate limit 방지
 
-    total_done += done
-    total_fail += fail
-    print('[R' + str(rnd) + '/' + str(ROUNDS) + '] 처리 ' + str(len(pending)) +
-          '건 → 성공 ' + str(done) + ' / 실패 ' + str(fail) +
-          ' | 누적 성공 ' + str(total_done))
+        total_processed += ok
+        total_errors += fail
+        print(f"  → 성공 {ok}개, 실패 {fail}개 (누적: {total_processed}개 처리)")
 
-    if len(pending) < BATCH:
-        print('마지막 배치 완료')
-        break
-    time.sleep(2)
-
-print('\n=== 롱폼 v9 재처리 완료 ===')
-print('총 성공: ' + str(total_done) + '건 | 총 실패: ' + str(total_fail) + '건')
+    print(f"\n=== 완료 ===")
+    print(f"총 처리: {total_processed}개, 스킵: {total_skipped}개, 오류: {total_errors}개")
