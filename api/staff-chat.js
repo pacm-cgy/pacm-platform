@@ -97,6 +97,12 @@ const AI_STAFF = {
   JADE:  { username:'ai_cmm_jade', name:'JADE',  emoji:'🌟',  team:'커뮤니티팀',color:'#F7B920', title:'매니저' },
   VERA:  { username:'ai_mgt_vera', name:'VERA',  emoji:'🎯',  team:'관리팀',    color:'#F46F6F', title:'매니저' },
   ALBA:  { username:'ai_mgt_alba', name:'ALBA',  emoji:'📣',  team:'관리팀',    color:'#F47070', title:'매니저' },
+  // ── 추가 5명 (v21) ───────────────────────────────────────────────
+  OPS_MINA: { username:'ai_ops_mina', name:'MINA',  emoji:'🌸',  team:'운영팀',    color:'#A0ABFF', title:'운영 매니저' },
+  OPS_TARA: { username:'ai_ops_tara', name:'TARA',  emoji:'📌',  team:'운영팀',    color:'#7B8CF5', title:'운영 매니저' },
+  MNT_YUNA: { username:'ai_mnt_yuna', name:'YUNA',  emoji:'🌱',  team:'멘토링팀',  color:'#2EC88A', title:'멘토링 매니저' },
+  NWS_VERO: { username:'ai_nws_vero', name:'VERO',  emoji:'📰',  team:'뉴스팀',    color:'#32B8F0', title:'뉴스 매니저' },
+  CMM_BEAU: { username:'ai_cmm_beau', name:'BEAU',  emoji:'🌺',  team:'커뮤니티팀',color:'#F5B518', title:'커뮤니티 매니저' },
 }
 
 const ROOMS = {
@@ -139,6 +145,12 @@ const PERSONA = {
   MAX:      { style:'leader',     values:['전략','장기 비전','팀 조율'],  voice:['전략적으로','팀 관점에서','큰 그림에서'],          emoji:'🏛️',  lens:'플랫폼 장기 성장에 도움이 되는가' },
   MGT_VERA: { style:'formal',     values:['목표','실행력','성과'],        voice:['목표 달성을 위해','성과 기준으로'],                emoji:'🎯',  lens:'목표에 얼마나 기여하는가' },
   MGT_ALBA: { style:'pr_style',   values:['브랜드','PR','스토리텔링'],    voice:['브랜드 관점에서','대외적으로','홍보적으로'],       emoji:'📣',  lens:'외부에서 어떻게 볼 것인가' },
+  // ── 추가 5명 페르소나 (v21) ───────────────────────────────────────
+  OPS_MINA: { style:'warm',       values:['꼼꼼함','배려','균형'],        voice:['확인했어요','챙기겠습니다','잘 될 거예요'],        emoji:'🌸',  lens:'놓치는 것 없이 팀을 돌보는가' },
+  OPS_TARA: { style:'formal',     values:['정확성','절차','신뢰'],        voice:['확인했습니다','절차대로','보고드릴게요'],          emoji:'📌',  lens:'프로세스가 올바르게 작동하는가' },
+  MNT_YUNA: { style:'cheerful',   values:['성장','가능성','도전'],        voice:['해보세요!','잘하고 있어요!','같이 해봐요!'],       emoji:'🌱',  lens:'이 사람이 한 단계 성장할 수 있는가' },
+  NWS_VERO: { style:'fast_news',  values:['속도','사실','현장'],          voice:['방금 입수했는데','현장에서 보면','실시간으로'],    emoji:'📰',  lens:'지금 이 순간 무슨 일이 벌어지고 있는가' },
+  CMM_BEAU: { style:'community_warm',values:['환대','축제','연결'],       voice:['반갑습니다!','함께해요!','모두 소중해요!'],        emoji:'🌺',  lens:'모두가 환영받고 있다고 느끼는가' },
 }
 const DEFAULT_PERSONA = {
   style:'casual', values:['소통','팀워크'], voice:['네','맞아요','감사해요'], emoji:'💬', lens:'함께 잘 해나가는 것',
@@ -579,7 +591,32 @@ async function generateAIDiscussion(topic, room, participantKeys, recentMessages
 // ══════════════════════════════════════════════════════════════════════
 
 export default async function handler(req) {
+  // ── 전역 오류 방어: 어떤 예외도 500 반환 대신 JSON으로 처리 ──────
+  try {
+    return await _handleRequest(req)
+  } catch (err) {
+    const msg = (err?.message || String(err)).slice(0, 200)
+    console.error('[staff-chat] unhandled:', msg)
+    return new Response(JSON.stringify({ error: 'Internal error', detail: msg }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...CORS },
+    })
+  }
+}
+
+async function _handleRequest(req) {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS })
+
+  // ── 환경변수 조기 검증 ───────────────────────────────────────────
+  const sbUrl = process.env.SUPABASE_URL || SB_URL
+  const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || SB_KEY
+  if (!sbUrl || !sbKey) {
+    return new Response(JSON.stringify({
+      error: 'Missing Supabase env vars',
+      hint:  'SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set',
+      ok:    false,
+    }), { status: 503, headers: { 'Content-Type': 'application/json', ...CORS } })
+  }
 
   const url  = new URL(req.url)
   const room = url.searchParams.get('room') || 'general'
