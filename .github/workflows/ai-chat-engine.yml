@@ -1,0 +1,111 @@
+name: AI 직원 자율 채팅 엔진 (5분마다 상시 가동)
+
+on:
+  schedule:
+    # 5분마다 실행 (GitHub Actions 최소 단위)
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: '실행 액션'
+        required: false
+        default: 'auto_chat'
+        type: choice
+        options:
+          - auto_chat
+          - work_report
+          - initiate
+          - all_rooms
+
+jobs:
+  ai-chat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4  # 5분 cron 사이클 내 안전 완료
+
+    steps:
+      - name: AI 직원 자율 채팅 실행
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://www.insightship.pacm.kr' }}
+        run: |
+          ACTION="${{ github.event.inputs.action || 'auto_chat' }}"
+          echo "=== AI 채팅 엔진 시작: $(date -u '+%Y-%m-%d %H:%M:%S UTC') ==="
+          echo "액션: $ACTION"
+
+          # 전체 자율 채팅 실행 (4개 채널 동시)
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST "$SITE_URL/api/staff-chat-auto" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            --max-time 55 \
+            -d "{\"rooms\":[\"general\",\"ops\",\"feedback\",\"strategy\"]}")
+
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+
+          echo "HTTP 상태: $HTTP_STATUS"
+          echo "$BODY" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print(f'엔진: {d.get(\"engine\", \"unknown\")}')
+    print(f'시간대: {d.get(\"activity_level\", \"?\")} (KST {d.get(\"kst_hour\", \"?\")}시)')
+    rooms = d.get('rooms', {})
+    for room, result in rooms.items():
+        if result.get('initiated'):
+            print(f'  [{room}] 대화 시작: {result.get(\"initiator\")} → 참여자: {result.get(\"participants\", [])}')
+        elif result.get('continued'):
+            print(f'  [{room}] 대화 이어받기: {result.get(\"respondent\")}')
+        elif result.get('skipped'):
+            reason = result.get('reason', result.get('silent_minutes', ''))
+            print(f'  [{room}] 스킵: {reason}')
+        elif result.get('error'):
+            print(f'  [{room}] 오류: {result[\"error\"]}')
+except Exception as e:
+    print(f'파싱 오류: {e}')
+    sys.stdin = open('/dev/null')
+" 2>/dev/null || echo "$BODY" | head -3
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "⚠️ 비정상 응답: HTTP $HTTP_STATUS"
+          else
+            echo "✅ AI 채팅 엔진 정상 완료"
+          fi
+
+  ai-work-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    # 업무 시간(KST 09:00, 14:00, 18:00)에만 업무 보고 실행
+    # UTC: 00:00, 05:00, 09:00
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'schedule' && (
+        startsWith(github.event.schedule, '0 0 ') ||
+        startsWith(github.event.schedule, '0 5 ') ||
+        startsWith(github.event.schedule, '0 9 ')
+      ))
+
+    steps:
+      - name: AI 직원 자율 업무 보고
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://www.insightship.pacm.kr' }}
+        run: |
+          echo "=== AI 업무 보고 실행: $(date -u '+%H:%M') ==="
+          curl -s \
+            -X POST "$SITE_URL/api/staff-chat-auto" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            --max-time 50 \
+            -d '{"action":"work_report","rooms":["ops","strategy"]}' | \
+            python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    rooms = d.get('rooms', {})
+    for room, r in rooms.items():
+        reporters = r.get('reporters', [])
+        print(f'[{room}] 보고 {len(reporters)}건: {[x[\"name\"] for x in reporters]}')
+except: pass
+" 2>/dev/null || true
+          echo "✅ 업무 보고 완료"

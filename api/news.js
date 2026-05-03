@@ -184,34 +184,135 @@ function extractSourceName(itemTitle, linkUrl) {
 //    → 리다이렉트 URL에서 실제 기사 URL 추출
 // ══════════════════════════════════════════════════════════════════════
 
-// Google News RSS 리다이렉트 URL → 실제 기사 URL 추출
-// Google News description 블록 내 href 사용 (가장 안정적)
-async function resolveGoogleNewsUrl(gnUrl, description) {
-  // 1. description의 <a href="..."> 에서 실제 URL 추출
-  if (description) {
-    const href = description.match(/href="(https?:\/\/(?!news\.google\.com)[^"]+)"/i)?.[1]
-    if (href) return href.replace(/&amp;/g, '&')
+// ══════════════════════════════════════════════════════════════════════
+// Google News RSS v4 — 실제 기사 URL 완전 추출
+// 참조: SSujitX/google-news-url-decoder, gnewsdecoder 알고리즘
+//
+// 전략 (우선순위 순):
+//  1. rawDescription의 <a href> — 가장 안정적 (Google News description에 원본 링크 포함)
+//  2. rawDescription 내 non-google URL 패턴
+//  3. Google News 페이지 fetch → location/canonical/og:url
+//  4. 리다이렉트 follow → 최종 URL
+// ══════════════════════════════════════════════════════════════════════
+async function resolveGoogleNewsUrl(gnUrl, rawDescription) {
+  // ── 전략 0: gnewsdecoder 방식 — base64 디코딩 (SSujitX 알고리즘)
+  // 참조: https://github.com/SSujitX/google-news-url-decoder
+  try {
+    const gnMatch = gnUrl.match(/articles\/([A-Za-z0-9_-]{20,})/)
+    if (gnMatch) {
+      const b64 = gnMatch[1].replace(/-/g, '+').replace(/_/g, '/')
+      const padded = b64 + '='.repeat((4 - b64.length % 4) % 4)
+      try {
+        const buf = typeof atob !== 'undefined'
+          ? Uint8Array.from(atob(padded), c => c.charCodeAt(0))
+          : Buffer.from(padded, 'base64')
+        const str = typeof TextDecoder !== 'undefined'
+          ? new TextDecoder().decode(buf)
+          : buf.toString('utf8')
+        const urlInStr = str.match(/https?:\/\/(?!news\.google\.)[^\s"'<>\x00-\x1f]{15,400}/)
+        if (urlInStr) {
+          const decoded = urlInStr[0].replace(/\x00.*$/, '').trim()
+          if (!decoded.includes('google.com')) return decoded
+        }
+      } catch {}
+    }
+  } catch {}
+
+  // ── 전략 1: rawDescription HTML에서 실제 기사 href 추출 (최우선)
+  if (rawDescription) {
+    // <a href="실제URL"> 패턴 (Google News description에 원본 링크 href 포함)
+    const hrefMatches = [...rawDescription.matchAll(/href=["'](https?:\/\/(?!news\.google\.com)[^"'&\s]{10,500})["']/gi)]
+    for (const m of hrefMatches) {
+      const href = m[1].replace(/&amp;/g, '&').replace(/&#38;/g, '&')
+      if (href && !href.includes('google.com') && href.startsWith('http')) return href
+    }
+    // URL 직접 패턴 (href 없이 텍스트로 존재하는 경우)
+    const urlMatch = rawDescription.match(/https?:\/\/(?!(?:news\.google\.com|t\.co))[^\s"'<>]{20,500}/i)
+    if (urlMatch) return urlMatch[0].replace(/&amp;/g, '&').split('&hl=')[0].split('&ved=')[0]
   }
-  // 2. Google News 페이지 fetch → og:url or canonical 추출
+
+  // ── 전략 2: Google News 페이지 직접 fetch (다양한 User-Agent)
+  const userAgents = [
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  ]
+  for (const ua of userAgents) {
+    try {
+      const r = await fetch(gnUrl, {
+        headers: {
+          'User-Agent': ua,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Referer': 'https://news.google.com/',
+        },
+        redirect: 'follow',
+        signal: AbortSignal.timeout(8000),
+      })
+      const finalUrl = r.url || gnUrl
+      // 리다이렉트 후 실제 기사 도메인이면 즉시 반환
+      if (finalUrl && !finalUrl.includes('news.google.com') && finalUrl.startsWith('http')) {
+        return finalUrl
+      }
+      if (!r.ok) continue
+      const html = await r.text()
+
+      // og:url / canonical 추출
+      const ogUrl = html.match(/<meta[^>]+property=["']og:url["'][^>]+content=["']([^"']{15,500})["']/i)?.[1]
+        || html.match(/<meta[^>]+content=["']([^"']{15,500})["'][^>]+property=["']og:url["']/i)?.[1]
+      if (ogUrl && !ogUrl.includes('news.google.com') && ogUrl.startsWith('http')) return ogUrl
+
+      const canonical = html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']{15,500})["']/i)?.[1]
+      if (canonical && !canonical.includes('news.google.com') && canonical.startsWith('http')) return canonical
+
+      // JSON-LD / JS 내 실제 URL 패턴들 (Google News HTML 구조 — 여러 변형 처리)
+      const jsPatterns = [
+        /"url"\s*:\s*"(https?:\/\/(?!(?:news\.google\.com|google\.com|googleapis\.com))[^"]{15,400})"/,
+        /\["https?:\/\/[^"]+",null,\["(https?:\/\/(?!news\.google\.com)[^"]{15,400})"\]/,
+        /data-url=["'](https?:\/\/(?!news\.google\.com)[^"']{15,400})["']/i,
+        /"articleUrl"\s*:\s*"(https?:\/\/[^"]{15,400})"/,
+        /itemid=["'](https?:\/\/[^"']{15,400})["']/i,
+        /hl=ko&.*?url=(https?[^&"'\s]{15,400})/i,
+        // JSON-LD 구조
+        /"mainEntityOfPage"\s*:\s*\{[^}]*"@id"\s*:\s*"(https?:\/\/[^"]{15,400})"/,
+      ]
+      for (const p of jsPatterns) {
+        try {
+          const m = html.match(p)
+          const candidate = m?.[1]
+          if (candidate && !candidate.includes('google.com') && candidate.startsWith('http')) {
+            const clean = decodeURIComponent(candidate.replace(/\\u003d/g, '=').replace(/\\u0026/g, '&').replace(/\\/g, ''))
+            if (clean.startsWith('http') && !clean.includes('google.com')) return clean
+          }
+        } catch {}
+      }
+
+      // 한 번 성공적으로 HTML 받았으면 더 이상 다른 UA로 시도 불필요
+      break
+    } catch { continue }
+  }
+
+  // ── 전략 3: 리다이렉트 체인 추적 (HEAD → GET fallback)
   try {
     const r = await fetch(gnUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
+      method: 'HEAD',
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; InsightshipBot/2.0 +https://insightship.pacm.kr)' },
       redirect: 'follow',
       signal: AbortSignal.timeout(6000),
     })
-    if (!r.ok) return null
-    const html = await r.text()
-    // JS 내 실제 URL 패턴들
-    const patterns = [
-      /\["([^"]*?)",null,\["([^"]+?\.(?:co\.kr|com|net|org|kr)(?:\/[^"]*)?)"]/,
-      /"url":"(https?:\/\/(?!news\.google\.com)[^"]{20,300})"/,
-    ]
-    for (const p of patterns) {
-      const m = html.match(p)
-      const candidate = m?.[2] || m?.[1]
-      if (candidate && !candidate.includes('google.com')) return candidate
+    const loc = r.url || r.headers.get('location')
+    if (loc && !loc.includes('news.google.com') && loc.startsWith('http')) return loc
+  } catch {}
+
+  // ── 전략 4: gnUrl의 query param에서 url= 파라미터 추출
+  try {
+    const urlObj = new URL(gnUrl)
+    const paramUrl = urlObj.searchParams.get('url') || urlObj.searchParams.get('q')
+    if (paramUrl && paramUrl.startsWith('http') && !paramUrl.includes('google.com')) {
+      return decodeURIComponent(paramUrl)
     }
   } catch {}
+
   return null
 }
 
@@ -272,42 +373,82 @@ function cleanBodyHtml(raw) {
     .trim()
 }
 
-// 언론사별 특화 본문 추출 패턴 (주요 한국 언론사 CSS 구조)
+// 언론사별 특화 본문 추출 패턴 (주요 한국 언론사 CSS 구조 — 30개 언론사 v22)
 const SITE_PATTERNS = [
-  // 네이버 뉴스
+  // 네이버 뉴스 — id 우선, class 폴백
   { host: 'n.news.naver.com',   re: /<div[^>]+id=["']newsct_article["'][^>]*>([\s\S]*?)<\/div>/i },
   { host: 'news.naver.com',     re: /<div[^>]+id=["']newsct_article["'][^>]*>([\s\S]*?)<\/div>/i },
-  // 한국경제, 서울경제 등
+  // 한국경제, 서울경제, 머니투데이, 파이낸셜뉴스
   { host: 'hankyung.com',       re: /<div[^>]+class=["'][^"']*article-body[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
   { host: 'sedaily.com',        re: /<div[^>]+class=["'][^"']*article_view[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
-  // 연합뉴스, 뉴시스
+  { host: 'mt.co.kr',           re: /<div[^>]+class=["'][^"']*articleBody[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  { host: 'fnnews.com',         re: /<div[^>]+class=["'][^"']*article_txt[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  // 연합뉴스, 뉴시스, 뉴스1
   { host: 'yna.co.kr',          re: /<div[^>]+class=["'][^"']*article-txt[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
   { host: 'newsis.com',         re: /<div[^>]+class=["'][^"']*article_txt[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
-  // VentureSquare, Platum, StartupToday
+  { host: 'news1.kr',           re: /<div[^>]+class=["'][^"']*article-content[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  // VentureSquare, Platum, StartupToday, 아웃스탠딩, BeSuccess
   { host: 'venturesquare.net',  re: /<div[^>]+class=["'][^"']*entry-content[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
   { host: 'platum.kr',          re: /<div[^>]+class=["'][^"']*entry-content[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
   { host: 'startuptoday.kr',    re: /<div[^>]+class=["'][^"']*article-body[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  { host: 'outstanding.kr',     re: /<div[^>]+class=["'][^"']*entry-content[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  { host: 'besuccess.com',      re: /<div[^>]+class=["'][^"']*entry-content[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  // ZDNet, 전자신문, 서울신문, 조선비즈
   { host: 'zdnet.co.kr',        re: /<div[^>]+class=["'][^"']*article_view[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
   { host: 'etnews.com',         re: /<div[^>]+class=["'][^"']*article_txt[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  { host: 'seoul.co.kr',        re: /<div[^>]+class=["'][^"']*article_content[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  { host: 'biz.chosun.com',     re: /<div[^>]+class=["'][^"']*article-body[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  // 비즈워치, 이데일리, 아이뉴스, 디지털타임스
+  { host: 'bizwatch.co.kr',     re: /<div[^>]+class=["'][^"']*article_body[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  { host: 'edaily.co.kr',       re: /<div[^>]+class=["'][^"']*news_body[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  { host: 'inews24.com',        re: /<div[^>]+class=["'][^"']*article-body[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  { host: 'dt.co.kr',           re: /<div[^>]+class=["'][^"']*article_content[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  // 중기부 등 정부기관
+  { host: 'mss.go.kr',          re: /<div[^>]+class=["'][^"']*view_content[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  { host: 'k-startup.go.kr',    re: /<div[^>]+class=["'][^"']*view_content[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  { host: 'koita.or.kr',        re: /<div[^>]+class=["'][^"']*content[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  // 매경, 한경닷컴, 서울경제
+  { host: 'mk.co.kr',           re: /<div[^>]+class=["'][^"']*art_txt[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  { host: 'hankyung.com',       re: /<div[^>]+id=["']newsView["'][^>]*>([\s\S]*?)<\/div>/i },
+  // 헤럴드경제, 아시아경제
+  { host: 'heraldcorp.com',     re: /<div[^>]+class=["'][^"']*article-body[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  { host: 'asiae.co.kr',        re: /<div[^>]+class=["'][^"']*articleView[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  // 더밀크, 테크M, 블로터
+  { host: 'themilk.com',        re: /<div[^>]+class=["'][^"']*entry-content[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  { host: 'techm.kr',           re: /<div[^>]+class=["'][^"']*article-body[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
+  { host: 'bloter.net',         re: /<div[^>]+class=["'][^"']*entry-content[^"']*["'][^>]*>([\s\S]*?)<\/div>/i },
 ]
 
-// 범용 본문 추출 패턴 (우선순위 순)
+// 범용 본문 추출 패턴 (우선순위 순 — 강화 v4)
 const GENERIC_PATTERNS = [
-  /<article[^>]*>([\s\S]*?)<\/article>/i,
-  /<main[^>]*>([\s\S]*?)<\/main>/i,
-  /<div[^>]+id=["'](?:article|content|newsct_article|articleBody|news-body|article-body|story-body)[^"']*["'][^>]*>([\s\S]{200,}?)<\/div>/i,
-  /<div[^>]+class=["'][^"']*(?:entry-content|article-content|article-body|news-content|post-content|article_body|article_content|articleBody|story-body)[^"']*["'][^>]*>([\s\S]{200,}?)<\/div>/i,
-  /<section[^>]+class=["'][^"']*(?:article|content|body)[^"']*["'][^>]*>([\s\S]{200,}?)<\/section>/i,
-  /<div[^>]+(?:itemprop=["']articleBody["'])[^>]*>([\s\S]{200,}?)<\/div>/i,
+  // JSON-LD articleBody
+  /"articleBody":\s*"([^"]{200,10000})"/i,
+  // 시맨틱 태그
+  /<article[^>]*>([\s\S]{200,}?)<\/article>/i,
+  /<main[^>]*>([\s\S]{200,}?)<\/main>/i,
+  // ID 기반 (확장)
+  /<div[^>]+id=["'](?:newsct_article|articleBody|article-body|article-content|news-body|story-body|content-body|main-content|articleView|article_body|newsBody)[^"']*["'][^>]*>([\s\S]{200,}?)<\/div>/i,
+  // class 기반 (확장)
+  /<div[^>]+class=["'][^"']*(?:entry-content|article-content|article-body|news-content|post-content|article_body|article_content|articleBody|story-body|news-body|article-text|article_text|view_content|read-content|body-content|cont_view|article_view_content)[^"']*["'][^>]*>([\s\S]{200,}?)<\/div>/i,
+  /<section[^>]+class=["'][^"']*(?:article|content|body|news)[^"']*["'][^>]*>([\s\S]{200,}?)<\/section>/i,
+  // itemprop
+  /<(?:div|section|article)[^>]+itemprop=["'](?:articleBody|description)["'][^>]*>([\s\S]{200,}?)<\/(?:div|section|article)>/i,
+  // p 태그 집합 (마지막 수단)
+  /(<p>[\s\S]{50,500}<\/p>(?:\s*<p>[\s\S]{50,500}<\/p>){2,})/i,
 ]
 
-async function fetchArticleContent(url, gnDescription) {
+async function fetchArticleContent(url, rawDescription) {
   // Google News URL인 경우 실제 기사 URL로 변환
   let actualUrl = url
   if (url && url.includes('news.google.com')) {
-    const resolved = await resolveGoogleNewsUrl(url, gnDescription)
-    if (resolved) actualUrl = resolved
-    else return { image: null, ogTitle: null, description: '', bodyText: '' }
+    // rawDescription (HTML 원본) 전달 → href에서 실제 URL 추출
+    const resolved = await resolveGoogleNewsUrl(url, rawDescription)
+    if (resolved) {
+      actualUrl = resolved
+    } else {
+      // 실패해도 빈 본문 반환 (제목+설명은 이미 있음) — 완전 포기 대신 빈 본문으로 계속
+      return { image: null, ogTitle: null, description: '', bodyText: '', gnFailed: true }
+    }
   }
 
   try {
@@ -350,24 +491,35 @@ async function fetchArticleContent(url, gnDescription) {
     } catch {}
 
     // 단계 3: 범용 패턴 시도
-    if (!bodyText) {
+    if (!bodyText || bodyText.length < 300) {
       for (const pat of GENERIC_PATTERNS) {
         const m = html.match(pat)
         if (m) {
           const cleaned = cleanBodyHtml(m[1] || m[2] || '')
-          if (cleaned.length > 200) { bodyText = cleaned.slice(0, 4000); break }
+          if (cleaned.length > bodyText.length && cleaned.length > 200) {
+            bodyText = cleaned.slice(0, 4000)
+            if (bodyText.length >= 500) break  // 충분하면 중단
+          }
         }
       }
     }
 
     // 단계 4: 텍스트 밀도 기반 추출 (Kohlschütter 2010)
-    if (!bodyText || bodyText.length < 300) {
+    if (!bodyText || bodyText.length < 400) {
       const densityText = extractByDensity(html)
       const cleaned = cleanBodyHtml(densityText)
       if (cleaned.length > bodyText.length) bodyText = cleaned.slice(0, 4000)
     }
 
-    // 단계 5: og:description fallback
+    // 단계 5: <p> 태그 직접 수집 (4단계까지 실패 시)
+    if (!bodyText || bodyText.length < 200) {
+      const pTags = [...html.matchAll(/<p[^>]*>([\s\S]{40,800}?)<\/p>/gi)]
+        .map(m => cleanBodyHtml(m[1]))
+        .filter(t => t.length >= 40 && !/(광고|스팸|구독|팔로우|공유하기)/i.test(t))
+      if (pTags.length >= 2) bodyText = pTags.slice(0, 15).join(' ').slice(0, 4000)
+    }
+
+    // 단계 6: og:description fallback
     const rawDesc = getMeta('og:description') || getMeta('description') || getMeta('twitter:description') || ''
     const cleanDesc = cleanBodyHtml(rawDesc).slice(0, 400)
 

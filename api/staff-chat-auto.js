@@ -866,7 +866,28 @@ async function runAutonomousWorkReports(rooms = ['ops', 'strategy']) {
 // ══════════════════════════════════════════════════════════════════════
 
 export default async function handler(req) {
+  // ── 전역 오류 방어 — 어떤 예외도 500 text 대신 JSON으로 처리 ──────
+  try {
+    return await _handleAutoRequest(req)
+  } catch (err) {
+    const msg = (err?.message || String(err)).slice(0, 200)
+    console.error('[staff-chat-auto] unhandled:', msg)
+    return new Response(JSON.stringify({ error: 'Internal error', detail: msg, ok: false }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...CORS },
+    })
+  }
+}
+
+async function _handleAutoRequest(req) {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS })
+
+  // ── 환경변수 조기 검증 ───────────────────────────────────────────
+  const sbUrl = process.env.SUPABASE_URL || SB_URL
+  const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || SB_KEY
+  if (!sbUrl || !sbKey) {
+    return json({ error: 'Missing Supabase env vars', ok: false }, 503)
+  }
 
   const authHeader  = req.headers.get('authorization') || ''
   const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
