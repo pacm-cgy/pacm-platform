@@ -5,7 +5,7 @@
  */
 // runtime: Node.js serverless
 
-import { generateChat, generateText } from './ai-engine.js'
+import { generateChat, generateText } from './_ai-engine.js'
 
 const SB_URL = process.env.SUPABASE_URL          // ← 서버사이드 env (VITE_ 제거)
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY

@@ -102,13 +102,49 @@ async function alreadyRanToday(taskType) {
   } catch { return false }
 }
 
+// ── v2: 운영 로그 (ai_operations_log) ───────────────────────────────
 async function logOperation(taskType, result, details='') {
   try {
     await fetch(`${SB_URL}/rest/v1/ai_operations_log`, {
-      method: 'POST',
+      method:  'POST',
       headers: { ...H(), Prefer: 'return=minimal' },
-      body: JSON.stringify({ created_at: new Date().toISOString() }),
+      body: JSON.stringify({
+        task_type:  taskType,
+        result:     result,
+        details:    details,
+        run_date:   todayKST(),
+        created_at: new Date().toISOString(),
+      }),
     }).catch(() => {})
+  } catch {}
+}
+
+// ── v2 신규: 자율 판단 로그 (ai_decision_log) ─────────────────────────
+// ARIA가 내린 모든 자율 판단을 기록 — 투명성 & 감사 추적
+async function logDecision({
+  decision_type,   // 판단 유형 (post/skip/escalate/monitor/plan 등)
+  context = {},    // 판단 당시 컨텍스트 (stats, kst hour, dow 등)
+  reasoning = '',  // 판단 근거 (자연어 설명)
+  action_taken = '',  // 실제 수행한 액션
+  outcome = 'pending', // success/fail/partial/skipped
+  confidence = 0.8,    // 확신도 0~1
+}) {
+  try {
+    await fetch(`${SB_URL}/rest/v1/ai_decision_log`, {
+      method:  'POST',
+      headers: { ...H(), Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        operator:      'ARIA',
+        decision_type,
+        context,
+        reasoning,
+        action_taken,
+        outcome,
+        confidence,
+        run_date:   todayKST(),
+        created_at: new Date().toISOString(),
+      }),
+    }).catch(() => {}) // 비동기 실패 무시 — 로그 실패가 운영을 막으면 안 됨
   } catch {}
 }
 
@@ -721,14 +757,35 @@ export async function handleAiPlatformOperator(req) {
     date: today,
     day_of_week: dow,
     tasks: {},
-    engine: 'ARIA-v3',
+    engine: 'ARIA-v3.1',
     agent: 'ARIA',
     external_api_cost: 0,
+    decision_log_enabled: true,
+  }
+
+  // ── 공통 컨텍스트 (모든 판단 로그에 포함) ───────────────────────
+  const sharedCtx = {
+    kst_hour: kst.getHours(),
+    dow,
+    week,
+    new_users: stats.newUsers?.length || 0,
+    weekly_posts: stats.weeklyPosts?.length || 0,
+    weekly_news: stats.weeklyNews?.length || 0,
+    feedback_bad: stats.feedbackStats?.bad || 0,
   }
 
   // ── 태스크 A: 일일 공지사항 ─────────────────────────────────────
   const noticeAlreadyDone = await alreadyRanToday('daily_notice')
   if (!noticeAlreadyDone) {
+    // 【판단 로그】 ARIA가 공지를 게시하기로 결정
+    await logDecision({
+      decision_type: 'post',
+      context: { ...sharedCtx, task: 'daily_notice', template_dow: dow },
+      reasoning: `오늘(${kstDateStr()}) 공지가 미발행 상태. 커뮤니티 정보 공유를 위해 일일 공지를 생성·게시하기로 판단.`,
+      action_taken: 'publish_daily_notice',
+      outcome: 'pending',
+      confidence: 0.95,
+    })
     try {
       const tpl = NOTICE_TEMPLATES[dow] || NOTICE_TEMPLATES[1]
       const notice = tpl(stats, kst)
@@ -736,15 +793,40 @@ export async function handleAiPlatformOperator(req) {
       if (r.ok) {
         await sendNotifications(notice.title, r.id)
         await logOperation('daily_notice', 'success', notice.title)
+        await logDecision({
+          decision_type: 'post',
+          context: { ...sharedCtx, task: 'daily_notice', post_id: r.id },
+          reasoning: '공지 게시 성공. 알림 발송 완료.',
+          action_taken: `published post_id:${r.id}`,
+          outcome: 'success',
+          confidence: 1.0,
+        })
         results.tasks.daily_notice = { ok: true, title: notice.title, post_id: r.id }
       } else {
         await logOperation('daily_notice', 'error', JSON.stringify(r.error))
+        await logDecision({
+          decision_type: 'post',
+          context: { ...sharedCtx, task: 'daily_notice', error: r.error },
+          reasoning: 'publishCommunityPost 실패. DB 오류 가능성.',
+          action_taken: 'publish_failed',
+          outcome: 'fail',
+          confidence: 1.0,
+        })
         results.tasks.daily_notice = { ok: false, error: r.error }
       }
     } catch(e) {
       results.tasks.daily_notice = { ok: false, error: e.message }
     }
   } else {
+    // 【판단 로그】 오늘 이미 실행됨 → 스킵 결정
+    await logDecision({
+      decision_type: 'skip',
+      context: { ...sharedCtx, task: 'daily_notice' },
+      reasoning: '오늘 일일 공지가 이미 게시됨. 중복 방지를 위해 스킵.',
+      action_taken: 'skip',
+      outcome: 'skipped',
+      confidence: 1.0,
+    })
     results.tasks.daily_notice = { skipped: true, reason: 'already_ran_today' }
   }
 
@@ -752,12 +834,28 @@ export async function handleAiPlatformOperator(req) {
   if ([1, 3, 5].includes(dow)) {
     const discussAlreadyDone = await alreadyRanToday('community_discussion')
     if (!discussAlreadyDone) {
+      await logDecision({
+        decision_type: 'post',
+        context: { ...sharedCtx, task: 'community_discussion', scheduled_days: [1,3,5] },
+        reasoning: `오늘(dow=${dow})은 커뮤니티 토론 게시 요일. 미발행 상태 확인 → 토론 포스트 생성 결정.`,
+        action_taken: 'publish_discussion_post',
+        outcome: 'pending',
+        confidence: 0.9,
+      })
       try {
         const idx = (week + dow) % DISCUSSION_TOPICS.length
         const topic = DISCUSSION_TOPICS[idx]
         const r = await publishCommunityPost(adminId, { ...topic, postType: 'question' })
         if (r.ok) {
           await logOperation('community_discussion', 'success', topic.title)
+          await logDecision({
+            decision_type: 'post',
+            context: { ...sharedCtx, task: 'community_discussion', post_id: r.id, topic_idx: idx },
+            reasoning: `토론 포스트 "${topic.title}" 게시 성공.`,
+            action_taken: `published post_id:${r.id}`,
+            outcome: 'success',
+            confidence: 1.0,
+          })
           results.tasks.community_discussion = { ok: true, title: topic.title, post_id: r.id }
         } else {
           results.tasks.community_discussion = { ok: false, error: r.error }
@@ -766,17 +864,49 @@ export async function handleAiPlatformOperator(req) {
         results.tasks.community_discussion = { ok: false, error: e.message }
       }
     } else {
+      await logDecision({
+        decision_type: 'skip',
+        context: { ...sharedCtx, task: 'community_discussion' },
+        reasoning: '오늘 커뮤니티 토론이 이미 게시됨 → 스킵.',
+        action_taken: 'skip',
+        outcome: 'skipped',
+        confidence: 1.0,
+      })
       results.tasks.community_discussion = { skipped: true, reason: 'already_ran_today' }
     }
   } else {
+    await logDecision({
+      decision_type: 'skip',
+      context: { ...sharedCtx, task: 'community_discussion' },
+      reasoning: `오늘(dow=${dow})은 토론 게시 비예약일 (월·수·금만). 스킵.`,
+      action_taken: 'skip',
+      outcome: 'skipped',
+      confidence: 1.0,
+    })
     results.tasks.community_discussion = { skipped: true, reason: 'not_scheduled_today' }
   }
 
   // ── 태스크 C: 커뮤니티 활성화 3단계 플랜 (수요일마다 실행) ──────
   if (dow === 3) {
+    await logDecision({
+      decision_type: 'plan',
+      context: { ...sharedCtx, task: 'activation_plan', phase: week % 3 === 0 ? 'Seed' : week % 3 === 1 ? 'Grow' : 'Amplify' },
+      reasoning: `수요일 → 활성화 플랜 실행. 현재 주차(${week}) 기반 단계 결정.`,
+      action_taken: 'run_activation_plan',
+      outcome: 'pending',
+      confidence: 0.88,
+    })
     try {
       const activationResult = await runActivationPlan(adminId, stats, week)
       await logOperation('activation_plan', 'success', activationResult.activation_phase)
+      await logDecision({
+        decision_type: 'plan',
+        context: { ...sharedCtx, task: 'activation_plan', phase: activationResult.activation_phase },
+        reasoning: `활성화 플랜 "${activationResult.activation_phase}" 단계 실행 성공.`,
+        action_taken: `activation_phase:${activationResult.activation_phase}`,
+        outcome: 'success',
+        confidence: 0.92,
+      })
       results.tasks.activation_plan = { ok: true, ...activationResult }
     } catch(e) {
       results.tasks.activation_plan = { ok: false, error: e.message }
@@ -787,10 +917,26 @@ export async function handleAiPlatformOperator(req) {
 
   // ── 태스크 D: 월별 이벤트 (매달 1일) ────────────────────────────
   if (kst.getDate() === 1) {
+    await logDecision({
+      decision_type: 'event',
+      context: { ...sharedCtx, task: 'monthly_event', month: kst.getMonth()+1 },
+      reasoning: `매달 1일 → 월별 이벤트 자동 생성 결정. ${kst.getMonth()+1}월 이벤트 생성.`,
+      action_taken: 'create_monthly_event',
+      outcome: 'pending',
+      confidence: 0.95,
+    })
     try {
       const eventId = await createMonthlyEvent(adminId, stats)
       if (eventId) {
         await logOperation('monthly_event', 'success', `event_id: ${eventId}`)
+        await logDecision({
+          decision_type: 'event',
+          context: { ...sharedCtx, task: 'monthly_event', event_id: eventId },
+          reasoning: `${kst.getMonth()+1}월 이벤트 생성 성공 (event_id: ${eventId}).`,
+          action_taken: `created event_id:${eventId}`,
+          outcome: 'success',
+          confidence: 1.0,
+        })
         results.tasks.monthly_event = { ok: true, event_id: eventId }
       } else {
         results.tasks.monthly_event = { skipped: true, reason: 'already_exists_this_month' }
@@ -803,8 +949,28 @@ export async function handleAiPlatformOperator(req) {
   }
 
   // ── 태스크 E: 신규 가입자 환영 (매일) ───────────────────────────
+  if (stats.newUsers?.length > 0) {
+    await logDecision({
+      decision_type: 'welcome',
+      context: { ...sharedCtx, task: 'welcome_new_users', new_user_count: stats.newUsers.length },
+      reasoning: `오늘 신규 가입자 ${stats.newUsers.length}명 감지 → 환영 메시지 발송 결정.`,
+      action_taken: 'send_welcome_messages',
+      outcome: 'pending',
+      confidence: 0.97,
+    })
+  }
   try {
     const welcomeResult = await welcomeNewUsers(adminId, stats.newUsers)
+    if (stats.newUsers?.length > 0) {
+      await logDecision({
+        decision_type: 'welcome',
+        context: { ...sharedCtx, task: 'welcome_new_users', welcomed: stats.newUsers.length },
+        reasoning: '신규 가입자 환영 처리 완료.',
+        action_taken: `welcomed ${stats.newUsers.length} users`,
+        outcome: 'success',
+        confidence: 1.0,
+      })
+    }
     results.tasks.welcome_new_users = {
       ok: true,
       new_count: stats.newUsers.length,
@@ -814,9 +980,53 @@ export async function handleAiPlatformOperator(req) {
     results.tasks.welcome_new_users = { ok: false, error: e.message }
   }
 
-  // ── 태스크 F: 플랫폼 현황 로그 (매일) ───────────────────────────
+  // ── 태스크 F: 플랫폼 현황 로그 (매일) + 자율 판단 종합 기록 ─────
+  // 【핵심 판단】 피드백 부정률이 높으면 에스컬레이션 결정
+  const feedbackBadRate = stats.feedbackStats?.total > 0
+    ? stats.feedbackStats.bad / stats.feedbackStats.total
+    : 0
+  if (feedbackBadRate > 0.3) {
+    await logDecision({
+      decision_type: 'escalate',
+      context: { ...sharedCtx, feedback_bad_rate: feedbackBadRate, feedback_total: stats.feedbackStats.total },
+      reasoning: `부정 피드백 비율 ${Math.round(feedbackBadRate*100)}% — 임계값(30%) 초과. 운영팀 에스컬레이션 필요.`,
+      action_taken: 'log_escalation_flag',
+      outcome: 'partial',
+      confidence: 0.85,
+    })
+    results.escalation_flag = { feedback_bad_rate: feedbackBadRate }
+  }
+
+  // 신규 가입자 급증 감지 (20명 초과 시 주목)
+  if (stats.newUsers?.length > 20) {
+    await logDecision({
+      decision_type: 'monitor',
+      context: { ...sharedCtx, surge_users: stats.newUsers.length },
+      reasoning: `신규 가입자 급증(${stats.newUsers.length}명). 비정상 가입 여부 모니터링 결정.`,
+      action_taken: 'flag_user_surge_monitor',
+      outcome: 'partial',
+      confidence: 0.75,
+    })
+  }
+
   await logOperation('platform_monitoring', 'success',
     `news:${stats.weeklyNews.length} posts:${stats.weeklyPosts.length} ideas:${stats.weeklyIdeas} users:+${stats.newUsers.length} feedback:${stats.feedbackStats.total}`)
+
+  // 최종 종합 판단 로그
+  await logDecision({
+    decision_type: 'summary',
+    context: {
+      ...sharedCtx,
+      tasks_run: Object.keys(results.tasks).filter(k => results.tasks[k]?.ok === true).length,
+      tasks_skipped: Object.keys(results.tasks).filter(k => results.tasks[k]?.skipped).length,
+      tasks_failed: Object.keys(results.tasks).filter(k => results.tasks[k]?.ok === false).length,
+    },
+    reasoning: 'ARIA 일일 자율 운영 사이클 완료. 모든 판단 내역을 ai_decision_log에 기록.',
+    action_taken: 'cycle_complete',
+    outcome: 'success',
+    confidence: 1.0,
+  })
+
   results.tasks.platform_monitoring = {
     ok: true,
     stats: {

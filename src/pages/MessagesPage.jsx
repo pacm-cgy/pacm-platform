@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, Search, Plus, ArrowLeft, MessageSquare, X, User, Check, Loader2, Users } from 'lucide-react'
+import { Send, Search, Plus, ArrowLeft, MessageSquare, X, User, Check, CheckCheck, Loader2, Users } from 'lucide-react'
 import { Helmet } from 'react-helmet-async'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store'
@@ -110,6 +110,29 @@ function NewConvModal({ user, onClose, onCreated }) {
   )
 }
 
+/* ── 타이핑 인디케이터 도트 애니메이션 ─────────────────────────────── */
+function TypingDots() {
+  return (
+    <div style={{ display:'flex', alignItems:'flex-end', gap:8, padding:'4px 0' }}>
+      <div style={{ width:26, height:26, borderRadius:'50%', background:'var(--blue-dim)', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <User size={12} color="var(--blue)"/>
+      </div>
+      <div style={{ padding:'10px 14px', borderRadius:'14px 14px 14px 3px', background:'var(--bg3)', border:'1px solid var(--b1)', display:'flex', alignItems:'center', gap:4 }}>
+        <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--t3)', display:'inline-block', animation:'typingBounce 1.2s ease-in-out infinite' }}/>
+        <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--t3)', display:'inline-block', animation:'typingBounce 1.2s ease-in-out 0.2s infinite' }}/>
+        <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--t3)', display:'inline-block', animation:'typingBounce 1.2s ease-in-out 0.4s infinite' }}/>
+      </div>
+    </div>
+  )
+}
+
+/* ── 읽음 수신 아이콘 ──────────────────────────────────────────────── */
+function ReadReceipt({ isRead, isSending }) {
+  if (isSending) return <Loader2 size={10} color="rgba(255,255,255,.5)" style={{ animation:'spin 1s linear infinite' }}/>
+  if (isRead)   return <CheckCheck size={10} color="#22C55E"/>
+  return <Check size={10} color="rgba(255,255,255,.5)"/>
+}
+
 /* ── 메인 컴포넌트 ─────────────────────────────────────────────────── */
 export default function MessagesPage() {
   const { user } = useAuthStore()
@@ -123,6 +146,12 @@ export default function MessagesPage() {
   const [showNew, setShowNew]     = useState(false)
   const [convSearch, setConvSearch] = useState('')
   const [unreadCounts, setUnreadCounts] = useState({})
+
+  // ── 타이핑 인디케이터 상태 ─────────────────────────────────────────
+  const [isTyping, setIsTyping]         = useState(false)   // 상대방이 입력 중인지
+  const [myTypingTimer, setMyTypingTimer] = useState(null)  // 내 타이핑 타이머 ref
+  const presenceChannelRef = useRef(null)                    // Presence 채널 ref
+
   const msgEndRef  = useRef(null)
   const inputRef   = useRef(null)
 
@@ -159,32 +188,120 @@ export default function MessagesPage() {
 
   useEffect(() => { loadConvs() }, [loadConvs])
 
-  // 활성 대화방 실시간 구독
+  // ── 활성 대화방 실시간 구독 (메시지 INSERT) ────────────────────────
   useEffect(() => {
     if (!activeConv) return
     loadMessages(activeConv.id)
-    const sub = supabase
+
+    const msgSub = supabase
       .channel(`msgs-${activeConv.id}`)
       .on('postgres_changes', {
         event:'INSERT', schema:'public', table:'messages',
         filter:`conv_id=eq.${activeConv.id}`
       }, payload => {
         setMessages(prev => {
-          // 중복 방지
           if (prev.some(m => m.id === payload.new.id)) return prev
           return [...prev, payload.new]
         })
         setTimeout(() => msgEndRef.current?.scrollIntoView({ behavior:'smooth' }), 50)
-        // 자신이 아닌 메시지는 바로 읽음 처리
+        // 상대방 메시지 → 즉시 읽음 처리
         if (payload.new.sender_id !== user?.id) {
           supabase.from('messages').update({ is_read:true }).eq('id', payload.new.id).then(()=>{})
           setUnreadCounts(prev => ({ ...prev, [activeConv.id]: 0 }))
         }
       })
+      // ── 내 메시지의 is_read 업데이트 실시간 반영 ──
+      .on('postgres_changes', {
+        event:'UPDATE', schema:'public', table:'messages',
+        filter:`conv_id=eq.${activeConv.id}`
+      }, payload => {
+        setMessages(prev => prev.map(m =>
+          m.id === payload.new.id ? { ...m, is_read: payload.new.is_read } : m
+        ))
+      })
       .subscribe()
-    return () => sub.unsubscribe()
+
+    return () => msgSub.unsubscribe()
+  }, [activeConv, user]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Presence 채널 — 타이핑 인디케이터 ─────────────────────────────
+  useEffect(() => {
+    if (!activeConv || !user) {
+      // 이전 presence 채널 정리
+      if (presenceChannelRef.current) {
+        supabase.removeChannel(presenceChannelRef.current)
+        presenceChannelRef.current = null
+      }
+      setIsTyping(false)
+      return
+    }
+
+    const channelName = `typing:${activeConv.id}`
+    const ch = supabase.channel(channelName, {
+      config: { presence: { key: user.id } }
+    })
+
+    ch.on('presence', { event: 'sync' }, () => {
+      const state = ch.presenceState()
+      // 나 외의 사용자가 typing:true 상태이면 인디케이터 표시
+      const othersTyping = Object.entries(state)
+        .filter(([key]) => key !== user.id)
+        .some(([, presences]) => presences.some(p => p.typing === true))
+      setIsTyping(othersTyping)
+    })
+
+    ch.on('presence', { event: 'join' }, ({ newPresences }) => {
+      const otherTyping = newPresences
+        .filter(p => p.user_id !== user.id)
+        .some(p => p.typing === true)
+      if (otherTyping) setIsTyping(true)
+    })
+
+    ch.on('presence', { event: 'leave' }, () => {
+      const state = ch.presenceState()
+      const othersTyping = Object.entries(state)
+        .filter(([key]) => key !== user.id)
+        .some(([, presences]) => presences.some(p => p.typing === true))
+      setIsTyping(othersTyping)
+    })
+
+    ch.subscribe(async status => {
+      if (status === 'SUBSCRIBED') {
+        await ch.track({ user_id: user.id, typing: false })
+      }
+    })
+
+    presenceChannelRef.current = ch
+
+    return () => {
+      supabase.removeChannel(ch)
+      presenceChannelRef.current = null
+      setIsTyping(false)
+    }
   }, [activeConv, user])
 
+  // ── 입력창 변경 → Presence typing 상태 브로드캐스트 ───────────────
+  function handleInputChange(e) {
+    setInput(e.target.value)
+    broadcastTyping(e.target.value.length > 0)
+  }
+
+  function broadcastTyping(typing) {
+    const ch = presenceChannelRef.current
+    if (!ch || !user) return
+    // 기존 타이머 초기화
+    if (myTypingTimer) clearTimeout(myTypingTimer)
+    ch.track({ user_id: user.id, typing })
+    if (typing) {
+      // 3초 후 자동으로 typing: false 브로드캐스트
+      const timer = setTimeout(() => {
+        ch.track({ user_id: user.id, typing: false })
+      }, 3000)
+      setMyTypingTimer(timer)
+    }
+  }
+
+  // ── 메시지 로드 + 읽음 처리 ───────────────────────────────────────
   async function loadMessages(convId) {
     setLoading(true)
     const { data } = await supabase
@@ -195,28 +312,43 @@ export default function MessagesPage() {
     setMessages(data || [])
     setLoading(false)
     setTimeout(() => msgEndRef.current?.scrollIntoView({ behavior:'smooth' }), 100)
-    // 읽음 처리
+    // 읽음 처리 — 상대방 메시지 전부 is_read=true
     await supabase.from('messages')
       .update({ is_read: true })
       .eq('conv_id', convId)
       .neq('sender_id', user?.id)
+      .eq('is_read', false)
     setUnreadCounts(prev => ({ ...prev, [convId]: 0 }))
   }
 
   async function selectConv(conv) {
     setActive(conv)
-    // 상대방 프로필 결정
+    setIsTyping(false)
     const other = conv.participant_a === user?.id ? conv.profile_b : conv.profile_a
     setOtherUser(other)
     inputRef.current?.focus()
   }
 
+  // ── 메시지 전송 ───────────────────────────────────────────────────
   async function sendMessage() {
     if (!input.trim() || !activeConv || !user) return
     const content = input.trim()
     setInput('')
-    // 낙관적 업데이트
-    const tempMsg = { id: `temp-${Date.now()}`, conv_id:activeConv.id, sender_id:user.id, content, is_read:false, created_at:new Date().toISOString() }
+    // 타이핑 상태 즉시 해제
+    broadcastTyping(false)
+    if (myTypingTimer) { clearTimeout(myTypingTimer); setMyTypingTimer(null) }
+
+    // 낙관적 업데이트 (sending 플래그 추가)
+    const tempId = `temp-${Date.now()}`
+    const tempMsg = {
+      id: tempId,
+      conv_id: activeConv.id,
+      sender_id: user.id,
+      content,
+      is_read: false,
+      _sending: true,
+      created_at: new Date().toISOString(),
+    }
     setMessages(prev => [...prev, tempMsg])
     setTimeout(() => msgEndRef.current?.scrollIntoView({ behavior:'smooth' }), 50)
 
@@ -224,13 +356,17 @@ export default function MessagesPage() {
       .from('messages')
       .insert({ conv_id:activeConv.id, sender_id:user.id, content })
       .select().single()
+
     if (!error && data) {
-      setMessages(prev => prev.map(m => m.id === tempMsg.id ? data : m))
+      setMessages(prev => prev.map(m => m.id === tempId ? data : m))
       // 대화방 last_msg_at 업데이트
       await supabase.from('messages_conversations')
         .update({ last_msg_at: data.created_at })
         .eq('id', activeConv.id)
       loadConvs()
+    } else {
+      // 전송 실패 → 에러 표시
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, _error: true, _sending: false } : m))
     }
   }
 
@@ -266,6 +402,7 @@ export default function MessagesPage() {
         <meta name="robots" content="noindex"/>
         <link rel="canonical" href="https://insightship.vercel.app/messages"/>
       </Helmet>
+
       {/* 페이지 헤더 */}
       <div style={{ padding:'28px var(--pad-x) 20px', borderBottom:'1px solid var(--b1)', background:'linear-gradient(180deg,rgba(59,130,246,.05) 0%,transparent 100%)' }}>
         <div style={{ maxWidth:'var(--max-w)', margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
@@ -388,7 +525,7 @@ export default function MessagesPage() {
             <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
               {/* 채팅 헤더 */}
               <div style={{ padding:'12px 18px', borderBottom:'1px solid var(--b1)', display:'flex', alignItems:'center', gap:12, background:'var(--bg2)', flexShrink:0 }}>
-                <button onClick={()=>{ setActive(null); setOtherUser(null); setMessages([]) }}
+                <button onClick={()=>{ setActive(null); setOtherUser(null); setMessages([]); setIsTyping(false) }}
                   style={{ background:'none', border:'1px solid var(--b1)', color:'var(--t2)', width:30, height:30, borderRadius:7, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                   <ArrowLeft size={14}/>
                 </button>
@@ -401,8 +538,20 @@ export default function MessagesPage() {
                   <div style={{ fontSize:14, fontWeight:600, color:'var(--t1)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                     {otherUser?.display_name || otherUser?.username || '알 수 없음'}
                   </div>
-                  {otherUser?.school && (
-                    <div style={{ fontSize:11, color:'var(--t3)', fontFamily:'var(--f-mono)' }}>{otherUser.school}</div>
+                  {/* 타이핑 인디케이터 — 헤더 서브텍스트 */}
+                  {isTyping ? (
+                    <div style={{ fontSize:11, color:'#3B82F6', fontFamily:'var(--f-mono)', display:'flex', alignItems:'center', gap:4 }}>
+                      <span style={{ display:'inline-flex', gap:2 }}>
+                        <span style={{ width:4, height:4, borderRadius:'50%', background:'#3B82F6', display:'inline-block', animation:'typingBounce 1.2s ease-in-out infinite' }}/>
+                        <span style={{ width:4, height:4, borderRadius:'50%', background:'#3B82F6', display:'inline-block', animation:'typingBounce 1.2s ease-in-out 0.2s infinite' }}/>
+                        <span style={{ width:4, height:4, borderRadius:'50%', background:'#3B82F6', display:'inline-block', animation:'typingBounce 1.2s ease-in-out 0.4s infinite' }}/>
+                      </span>
+                      입력 중...
+                    </div>
+                  ) : (
+                    otherUser?.school && (
+                      <div style={{ fontSize:11, color:'var(--t3)', fontFamily:'var(--f-mono)' }}>{otherUser.school}</div>
+                    )
                   )}
                 </div>
                 <div style={{ fontSize:9, padding:'3px 8px', borderRadius:4, background:'rgba(34,197,94,.1)', border:'1px solid rgba(34,197,94,.2)', color:'#22C55E', fontFamily:'var(--f-mono)', flexShrink:0 }}>● LIVE</div>
@@ -423,6 +572,8 @@ export default function MessagesPage() {
                   </div>
                 ) : messages.map((m, idx) => {
                   const isMe = m.sender_id === user?.id
+                  const isSending = !!m._sending
+                  const isError   = !!m._error
                   const showDate = idx === 0 || (
                     new Date(m.created_at).toDateString() !== new Date(messages[idx-1].created_at).toDateString()
                   )
@@ -445,24 +596,35 @@ export default function MessagesPage() {
                           <div style={{
                             padding:'10px 14px',
                             borderRadius: isMe ? '14px 14px 3px 14px' : '14px 14px 14px 3px',
-                            background: m.id?.startsWith('temp-') ? 'rgba(59,130,246,.6)'
+                            background: isError ? 'rgba(244,63,94,.6)'
+                              : isSending ? 'rgba(59,130,246,.5)'
                               : isMe ? '#3B82F6' : 'var(--bg3)',
                             border: isMe ? 'none' : '1px solid var(--b1)',
                             color: isMe ? '#fff' : 'var(--t1)',
                             fontSize: 13.5, lineHeight: 1.6,
                             wordBreak: 'break-word',
+                            opacity: isSending ? 0.8 : 1,
+                            transition: 'all .2s',
                           }}>
                             {m.content}
                           </div>
-                          <div style={{ fontSize:10, color:'var(--t4)', fontFamily:'var(--f-mono)', marginTop:3, textAlign:isMe?'right':'left', display:'flex', alignItems:'center', gap:4, justifyContent:isMe?'flex-end':'flex-start' }}>
-                            {format(new Date(m.created_at), 'HH:mm', { locale:ko })}
-                            {isMe && m.is_read && <Check size={10} color="#22C55E"/>}
+                          {/* 시간 + 읽음 수신 */}
+                          <div style={{ fontSize:10, color:'var(--t4)', fontFamily:'var(--f-mono)', marginTop:3, display:'flex', alignItems:'center', gap:4, justifyContent:isMe?'flex-end':'flex-start' }}>
+                            {isError && <span style={{ color:'#F43F5E', fontSize:9 }}>전송 실패</span>}
+                            {!isError && format(new Date(m.created_at), 'HH:mm', { locale:ko })}
+                            {isMe && !isError && (
+                              <ReadReceipt isRead={m.is_read} isSending={isSending}/>
+                            )}
                           </div>
                         </div>
                       </div>
                     </div>
                   )
                 })}
+
+                {/* 타이핑 인디케이터 — 메시지 목록 하단 */}
+                {isTyping && <TypingDots/>}
+
                 <div ref={msgEndRef}/>
               </div>
 
@@ -471,11 +633,12 @@ export default function MessagesPage() {
                 <input
                   ref={inputRef}
                   value={input}
-                  onChange={e=>setInput(e.target.value)}
+                  onChange={handleInputChange}
                   onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&(e.preventDefault(),sendMessage())}
+                  onBlur={()=>broadcastTyping(false)}
                   placeholder="메시지를 입력하세요... (Enter 전송)"
                   style={{ flex:1, padding:'11px 14px', background:'var(--bg3)', border:'1px solid var(--b2)', borderRadius:10, color:'var(--t1)', fontSize:13.5, fontFamily:'var(--f-sans)', outline:'none', transition:'border-color .15s' }}
-                  onFocus={e=>e.target.style.borderColor='rgba(59,130,246,.4)'} onBlur={e=>e.target.style.borderColor='var(--b2)'}
+                  onFocus={e=>e.target.style.borderColor='rgba(59,130,246,.4)'}
                 />
                 <button
                   onClick={sendMessage} disabled={!input.trim()}
@@ -508,7 +671,6 @@ export default function MessagesPage() {
           onClose={()=>setShowNew(false)}
           onCreated={async convId => {
             await loadConvs()
-            // 생성된 대화방으로 이동
             const { data } = await supabase
               .from('messages_conversations')
               .select(`
@@ -522,7 +684,15 @@ export default function MessagesPage() {
           }}
         />
       )}
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
+
+      <style>{`
+        @keyframes spin        { to { transform:rotate(360deg) } }
+        @keyframes pulse       { 0%,100%{opacity:1} 50%{opacity:.4} }
+        @keyframes typingBounce {
+          0%,60%,100% { transform:translateY(0); opacity:.4 }
+          30%          { transform:translateY(-5px); opacity:1 }
+        }
+      `}</style>
     </div>
   )
 }

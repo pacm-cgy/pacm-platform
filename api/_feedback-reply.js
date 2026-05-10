@@ -12,7 +12,7 @@
  */
 // runtime: Node.js serverless
 
-import { generateFeedbackReply } from './ai-engine.js'
+import { generateFeedbackReply } from './_ai-engine.js'
 
 const SB_URL      = process.env.SUPABASE_URL
 const SB_KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY

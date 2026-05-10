@@ -955,3 +955,208 @@ create policy if not exists "la_service_all"
   on public.login_attempts for all
   using (auth.role() = 'service_role')
   with check (true);
+
+-- ══════════════════════════════════════════════════════════════════════
+-- work_logs 테이블 — AI 직원 활동 로그 (admin 패널용)
+-- ══════════════════════════════════════════════════════════════════════
+create table if not exists public.work_logs (
+  id               uuid primary key default uuid_generate_v4(),
+  member_username  text not null,
+  member_name      text,
+  team             text,
+  title            text,
+  task_type        text not null,
+  task             text,
+  status           text not null default 'done' check (status in ('done','failed','skipped')),
+  result           jsonb default '{}'::jsonb,
+  created_at       timestamptz not null default now()
+);
+-- Migration helper: add status column if upgrading existing DB
+alter table if exists public.work_logs
+  add column if not exists status text not null default 'done'
+    check (status in ('done','failed','skipped'));
+create index if not exists wl_username_idx on public.work_logs(member_username);
+create index if not exists wl_team_idx     on public.work_logs(team);
+create index if not exists wl_type_idx     on public.work_logs(task_type);
+create index if not exists wl_created_idx  on public.work_logs(created_at desc);
+alter table if exists public.work_logs enable row level security;
+create policy if not exists "wl_service_write" on public.work_logs for insert with check (true);
+create policy if not exists "wl_service_read"  on public.work_logs for select using (true);
+
+-- ══════════════════════════════════════════════════════════════════════
+-- staff_chat_messages 테이블 — AI 직원 채팅방 메시지
+-- ══════════════════════════════════════════════════════════════════════
+create table if not exists public.staff_chat_messages (
+  id            uuid primary key default uuid_generate_v4(),
+  room          text not null default 'general',
+  sender_key    text not null,
+  sender_name   text,
+  sender_emoji  text,
+  sender_color  text,
+  sender_team   text,
+  message       text not null check (char_length(message) >= 1 and char_length(message) <= 1000),
+  msg_type      text not null default 'chat' check (msg_type in ('chat','system','admin','announcement','ai_auto','ai_discuss','admin_message')),
+  is_deleted    boolean not null default false,
+  created_at    timestamptz not null default now()
+);
+create index if not exists scm_room_idx    on public.staff_chat_messages(room, created_at desc);
+create index if not exists scm_sender_idx  on public.staff_chat_messages(sender_key);
+create index if not exists scm_created_idx on public.staff_chat_messages(created_at desc);
+alter table if exists public.staff_chat_messages enable row level security;
+create policy if not exists "scm_read_all"   on public.staff_chat_messages for select using (true);
+create policy if not exists "scm_insert_all" on public.staff_chat_messages for insert with check (true);
+create policy if not exists "scm_update_svc" on public.staff_chat_messages for update using (true);
+
+-- ══════════════════════════════════════════════════════════════════════
+-- ai_team_members 테이블 — AI 직원 팀원 정보
+-- ══════════════════════════════════════════════════════════════════════
+create table if not exists public.ai_team_members (
+  id            uuid primary key default uuid_generate_v4(),
+  username      text unique not null,
+  display_name  text not null,
+  team          text not null,
+  title         text,
+  bio           text,
+  emoji         text,
+  color         text,
+  is_active     boolean not null default true,
+  created_at    timestamptz not null default now(),
+  last_active   timestamptz
+);
+create index if not exists atm_username_idx on public.ai_team_members(username);
+create index if not exists atm_team_idx     on public.ai_team_members(team);
+alter table if exists public.ai_team_members enable row level security;
+create policy if not exists "atm_read_all"  on public.ai_team_members for select using (true);
+create policy if not exists "atm_write_svc" on public.ai_team_members for all using (true) with check (true);
+
+-- ══════════════════════════════════════════════════════════════════════
+-- ai_decisions 테이블 — AI 의사결정 기록 (자율형 AI 직원팀 설계서)
+-- ══════════════════════════════════════════════════════════════════════
+create table if not exists public.ai_decisions (
+  id            uuid primary key default uuid_generate_v4(),
+  agent_key     text not null,
+  agent_name    text,
+  decision_type text not null,
+  context       jsonb default '{}'::jsonb,
+  rationale     text,
+  action_taken  text,
+  outcome       jsonb default '{}'::jsonb,
+  confidence    float default 0.8,
+  created_at    timestamptz not null default now()
+);
+create index if not exists ad_agent_idx   on public.ai_decisions(agent_key);
+create index if not exists ad_type_idx    on public.ai_decisions(decision_type);
+create index if not exists ad_created_idx on public.ai_decisions(created_at desc);
+alter table if exists public.ai_decisions enable row level security;
+create policy if not exists "ad_read_all"  on public.ai_decisions for select using (true);
+create policy if not exists "ad_write_svc" on public.ai_decisions for insert with check (true);
+
+-- ══════════════════════════════════════════════════════════════════════
+-- ai_knowledge_graph 테이블 — AI 지식 그래프 (자율형 AI 직원팀용)
+-- ══════════════════════════════════════════════════════════════════════
+create table if not exists public.ai_knowledge_graph (
+  id            uuid primary key default uuid_generate_v4(),
+  concept       text not null,
+  related       text[] default '{}',
+  weight        float default 1.0,
+  category      text,
+  last_used     timestamptz default now(),
+  use_count     integer not null default 0,
+  created_at    timestamptz not null default now()
+);
+create index if not exists akg_concept_idx  on public.ai_knowledge_graph(concept);
+create index if not exists akg_category_idx on public.ai_knowledge_graph(category);
+alter table if exists public.ai_knowledge_graph enable row level security;
+create policy if not exists "akg_read_all"  on public.ai_knowledge_graph for select using (true);
+create policy if not exists "akg_write_svc" on public.ai_knowledge_graph for all using (true) with check (true);
+
+-- ══════════════════════════════════════════════════════════════════════
+-- weekly_reports 테이블 — 주간 보고서 전용 테이블
+-- ══════════════════════════════════════════════════════════════════════
+create table if not exists public.weekly_reports (
+  id            uuid primary key default uuid_generate_v4(),
+  week_code     text unique not null,
+  week_label    text not null,
+  report_type   text not null default 'combined',
+  funding_body  text,
+  market_body   text,
+  full_body     text,
+  news_count    integer default 0,
+  generated_by  text default 'SAGE',
+  status        text not null default 'draft' check (status in ('draft','published','archived')),
+  published_at  timestamptz,
+  created_at    timestamptz not null default now()
+);
+create index if not exists wr_week_idx     on public.weekly_reports(week_code);
+create index if not exists wr_status_idx   on public.weekly_reports(status);
+create index if not exists wr_created_idx  on public.weekly_reports(created_at desc);
+alter table if exists public.weekly_reports enable row level security;
+create policy if not exists "wr_read_all"  on public.weekly_reports for select using (true);
+create policy if not exists "wr_write_svc" on public.weekly_reports for all using (true) with check (true);
+
+-- ══════════════════════════════════════════════════════════════════════
+-- ai_performance_metrics 테이블 — AI 성능 지표
+-- ══════════════════════════════════════════════════════════════════════
+create table if not exists public.ai_performance_metrics (
+  id            uuid primary key default uuid_generate_v4(),
+  agent_key     text not null,
+  metric_type   text not null,
+  metric_value  float not null,
+  context       jsonb default '{}'::jsonb,
+  recorded_at   timestamptz not null default now()
+);
+create index if not exists apm_agent_idx   on public.ai_performance_metrics(agent_key);
+create index if not exists apm_type_idx    on public.ai_performance_metrics(metric_type);
+create index if not exists apm_time_idx    on public.ai_performance_metrics(recorded_at desc);
+alter table if exists public.ai_performance_metrics enable row level security;
+create policy if not exists "apm_read_all"  on public.ai_performance_metrics for select using (true);
+create policy if not exists "apm_write_svc" on public.ai_performance_metrics for insert with check (true);
+
+-- ══════════════════════════════════════════════════════════════════════
+-- event_applications 테이블 — 이벤트/챌린지 신청 (EventsPage)
+-- ══════════════════════════════════════════════════════════════════════
+create table if not exists public.event_applications (
+  id                uuid primary key default uuid_generate_v4(),
+  event_id          uuid not null,             -- community_posts.id (post_type='event')
+  user_id           uuid references public.profiles(id) on delete set null,
+  applicant_name    text not null,
+  applicant_email   text not null,
+  motivation        text,
+  status            text not null default 'pending'
+                      check (status in ('pending','accepted','rejected','waitlist')),
+  created_at        timestamptz not null default now()
+);
+create index if not exists ea_event_idx   on public.event_applications(event_id, created_at desc);
+create index if not exists ea_user_idx    on public.event_applications(user_id);
+create index if not exists ea_status_idx  on public.event_applications(status);
+alter table if exists public.event_applications enable row level security;
+-- 신청자는 자신의 신청만 조회, 관리자는 서비스롤로 전체 조회
+create policy if not exists "ea_select_own"  on public.event_applications
+  for select using (user_id = auth.uid());
+create policy if not exists "ea_insert_any"  on public.event_applications
+  for insert with check (true);
+create policy if not exists "ea_update_svc"  on public.event_applications
+  for update using (true);
+
+-- ══════════════════════════════════════════════════════════════════════
+-- ai_decision_log 테이블 — AI 자율 판단 로그 (ai-platform-operator v2)
+-- ══════════════════════════════════════════════════════════════════════
+create table if not exists public.ai_decision_log (
+  id              uuid primary key default uuid_generate_v4(),
+  operator        text not null default 'ARIA',       -- 판단 주체 AI
+  decision_type   text not null,                      -- 판단 유형 (post/skip/escalate/etc)
+  context         jsonb not null default '{}'::jsonb, -- 판단 당시 컨텍스트
+  reasoning       text,                               -- 판단 근거 (자연어)
+  action_taken    text,                               -- 실제 수행한 액션
+  outcome         text,                               -- 결과 (success/fail/partial)
+  confidence      float default 0.8,                  -- 확신도 0~1
+  run_date        date not null default current_date,
+  created_at      timestamptz not null default now()
+);
+create index if not exists adl_operator_idx on public.ai_decision_log(operator, run_date desc);
+create index if not exists adl_type_idx     on public.ai_decision_log(decision_type);
+create index if not exists adl_date_idx     on public.ai_decision_log(run_date desc);
+alter table if exists public.ai_decision_log enable row level security;
+create policy if not exists "adl_read_all"   on public.ai_decision_log for select using (true);
+create policy if not exists "adl_insert_svc" on public.ai_decision_log for insert with check (true);
+

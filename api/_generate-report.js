@@ -1,17 +1,17 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════╗
- * ║  INSIGHTSHIP AI 주간 리포트 생성기 v3.0                             ║
+ * ║  INSIGHTSHIP AI 주간 리포트 생성기 v3.1                             ║
  * ║  담당 AI: SAGE (세이지) — 리포트 매니저                             ║
  * ║                                                                      ║
- * ║  v3 업그레이드:                                                      ║
- * ║  - 롱폼 v10 엔진 내장 (3,000자+ 리포트)                            ║
- * ║  - 섹터별 시장 수치 자동 내재화                                     ║
- * ║  - 청소년 창업가 인사이트 섹션 강화                                 ║
- * ║  - 주간 발행 검증 로직 (중복 방지)                                  ║
- * ║  - GET 상태 조회 강화                                               ║
+ * ║  v3.1 업그레이드:                                                   ║
+ * ║  - weekly_reports 테이블 완전 연동 (upsert + 중복 방지)             ║
+ * ║  - articles 동시 발행 유지 (하위 호환)                              ║
+ * ║  - GET: weekly_reports 최신 목록 반환                               ║
+ * ║  - 리포트 상태 관리 (draft→published)                               ║
+ * ║  - 성능 메트릭 자동 기록                                             ║
  * ║                                                                      ║
  * ║  스케줄: 매주 금요일 23:00 KST (UTC 14:00)                          ║
- * ║  출력: articles 테이블에 trend 카테고리로 자동 발행                  ║
+ * ║  출력: weekly_reports + articles 테이블 동시 저장                    ║
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
 
@@ -401,25 +401,84 @@ async function upsertArticle(title, body, tags, slug, adminId) {
 // §5. 메인 핸들러
 // ══════════════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════════════
+// §5-B. weekly_reports 테이블 upsert
+// ══════════════════════════════════════════════════════════════════════
+
+async function upsertWeeklyReport({ weekCode: code, weekLabel: label, fundingBody, marketBody, newsCount }) {
+  if (!SB_URL || !SB_KEY) return null
+  const fullBody = [fundingBody, marketBody].filter(Boolean).join('\n\n---\n\n')
+  const payload = {
+    week_code:    code,
+    week_label:   label,
+    report_type:  'combined',
+    funding_body: fundingBody || null,
+    market_body:  marketBody  || null,
+    full_body:    fullBody,
+    news_count:   newsCount,
+    generated_by: 'SAGE',
+    status:       'published',
+    published_at: new Date().toISOString(),
+  }
+  try {
+    // check existing
+    const chk = await fetch(`${SB_URL}/rest/v1/weekly_reports?week_code=eq.${encodeURIComponent(code)}&select=id&limit=1`, { headers: SH() })
+    const existing = await chk.json()
+    if (existing?.[0]?.id) {
+      await fetch(`${SB_URL}/rest/v1/weekly_reports?week_code=eq.${encodeURIComponent(code)}`, {
+        method: 'PATCH', headers: { ...SH(), Prefer: 'return=minimal' },
+        body: JSON.stringify({ funding_body: fundingBody, market_body: marketBody, full_body: fullBody, news_count: newsCount, status: 'published', published_at: payload.published_at }),
+      })
+      return { updated: true, id: existing[0].id }
+    }
+    const r = await fetch(`${SB_URL}/rest/v1/weekly_reports`, {
+      method: 'POST', headers: { ...SH(), Prefer: 'return=representation' },
+      body: JSON.stringify(payload),
+    })
+    const d = await r.json()
+    return { inserted: true, id: d?.[0]?.id || null }
+  } catch(e) {
+    return { error: e.message?.slice(0, 80) }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// §5-C. AI 성능 메트릭 기록
+// ══════════════════════════════════════════════════════════════════════
+
+async function recordPerformanceMetric(agentKey, metricType, value, context = {}) {
+  if (!SB_URL || !SB_KEY) return
+  fetch(`${SB_URL}/rest/v1/ai_performance_metrics`, {
+    method: 'POST',
+    headers: { ...SH(), Prefer: 'return=minimal' },
+    body: JSON.stringify({ agent_key: agentKey, metric_type: metricType, metric_value: value, context, recorded_at: new Date().toISOString() }),
+  }).catch(() => {})
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// §5-D. 메인 핸들러 v3.1
+// ══════════════════════════════════════════════════════════════════════
+
 export async function handleGenerateReport(req) {
   if (req.method === 'GET') {
-    // GET: 상태 + 최근 리포트 목록
-    let recentReports = []
+    // GET: 상태 + weekly_reports + 최신 articles
+    let weeklyReports = []
+    let recentArticles = []
     if (SB_URL && SB_KEY) {
-      try {
-        const r = await fetch(
-          `${SB_URL}/rest/v1/articles?status=eq.published&tags=cs.{AI리포트}&order=published_at.desc&limit=6&select=title,slug,published_at,read_time`,
-          { headers: SH() }
-        )
-        recentReports = await r.json().catch(() => [])
-      } catch {}
+      const [wrRes, artRes] = await Promise.allSettled([
+        fetch(`${SB_URL}/rest/v1/weekly_reports?status=eq.published&order=created_at.desc&limit=6&select=id,week_code,week_label,news_count,published_at,status`, { headers: SH() }).then(r => r.json()),
+        fetch(`${SB_URL}/rest/v1/articles?status=eq.published&tags=cs.{AI리포트}&order=published_at.desc&limit=6&select=title,slug,published_at,read_time`, { headers: SH() }).then(r => r.json()),
+      ])
+      weeklyReports  = wrRes.status  === 'fulfilled' && Array.isArray(wrRes.value)  ? wrRes.value  : []
+      recentArticles = artRes.status === 'fulfilled' && Array.isArray(artRes.value) ? artRes.value : []
     }
     return new Response(JSON.stringify({
-      status: 'ok', engine: 'SAGE-v3',
+      status: 'ok', engine: 'SAGE-v3.1',
       agent: 'SAGE (세이지) — Insightship 리포트 매니저',
-      description: 'AI 주간 리포트 자동 생성 (자체 NLP v3, 외부 API 0원)',
+      description: 'AI 주간 리포트 자동 생성 (자체 NLP v3.1, weekly_reports 테이블 연동)',
       schedule: '매주 금요일 23:00 KST',
-      recent_reports: Array.isArray(recentReports) ? recentReports : [],
+      weekly_reports: weeklyReports,
+      recent_articles: recentArticles,
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })
   }
 
@@ -429,6 +488,7 @@ export async function handleGenerateReport(req) {
   if (!isAuthed) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   if (!SB_URL || !SB_KEY) return new Response(JSON.stringify({ error: 'Missing Supabase env' }), { status: 500 })
 
+  const startTs = Date.now()
   const url = new URL(req.url)
   const fromParam = url.searchParams.get('from')
   const toParam   = url.searchParams.get('to')
@@ -499,37 +559,72 @@ export async function handleGenerateReport(req) {
   }
 
   const adminId = await getSageId()
-  const results = { label, news_count: news.length, generated: [], errors: [], engine: 'SAGE-v3', agent: 'SAGE' }
+  const results = {
+    label, news_count: news.length,
+    week_code: code, generated: [], errors: [],
+    engine: 'SAGE-v3.1', agent: 'SAGE',
+  }
+
+  let fundingBody = null
+  let marketBody  = null
 
   // ── 리포트 1: 투자·자금 동향 ──────────────────────────────────────
   try {
     const slug1 = `ai-funding-report-${code}`
-    const body1 = buildFundingReport(label, news)
-    if (body1.length < 400) throw new Error(`본문 너무 짧음: ${body1.length}자`)
+    fundingBody = buildFundingReport(label, news)
+    if (fundingBody.length < 400) throw new Error(`본문 너무 짧음: ${fundingBody.length}자`)
     const r1 = await upsertArticle(
       `[AI 리포트] ${label} 스타트업 투자·자금 동향`,
-      body1,
+      fundingBody,
       ['AI리포트','투자동향','스타트업',label],
       slug1,
       adminId
     )
-    results.generated.push({ type: 'funding', slug: slug1, len: body1.length, ...r1 })
-  } catch(e) { results.errors.push('funding: ' + (e.message||'').slice(0,100)) }
+    results.generated.push({ type: 'funding', slug: slug1, len: fundingBody.length, ...r1 })
+  } catch(e) {
+    results.errors.push('funding: ' + (e.message||'').slice(0,100))
+    fundingBody = null
+  }
 
   // ── 리포트 2: 시장·생태계 동향 ───────────────────────────────────
   try {
     const slug2 = `ai-market-report-${code}`
-    const body2 = buildMarketReport(label, news)
-    if (body2.length < 400) throw new Error(`본문 너무 짧음: ${body2.length}자`)
+    marketBody = buildMarketReport(label, news)
+    if (marketBody.length < 400) throw new Error(`본문 너무 짧음: ${marketBody.length}자`)
     const r2 = await upsertArticle(
       `[AI 리포트] ${label} 스타트업 생태계 시장 동향`,
-      body2,
+      marketBody,
       ['AI리포트','시장분석','트렌드',label],
       slug2,
       adminId
     )
-    results.generated.push({ type: 'market', slug: slug2, len: body2.length, ...r2 })
-  } catch(e) { results.errors.push('market: ' + (e.message||'').slice(0,100)) }
+    results.generated.push({ type: 'market', slug: slug2, len: marketBody.length, ...r2 })
+  } catch(e) {
+    results.errors.push('market: ' + (e.message||'').slice(0,100))
+    marketBody = null
+  }
+
+  // ── weekly_reports 테이블 upsert (v3.1 신규) ─────────────────────
+  if (fundingBody || marketBody) {
+    try {
+      const wrResult = await upsertWeeklyReport({
+        weekCode: code,
+        weekLabel: label,
+        fundingBody,
+        marketBody,
+        newsCount: news.length,
+      })
+      results.weekly_report = wrResult
+    } catch(e) {
+      results.errors.push('weekly_report_upsert: ' + (e.message||'').slice(0,80))
+    }
+  }
+
+  // ── 성능 메트릭 기록 (비동기) ────────────────────────────────────
+  const elapsed = Date.now() - startTs
+  recordPerformanceMetric('SAGE', 'report_generation_ms', elapsed, {
+    week_code: code, news_count: news.length, errors: results.errors.length,
+  })
 
   return new Response(JSON.stringify(results, null, 2), {
     status: 200, headers: { 'Content-Type': 'application/json' },
