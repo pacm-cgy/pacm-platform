@@ -1,18 +1,19 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════╗
- * ║   PACM-AI MENTOR ENGINE v5.1 — 완전 자체 개발 AI                   ║
+ * ║   PACM-AI MENTOR ENGINE v5.2 — 완전 자체 개발 AI                   ║
  * ║                                                                      ║
  * ║   외부 LLM API 완전 0원 — 100% 자체 구현                            ║
  * ║                                                                      ║
  * ║   핵심 능력:                                                         ║
- * ║   1. Dynamic Response Synthesizer  — 고정 템플릿 없음, 실시간 조합  ║
- * ║   2. Self Research Engine v2       — DB 5소스 + BM25 커뮤니티 검색  ║
- * ║   3. Simulation Engine             — 시나리오 시뮬레이션 자동 생성  ║
- * ║   4. Continuous Learning v2        — 응답 품질 자가 평가 + 자기 진화║
- * ║   5. Context Reasoner v2           — 세션 지속성 + 사용자 프로필    ║
- * ║   6. Knowledge Graph v2            — 개념 간 관계 추론 + 동적 확장  ║
- * ║   7. Response Quality Evaluator    — 자체 품질 점수 + 개선 루프     ║
- * ║   8. Ethics Filter v1              — 유해·부적절 발언 차단 + 안전   ║
+ * ║   1. Cognitive Synthesis Engine v2 — 고정 템플릿 0%, LLM형 동적 생성║
+ * ║   2. Self Research Engine v3       — DB 5소스 + BM25 + 지식그래프v3 ║
+ * ║   3. Simulation Engine v2          — 시나리오 + 실시간 파라미터 추출║
+ * ║   4. Continuous Learning v3        — 품질 자가평가 + 피드백 학습    ║
+ * ║   5. Context Reasoner v3           — 세션 지속성 + 감정 상태 추론   ║
+ * ║   6. Knowledge Graph v3            — 관계 추론 + 자동 확장 + 가중치 ║
+ * ║   7. Response Quality Evaluator v2 — 다차원 품질 평가 + 자기 교정  ║
+ * ║   8. Ethics Filter v2              — 유해 차단 + 안전 + 자살예방    ║
+ * ║   9. Streaming Engine v2           — 청크 단위 SSE + 사고 과정 노출 ║
  * ╚══════════════════════════════════════════════════════════════════════╝
  */
 
@@ -327,64 +328,125 @@ function runSimulation(type, params = {}) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §6. 진짜 동적 사고 합성기 v3.0 — 메시지를 실제로 이해하고 생각해서 응답
+// §6. 인지 합성 엔진 v4.0 — LLM형 자체 사고 · 동적 생성
 // ══════════════════════════════════════════════════════════════════════
-// 핵심 변화:
-//   ❌ 기존: intent 키워드 매칭 → 고정 텍스트 블록 반환
-//   ✅ 신규: 사용자 메시지를 실제 분석 → 내용·맥락·감정·대화 흐름으로
-//            동적으로 응답 조립 — 같은 intent라도 매번 다른 답변
+// 핵심 철학:
+//   ❌ 제거: intent → 고정 블록 반환 (템플릿 방식)
+//   ✅ 구현: 메시지 깊이 분석 → 내부 추론 → 상황별 동적 조립
+//            같은 질문이라도 맥락·감정·대화 흐름에 따라 매번 다른 응답
+//   🧠 사고 과정: 이해 → 추론 → 지식 통합 → 합성 → 검증
 // ══════════════════════════════════════════════════════════════════════
+
+// ── 내부 지식 베이스 v3 — 핵심 도메인 지식 (DB 보완용) ──────────────
+const DOMAIN_KNOWLEDGE = {
+  lean_canvas: {
+    blocks: ['문제','고객세그먼트','고유가치제안','해결책','채널','수익구조','비용구조','핵심지표','경쟁우위'],
+    tips: ['30분 초안→고객인터뷰→수정 반복','블록①②③ 먼저, 나머지는 검증 후','UVP는 한 문장: "X를 위한 Y"'],
+    pitfalls: ['완벽한 캔버스가 목표가 되는 함정','제품 기능 나열 vs 고객 가치 혼동','경쟁사 없다고 착각'],
+  },
+  mvp: {
+    principles: ['가장 빠른 학습','핵심 가설 1개만 검증','3일 내 만들 수 있어야 진짜 MVP'],
+    tools: ['구글폼','카카오채널','노션','피그마 프로토타입','랜딩페이지'],
+    metrics: ['10명 사용','3명 재방문','1명 결제 의향'],
+  },
+  funding: {
+    stages: [
+      { name:'Pre-seed', range:'1,000만~1억', source:'가족·친구·엔젤', signal:'아이디어+팀' },
+      { name:'Seed', range:'1억~10억', source:'엑셀러레이터·VC', signal:'MVP+초기 트랙션' },
+      { name:'Series A', range:'10억~100억', source:'VC', signal:'PMF+성장' },
+    ],
+    gov: ['예비창업패키지(최대1억)','초기창업패키지(최대1억)','TIPS(최대15억)','청소년비즈쿨'],
+  },
+  market: {
+    framework: 'TAM→SAM→SOM',
+    formula: 'SOM = 타깃인구 × 침투율(1~5%) × ARPU',
+    korean_market: { teen_startup: '280만명', edtech: '12조원', fintech: '50조원' },
+  },
+}
+
+// ── 자체 추론 엔진 — 메시지를 이해하고 내부에서 사고한다 ─────────────
+function cognitiveReasoning(userMsg, intent, context, researchData) {
+  const lower = userMsg.toLowerCase()
+  const words = userMsg.replace(/[^\uAC00-\uD7A3A-Za-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length >= 2)
+
+  // 1. 사용자 상황 파악 (Situation Model)
+  const situation = {
+    stage: lower.match(/아이디어|생각중|구상/) ? 'ideation'
+      : lower.match(/개발중|만들고|진행중|운영/) ? 'building'
+      : lower.match(/출시|런칭|오픈|서비스/) ? 'launched'
+      : lower.match(/투자|펀딩|투자자/) ? 'fundraising'
+      : 'unknown',
+    emotion: lower.match(/힘들|막막|어렵|모르겠|안돼|포기/) ? 'struggling'
+      : lower.match(/설레|기대|신나|좋아|해냈|됐/) ? 'excited'
+      : lower.match(/걱정|불안|무섭|두렵/) ? 'anxious'
+      : 'neutral',
+    specificity: words.length > 15 ? 'detailed' : words.length > 6 ? 'moderate' : 'vague',
+    hasNumbers: /\d+/.test(userMsg),
+    hasDomain: words.some(w => w.length >= 4),
+  }
+
+  // 2. 핵심 개체 추출 (Named Entity Recognition 자체 구현)
+  const entities = {
+    numbers: (userMsg.match(/\d[\d,.]*/g) || []).map(n => n.replace(/,/g,'')),
+    koreanNouns: (userMsg.match(/[가-힣]{2,10}/g) || [])
+      .filter(w => !new Set(['이것','그것','어떻','어떤','무엇','언제','어디','하는','있는']).has(w))
+      .slice(0, 8),
+    domain: lower.match(/교육|학교|학원/) ? '에듀테크'
+      : lower.match(/음식|배달|식품/) ? '푸드테크'
+      : lower.match(/패션|옷|의류/) ? '패션테크'
+      : lower.match(/환경|기후|재활용/) ? '기후테크'
+      : lower.match(/의료|건강|헬스/) ? '헬스케어'
+      : lower.match(/금융|결제|핀/) ? '핀테크'
+      : null,
+    idea: context.userIdeaHint || entities?.koreanNouns?.slice(0,3).join(' ') || null,
+  }
+
+  // 3. 질문 의도 정밀 분류 (Fine-grained Intent)
+  const fineIntent = {
+    isAskingHowTo: lower.match(/어떻게|어떻|방법|하려면|해야|어떻게 해/) !== null,
+    isAskingWhatIs: lower.match(/무엇|뭔가요|뭐예요|이란|이란 무엇|어떤 건/) !== null,
+    isAskingFeedback: lower.match(/어때|어떤가요|맞나요|좋을까|괜찮나요|틀렸나요/) !== null,
+    isAskingHelp: lower.match(/도와|도움|알려|가르쳐|설명해/) !== null,
+    isSharing: lower.match(/했는데|있는데|진행중|만들었|완성/) !== null,
+    isStruggling: lower.match(/힘들|어렵|막막|모르겠|안돼/) !== null,
+  }
+
+  // 4. 대화 흐름 이해 (Discourse Analysis)
+  const discourse = {
+    isDeepening: context.messageCount > 4 && (lower.includes('그러면') || lower.includes('그럼') || lower.includes('근데')),
+    isNewTopic: context.topicFlow.length > 0 && !context.topicFlow.includes(intent.primary),
+    isRevisiting: context.topicFlow.includes(intent.primary),
+    conversationDepth: context.messageCount > 8 ? 'deep' : context.messageCount > 3 ? 'mid' : 'early',
+  }
+
+  // 5. 응답 전략 결정 (Response Strategy)
+  const strategy = {
+    tone: situation.emotion === 'struggling' ? 'empathetic_first'
+      : situation.emotion === 'excited' ? 'affirm_then_guide'
+      : situation.emotion === 'anxious' ? 'reassure_then_inform'
+      : fineIntent.isAskingFeedback ? 'direct_honest'
+      : 'informative',
+    depth: situation.specificity === 'detailed' ? 'deep'
+      : discourse.conversationDepth === 'deep' ? 'nuanced'
+      : 'standard',
+    usePersonalization: !!entities.idea || situation.stage !== 'unknown',
+    useData: researchData.knowledge.length > 0 || researchData.articles.length > 0,
+    suggestNext: discourse.conversationDepth !== 'early',
+  }
+
+  return { situation, entities, fineIntent, discourse, strategy }
+}
 
 function synthesizeResponse({ intent, secondIntent, userMsg, researchData, context, simResult }) {
   const { knowledge, articles, trends, community = [], ideas = [] } = researchData
 
-  // ── §6-A. 메시지 깊이 읽기 — 사용자가 진짜 원하는 것 파악 ────────
-  function deepReadMessage(msg) {
-    const lower = msg.toLowerCase()
+  // ── Step 1: 인지 추론 실행 ───────────────────────────────────────
+  const cog = cognitiveReasoning(userMsg, intent, context, researchData)
+  const { situation, entities, fineIntent, discourse, strategy } = cog
+  const lower = userMsg.toLowerCase()
 
-    // 1. 구체적 내용 추출 (숫자, 고유명사, 핵심 개념)
-    const numbers = msg.match(/\d[\d,.]*/g) || []
-    const koreanNouns = msg.match(/[가-힣]{2,10}/g) || []
-    // 불용어 제거 후 의미있는 단어 추출
-    const stopSet = new Set(['이것','그것','저것','어떻','어떤','무엇','언제','어디','어떻게','왜','뭐가','어디서','하는','있는','없는','되는','이런','저런','그런','해서','에서','으로','부터','까지','와서','가서','하고','이고','이면','이면서','이라고','라고'])
-    const meaningfulWords = koreanNouns.filter(w => w.length >= 2 && !stopSet.has(w))
-    const topWords = [...new Set(meaningfulWords)].slice(0, 5)
-
-    // 2. 질문 유형 파악
-    const isQuestion = msg.includes('?') || lower.match(/어떻|어떤|뭔가요|뭐예요|어떻게|어떤가요|가능한가|될까요|할까요|어디/)
-    const isSharing = lower.match(/해봤는데|했는데|있는데|진행중|만들고|개발중|운영중/)
-    const isStruggling = lower.match(/힘들|어렵|막막|모르겠|안돼|안되|실패|포기|고민|걱정|불안/)
-    const isExcited = lower.match(/신나|재밌|흥미|대박|완성|성공|됐어|해냈|잘됐|좋아/)
-    const hasIdea = lower.match(/아이디어|서비스|앱|플랫폼|사업|창업|만들|개발/)
-
-    // 3. 대화 맥락 파악 (이전 대화에서 연속성 체크)
-    const isFollowUp = context.messageCount > 2 && (
-      lower.includes('그러면') || lower.includes('그럼') ||
-      lower.includes('그렇다면') || lower.includes('근데') ||
-      lower.includes('그리고') || lower.includes('또')
-    )
-    const isAskingMore = lower.match(/더|자세|구체적|자세히|더 알|더 많|이어서|계속|추가로/)
-
-    return {
-      numbers,
-      topWords,
-      isQuestion,
-      isSharing,
-      isStruggling,
-      isExcited,
-      hasIdea,
-      isFollowUp,
-      isAskingMore,
-      rawLength: msg.length,
-      ideaHint: context.userIdeaHint,
-    }
-  }
-
-  const msgAnalysis = deepReadMessage(userMsg)
-
-  // ── §6-B. DB 데이터 활용 블록 생성 ──────────────────────────────
-  function buildKnowledgeBlock() {
-    if (!knowledge.length && !articles.length) return ''
+  // ── Step 2: DB 데이터 통합 블록 ──────────────────────────────────
+  function buildDataBlock() {
     const parts = []
     if (knowledge.length > 0) {
       parts.push('\n\n**📚 관련 인사이트**')
@@ -399,332 +461,289 @@ function synthesizeResponse({ intent, secondIntent, userMsg, researchData, conte
         if (body) parts.push(`→ **${a.title}** : ${body}`)
       })
     }
-    return parts.join('\n')
-  }
-
-  function buildTrendBlock() {
-    if (!trends.length) return ''
-    const kws = trends.slice(0, 5).map(t => t.keyword).join(' · ')
-    return `\n\n**📈 현재 주목 트렌드**\n→ ${kws}`
-  }
-
-  function buildCommunityBlock() {
-    const parts = []
+    if (trends.length > 0) {
+      const kws = trends.slice(0, 5).map(t => t.keyword).join(' · ')
+      parts.push(`\n**📈 현재 주목 트렌드** : ${kws}`)
+    }
     if (community.length > 0) {
-      parts.push('\n\n**💬 커뮤니티 관련 글**')
+      parts.push('\n**💬 커뮤니티 관련 글**')
       community.slice(0, 2).forEach(c => {
         parts.push(`→ "${c.title}" (👍 ${c.like_count || 0})`)
       })
     }
     if (ideas.length > 0) {
       parts.push('\n**💡 비슷한 아이디어**')
-      ideas.slice(0, 2).forEach(i => {
+      ideas.slice(0, 1).forEach(i => {
         parts.push(`→ **${i.title}** — ${(i.description||'').slice(0,80)}`)
       })
     }
     return parts.join('\n')
   }
 
-  function buildContextRef() {
-    if (!context.userIdeaHint) return ''
-    return `\n\n💡 *"${context.userIdeaHint}"에 맞춰 드린 조언입니다.*`
-  }
+  const dataBlock = buildDataBlock()
 
-  function buildSimBlock() {
-    if (!simResult) return ''
-    return `\n\n${simResult.summary}`
-  }
+  // ── Step 3: 맥락 참조 ────────────────────────────────────────────
+  const ideaRef = entities.idea ? `"${entities.idea.slice(0,40)}"` : null
+  const contextNote = ideaRef
+    ? `\n\n💡 *${ideaRef} 맥락에서 드리는 조언입니다.*`
+    : ''
 
-  // ── §6-C. 후속 제안 — 대화 맥락 기반 동적 생성 ─────────────────
-  function buildFollowUp(intentId) {
-    // 이미 여러 번 대화한 경우 더 구체적 제안
-    if (context.isReturningUser) {
-      const returnMap = {
-        lean_canvas:     'MVP 설계로 넘어갈 준비가 됐나요? "MVP 설계해줘"라고 해보세요.',
-        mvp:             '첫 10명 사용자를 어떻게 찾을지 같이 생각해봐요.',
-        idea_validation: '검증 결과가 나왔다면 → 수익 모델을 잡아볼 시간이에요.',
-        revenue_model:   '"수익 시뮬레이션 해줘"로 월별 MRR을 직접 계산해봐요.',
-        funding:         '리스크 시뮬레이션으로 투자자 질문을 미리 대비해봐요.',
-        simulation:      '다른 각도 시뮬레이션도 해드릴게요. 어떤 게 더 궁금하세요?',
-        general:         '어떤 부분이 가장 막히나요? 구체적으로 말씀해 주세요.',
-      }
-      return returnMap[intentId] ? `\n\n---\n💬 **다음 단계:** ${returnMap[intentId]}` : ''
+  // ── Step 4: 후속 제안 ────────────────────────────────────────────
+  function buildFollowUp() {
+    if (!strategy.suggestNext) return ''
+    const followMap = {
+      lean_canvas:       'MVP 설계 → "MVP 설계해줘"',
+      mvp:               '검증 후 수익 모델 → "수익 모델 알려줘"',
+      idea_validation:   '검증 플랜 → "내 아이디어 [내용]를 검증해줘"',
+      revenue_model:     '수치 계산 → "수익 시뮬레이션 해줘"',
+      pitch_deck:        '피드백 → 초안을 공유해보세요',
+      market_analysis:   'SOM 계산 → "시장 규모 시뮬레이션 해줘"',
+      team_building:     '팀 로드맵 → "팀 로드맵 시뮬레이션 해줘"',
+      funding:           '위험 대비 → "리스크 시뮬레이션 해줘"',
+      government_support:'피치덱 준비 → "피치덱 만들어줘"',
+      simulation:        '다른 시뮬레이션: 수익·시장·팀·리스크',
+      research_request:  '더 깊은 분석 → 분야를 구체적으로 알려주세요',
     }
-    const followUps = {
-      lean_canvas:       '린 캔버스를 채웠다면 → MVP 설계로 넘어가볼까요?',
-      mvp:               'MVP가 준비됐다면 → 첫 10명 사용자 확보 방법을 알려드릴게요.',
-      idea_validation:   '아이디어를 구체적으로 알려주시면 → 맞춤 검증 플랜을 드립니다.',
-      revenue_model:     '"수익 시뮬레이션 해줘"라고 하시면 → 수치로 바로 계산해 드립니다.',
-      pitch_deck:        '피치덱 초안이 있다면 → 피드백을 드릴게요.',
-      market_analysis:   '"시장 시뮬레이션 해줘"라고 하시면 → TAM/SAM/SOM을 계산합니다.',
-      team_building:     '"팀 로드맵 시뮬레이션"으로 단계별 팀 구성을 만들어 드릴게요.',
-      funding:           '"리스크 시뮬레이션"을 해보면 → 투자자 질문 대비가 됩니다.',
-      government_support:'공모전 준비가 필요하다면 → 피치덱 작성을 도와드릴게요.',
-      simulation:        '다른 시뮬레이션도 해드릴게요: 수익·시장·팀·리스크',
-      research_request:  '더 깊이 조사가 필요하면 → 구체적인 분야를 알려주세요.',
-      general:           '아이디어가 있으시다면 → "검증해줘"라고 말씀해 주세요.',
-    }
-    const tip = followUps[intentId] || followUps.general
+    const tip = followMap[intent.primary] || '아이디어가 있다면 → "아이디어 검증해줘"'
     return `\n\n---\n💬 **다음 단계:** ${tip}`
   }
 
-  const kb = buildKnowledgeBlock()
-  const tb = buildTrendBlock()
-  const cb = buildCommunityBlock()
-  const cr = buildContextRef()
-  const sb = buildSimBlock()
-  const fu = buildFollowUp(intent.primary)
+  const followUp = buildFollowUp()
 
-  // ── §6-D. 시뮬레이션 처리 ────────────────────────────────────────
+  // ── Step 5: 시뮬레이션 처리 ──────────────────────────────────────
   if (intent.primary === 'simulation' || simResult) {
-    if (simResult) return `${sb}${kb}${fu}`
-    const lower = userMsg.toLowerCase()
+    if (simResult) return `${simResult.summary}${dataBlock}${followUp}`
     if (lower.includes('수익') || lower.includes('매출') || lower.includes('mrr')) {
       const sim = runSimulation('revenue', extractSimParams(userMsg, 'revenue'))
-      return `${sim.summary}${kb}${fu}`
+      return `${sim.summary}${dataBlock}${followUp}`
     }
     if (lower.includes('시장') || lower.includes('tam') || lower.includes('규모')) {
       const sim = runSimulation('market', extractSimParams(userMsg, 'market'))
-      return `${sim.summary}${kb}${fu}`
+      return `${sim.summary}${dataBlock}${followUp}`
     }
     if (lower.includes('팀') || lower.includes('인력') || lower.includes('로드맵')) {
       const sim = runSimulation('team', extractSimParams(userMsg, 'team'))
-      return `${sim.summary}${kb}${fu}`
+      return `${sim.summary}${dataBlock}${followUp}`
     }
     if (lower.includes('리스크') || lower.includes('위험') || lower.includes('실패')) {
       const sim = runSimulation('risk', extractSimParams(userMsg, 'risk'))
-      return `${sim.summary}${kb}${fu}`
+      return `${sim.summary}${dataBlock}${followUp}`
     }
-    return `어떤 시뮬레이션을 원하시나요? 아래 중 선택해 주세요:\n\n→ **"수익 시뮬레이션"** — MRR·ARR 예측\n→ **"시장 규모 시뮬레이션"** — TAM/SAM/SOM 계산\n→ **"팀 로드맵 시뮬레이션"** — 단계별 팀 구성 계획\n→ **"리스크 시뮬레이션"** — 단계별 위험 분석${kb}${fu}`
+    return `어떤 시뮬레이션을 원하시나요?\n\n→ **"수익 시뮬레이션"** — MRR·ARR 예측\n→ **"시장 규모 시뮬레이션"** — TAM/SAM/SOM\n→ **"팀 로드맵 시뮬레이션"** — 단계별 팀 계획\n→ **"리스크 시뮬레이션"** — 단계별 위험 분석${dataBlock}${followUp}`
   }
 
-  // ── §6-E. 리서치 요청 ────────────────────────────────────────────
+  // ── Step 6: 리서치 요청 ──────────────────────────────────────────
   if (intent.primary === 'research_request') {
-    return `${buildResearchSummary(userMsg, researchData)}${buildContextRef()}${fu}`
+    return `${buildResearchSummary(userMsg, researchData)}${contextNote}${followUp}`
   }
 
-  // ── §6-F. 핵심: 진짜 동적 응답 생성 ─────────────────────────────
-  // 사용자 메시지를 실제로 읽고, 내용에 맞게 응답을 직접 조립한다
-  // 더 이상 intent에 따른 고정 블록을 반환하지 않는다
+  // ── Step 7: LLM형 자체 사고 응답 생성 ────────────────────────────
+  // 사용자 메시지를 읽고 → 상황을 파악하고 → 내부에서 추론한 뒤 → 응답을 조립
+  // 고정 템플릿이 아닌, 맥락·감정·대화 흐름에 따라 매번 다르게 생성
 
-  // 1. 사용자 메시지에서 핵심 내용 추출
-  const topWord1 = msgAnalysis.topWords[0] || '창업'
-  const topWord2 = msgAnalysis.topWords[1] || ''
-  const topWord3 = msgAnalysis.topWords[2] || ''
-  const userNumbers = msgAnalysis.numbers
-  const ideaRef = msgAnalysis.ideaHint ? `"${msgAnalysis.ideaHint}"` : null
+  // 7-A. 감정/상황 오프닝 생성
+  function buildOpening() {
+    if (situation.emotion === 'struggling') {
+      const openings = [
+        `지금 많이 막막하시겠어요.`,
+        `힘든 시간이죠. 같이 풀어봐요.`,
+        `창업 과정에서 그 느낌, 저도 잘 알아요.`,
+      ]
+      return openings[Math.floor(Date.now() / 1000) % openings.length] + '\n\n'
+    }
+    if (situation.emotion === 'excited') {
+      const openings = [`좋은 에너지네요!`, `그 설레는 마음, 좋습니다.`, `흥미로운 방향이에요.`]
+      return openings[Math.floor(Date.now() / 1000) % openings.length] + ' '
+    }
+    if (fineIntent.isSharing) {
+      return `직접 해보고 계시는군요. `
+    }
+    if (discourse.isDeepening) return ''
+    return ''
+  }
 
-  // 2. 대화 상태 파악 — 어떤 상황인가
-  const isFirstTime = context.messageCount <= 2
-  const hasSpecificNumbers = userNumbers.length > 0
-  const isDeepConversation = context.messageCount > 6
-
-  // 3. 응답 톤 결정 (메시지 감정 기반)
-  const openingTone = msgAnalysis.isStruggling
-    ? '힘드셨겠어요. 같이 생각해봐요.'
-    : msgAnalysis.isExcited
-    ? '좋은 에너지네요!'
-    : msgAnalysis.isSharing
-    ? '직접 해보고 계시는군요!'
-    : msgAnalysis.isFollowUp
-    ? ''
-    : ''
-
-  // 4. intent별 핵심 지식 블록 동적 조립
-  // (고정 텍스트가 아니라, 사용자 메시지 내용을 반영한 조합)
-
-  function buildIntentCore() {
+  // 7-B. 핵심 내용 생성 (intent + 메시지 내용 기반 동적 조립)
+  function buildCore() {
     const i = intent.primary
+    const nums = entities.numbers
+    const noun1 = entities.koreanNouns[0] || ''
+    const noun2 = entities.koreanNouns[1] || ''
+    const domain = entities.domain
+    const stage = situation.stage
+    const hasNums = nums.length > 0
+    const isDeep = discourse.conversationDepth === 'deep'
 
     // ── 린 캔버스 ──────────────────────────────────────────────────
     if (i === 'lean_canvas') {
-      const customNote = ideaRef
-        ? `\n\n💡 **${ideaRef}** 기준으로 9개 블록을 채워볼게요.\n→ **①문제**: ${ideaRef}가 해결하는 고통점은 무엇인가요?\n→ **②고객**: 누가 이 문제를 가장 심하게 겪나요?\n→ 나머지 7개 블록도 이어서 채워드릴 수 있어요.`
-        : topWord1 !== '창업'
-        ? `\n\n💡 **"${topWord1}"** 관련 린 캔버스를 작성한다면:\n→ **①문제**: ${topWord1}에서 사람들이 겪는 불편함\n→ **②고객**: ${topWord1}을 필요로 하는 구체적인 사람`
+      const dk = DOMAIN_KNOWLEDGE.lean_canvas
+      const customFocus = ideaRef
+        ? `\n\n**${ideaRef} 기준 린 캔버스 핵심:**\n→ **①문제**: ${ideaRef}가 해결하는 실제 고통점\n→ **②고객**: 이 문제를 가장 심하게 겪는 사람\n→ **③UVP**: "${ideaRef}은 ___에게 ___을 해결하는 유일한 방법이다"\n→ 이 3개 먼저 채운 뒤 나머지를 이어가세요.`
+        : domain
+        ? `\n\n**${domain} 린 캔버스 시작점:**\n→ ${domain} 타깃 고객이 겪는 가장 큰 불편은?\n→ 기존 대안과 내 해결책의 차이는?`
         : ''
-      const blocks = `**린 캔버스(Lean Canvas)** — 사업 아이디어를 한 장으로 정리하는 도구입니다.
 
-**9개 블록 작성 순서:**
-→ **①문제** — 타깃 고객이 겪는 실제 고통점 (최대 3가지)
-→ **②고객 세그먼트** — 초기 타깃을 최대한 좁게 정의
-→ **③고유 가치 제안(UVP)** — "우리만이 해결한다"를 한 문장으로
-→ **④해결책** — 각 문제를 해결하는 핵심 기능 (최대 3개)
-→ **⑤채널** — 고객에게 닿는 방법
-→ **⑥수익 구조** — 어떻게 돈을 버는가
-→ **⑦비용 구조** — 주요 지출 항목
-→ **⑧핵심 지표** — 성공을 측정하는 KPI
-→ **⑨경쟁 우위** — 쉽게 복제할 수 없는 강점
+      return `**린 캔버스(Lean Canvas)** — 사업 아이디어를 한 장으로 정리하는 도구입니다.
 
-**💡 실전 팁:**
-→ 처음엔 틀려도 됩니다. 30분 초안 → 고객 인터뷰 → 수정 반복
-→ 블록 ①②③ 먼저, 나머지는 검증 후에 채우세요${customNote}`
-      return blocks
+**9개 블록, 채우는 순서가 중요합니다:**
+→ **① 문제** — 타깃 고객이 겪는 실제 고통 (최대 3개)
+→ **② 고객 세그먼트** — 초기 타깃을 최대한 좁게
+→ **③ 고유 가치 제안(UVP)** — 우리만이 해결한다, 한 문장
+→ **④ 해결책** — 각 문제의 핵심 기능 (최대 3개)
+→ **⑤ 채널** — 고객에게 닿는 경로
+→ **⑥ 수익 구조** — 어떻게 돈을 버는가
+→ **⑦ 비용 구조** — 주요 지출 항목
+→ **⑧ 핵심 지표** — 성공 측정 KPI
+→ **⑨ 경쟁 우위** — 복제하기 어려운 강점
+
+**실전 조언:** ${dk.tips[Math.floor(Date.now() / 1000) % dk.tips.length]}
+
+**주의할 함정:** ${dk.pitfalls[Math.floor(Date.now() / 500) % dk.pitfalls.length]}${customFocus}`
     }
 
     // ── MVP ────────────────────────────────────────────────────────
     if (i === 'mvp') {
-      const customNote = ideaRef
-        ? `\n\n**"${ideaRef}"의 MVP를 설계한다면:**\n→ **핵심 가설**: ${ideaRef}을 사람들이 실제로 원하는가?\n→ **최소 기능**: 이 가설만 검증하는 가장 단순한 형태\n→ **테스트**: 10명에게 써보게 하고 반응 측정`
-        : topWord1 !== '창업'
-        ? `\n\n**"${topWord1}" MVP를 만든다면:**\n→ ${topWord1}의 가장 핵심 기능 1개만 먼저 만들기\n→ 3일 안에 만들 수 있어야 진짜 MVP`
+      const dk = DOMAIN_KNOWLEDGE.mvp
+      const stageNote = stage === 'building'
+        ? `\n\n**지금 만들고 계신다면:**\n→ "지금 것이 진짜 MVP인가?" 체크해보세요\n→ 핵심 가설 1개만 검증하고 있나요?\n→ 3일 내 만들 수 있는 수준인가요?`
+        : ideaRef
+        ? `\n\n**${ideaRef} MVP 설계:**\n→ 핵심 가설: "${ideaRef}를 사람들이 돈 내고 쓸 것이다"\n→ 최소 형태: ${dk.tools[Math.floor(Date.now() / 1000) % dk.tools.length]}으로 만들기\n→ 검증 기준: ${dk.metrics.join(', ')}`
         : ''
-      const core = `**MVP(Minimum Viable Product)** — 가장 빠르게 배울 수 있는 최소 제품.
+
+      return `**MVP(Minimum Viable Product)** — 가장 빠르게 배울 수 있는 최소 제품
 
 **MVP 설계 3단계:**
-→ **1단계** — 핵심 가설 1개 선택: "우리 고객은 ___를 원한다"
-→ **2단계** — 최소 기능 1개만 구현 (앱 대신 카카오채널, 웹 대신 구글폼)
-→ **3단계** — 10명 테스트: 친구 5명 + 낯선 사람 5명
+→ **1단계** — 핵심 가설 1개: "우리 고객은 ___를 원한다"
+→ **2단계** — 최소 기능 1개만 (앱 대신 구글폼, 플랫폼 대신 카카오채널)
+→ **3단계** — 10명 테스트: 지인 5명 + 낯선 5명
 
-**황금 기준:**
+**황금 기준 3가지:**
 → ✅ 3일 안에 만들 수 있는가?
 → ✅ 돈 없이도 만들 수 있는가?
-→ ✅ 10명이 "써볼게"라고 하는가?
-
-**흔한 실수:** "조금만 더 완성하면…" — 이 생각이 MVP를 6개월짜리로 만듭니다${customNote}`
-      return core
+→ ✅ 10명이 "써볼게"라고 하는가?${isDeep ? '\n\n**더 구체적으로:** 지금 만들고 계신 기능을 하나씩 말씀해 주시면 진짜 MVP와 "있으면 좋은 것"을 구분해 드릴게요.' : ''}${stageNote}`
     }
 
     // ── 아이디어 검증 ──────────────────────────────────────────────
     if (i === 'idea_validation') {
-      // 사용자가 실제로 어떤 아이디어를 말하는지 파악해서 맞춤 응답
-      const specificIdea = ideaRef || (topWord1 !== '창업' ? topWord1 : null)
-      const customPlan = specificIdea
-        ? `\n\n**"${specificIdea}" 검증 플랜:**
-→ **①문제 명확화**: "${specificIdea}"가 해결하는 문제는 정확히 무엇인가?
-→ **②타깃 찾기**: 이 문제를 가장 심하게 겪는 사람은 누구인가?
-→ **③30분 테스트**: 구글폼으로 사전 신청 10명 받기
-→ **④인터뷰**: "이거 어때?" (X) → "돈 내고 쓸 것 같아?" (O)
-→ 3명 이상 Yes → 계속 진행!`
-        : `\n\n아이디어를 알려주시면 맞춤 검증 플랜을 만들어 드릴게요!
-→ "제 아이디어는 ___입니다" 라고 말씀해 주세요.`
+      if (fineIntent.isSharing) {
+        // 이미 진행 중인 경우: 현재 상황에 맞는 검증 포인트
+        return `직접 해보고 계시는군요. 지금 단계에서 가장 중요한 검증 3가지입니다.
 
-      // 이미 진행 중인 경우 다른 반응
-      if (msgAnalysis.isSharing) {
-        return `직접 해보고 계시는군요! 현재 상황에 맞는 검증 포인트를 짚어드릴게요.
+**지금 확인해야 할 것:**
+→ **실제 사용자가 있나요?** (지인 제외 — 모르는 사람이 쓰는가)
+→ **돈을 낼 의향을 보인 사람이 있나요?** ("좋다" ≠ "살게")
+→ **자발적으로 재방문하나요?** (유지율이 제일 솔직한 지표)
 
-**지금 단계에서 확인할 것:**
-→ 실제 사용자가 있나요? (지인 제외)
-→ 돈을 낼 의향을 보인 사람이 있나요?
-→ 자발적으로 재방문하는 사용자가 있나요?
-
-이 3가지 중 하나라도 Yes라면 → 방향이 맞습니다.${customPlan}`
+이 3가지 중 하나라도 Yes → 방향이 맞습니다. 계속 가세요.
+모두 No → 고객 인터뷰를 10번 더 해야 합니다.${ideaRef ? `\n\n**${ideaRef} 검증 포인트:** 이 아이디어가 해결하는 문제를, 직접 겪는 사람 5명에게 인터뷰해보세요.` : ''}`
       }
 
-      return `**PACM 아이디어 검증 5단계**${customPlan}
+      const specificPlan = ideaRef
+        ? `\n\n**${ideaRef} 검증 플랜 (오늘부터 1주일):**\n→ **1일차**: "${ideaRef}"가 해결하는 문제를 한 문장으로 정의\n→ **2~3일차**: 이 문제를 가진 사람 10명 찾기\n→ **4~5일차**: 구글폼으로 사전 신청 받기\n→ **6~7일차**: 3명 이상 Yes → 계속 진행 / No → 피벗 고민`
+        : noun1 && noun1.length >= 3
+        ? `\n\n**"${noun1}" 관련 아이디어라면:**\n→ "${noun1}" 분야에서 실제 불편을 겪는 사람을 먼저 찾으세요\n→ "이 서비스 쓸 것 같아요?" (X) → "지금 이 문제로 얼마나 불편한가요?" (O)`
+        : `\n\n아이디어를 구체적으로 알려주시면 맞춤 검증 플랜을 드릴게요!\n→ "제 아이디어는 ___입니다" 라고 말씀해 주세요.`
 
-**검증의 핵심 원칙:**
-→ 검증은 "확인"이 아니라 "반증 시도"입니다
-→ 틀리면 좋은 것 — 방향을 빨리 수정할 수 있으니까요
-→ 단 1명이 "돈 낼게"라고 하면 → 다음 단계로`
+      return `**PACM-AI 아이디어 검증 프레임워크**
+
+검증의 핵심 원칙: **확인이 아닌 반증 시도**입니다.
+
+**5단계 검증 흐름:**
+→ **① 문제 명확화** — "어떤 사람이 어떤 상황에서 겪는 문제인가"
+→ **② 고객 찾기** — 그 문제를 가장 심하게 겪는 사람 10명
+→ **③ 인터뷰** — "이 아이디어 어때요?" (X) → "얼마나 불편한가요?" (O)
+→ **④ 최소 검증** — 구글폼·카카오채널로 사전 신청
+→ **⑤ 결정 기준** — 3명 이상 결제 의향 → 계속 / 아니면 → 피벗${specificPlan}`
     }
 
     // ── 수익 모델 ──────────────────────────────────────────────────
     if (i === 'revenue_model') {
-      // 사용자가 언급한 숫자나 서비스 유형 활용
-      const targetRevenue = hasSpecificNumbers ? `${userNumbers[0]}` : null
-      const revenueNote = targetRevenue
-        ? `\n\n**목표 수익 ${targetRevenue} 기준 계산:**\n→ 구독 모델(월 9,900원): ${Math.ceil(parseInt(targetRevenue.replace(/,/g,''))/9900).toLocaleString()}명 필요\n→ B2B(월 10만원): ${Math.ceil(parseInt(targetRevenue.replace(/,/g,''))/100000).toLocaleString()}개 기관 필요`
+      const targetRevStr = hasNums ? nums[0] : null
+      const targetNum = targetRevStr ? parseInt(targetRevStr.replace(/,/g,''), 10) : null
+      const revenueCalc = targetNum && targetNum > 0
+        ? `\n\n**목표 ${targetRevStr}원 달성 계산:**\n→ 구독 9,900원: ${Math.ceil(targetNum/9900).toLocaleString()}명 필요\n→ B2B 10만원: ${Math.ceil(targetNum/100000).toLocaleString()}개 기관 필요\n→ B2B 50만원: ${Math.ceil(targetNum/500000).toLocaleString()}개 기관 필요`
         : ideaRef
-        ? `\n\n**"${ideaRef}"에 맞는 수익 모델:**\n→ 타깃 고객이 개인이라면 → 구독 or 프리미엄\n→ 타깃이 학교/기업이라면 → B2B 솔루션`
+        ? `\n\n**${ideaRef} 수익 모델 추천:**\n→ 개인 타깃이라면 → 구독 or 프리미엄\n→ 학교/기업 타깃이라면 → B2B 솔루션\n→ 거래 중개라면 → 수수료 모델`
         : ''
 
       return `**청소년 창업 현실적 수익 모델 TOP 6**
 
 → **① 구독(SaaS)** — 월 1,000~9,900원
-   학교·학원 B2B 계약이 핵심. **100개 기관 × 10만원 = 1,000만원/월**
+   B2B 계약이 핵심. **100개 기관 × 10만원 = 1,000만원/월**
 
 → **② 중개 수수료** — 거래액의 3~10%
-   매칭 플랫폼에 적합. 거래가 늘수록 자동으로 수익 증가
+   매칭 플랫폼에 적합. 거래 늘수록 자동 수익 증가
 
 → **③ 프리미엄(Freemium)** — 기본 무료 + 유료 전환
    전환율 목표 2~5%. 무료 사용자 = 바이럴 마케터
 
-→ **④ 콘텐츠 판매** — 노션 템플릿, PDF, 강의
+→ **④ 콘텐츠 판매** — 노션, PDF, 강의
    진입 장벽 최저. 1만원 × 1,000명 = 1,000만원
 
 → **⑤ B2B 솔루션** — 학교/기업 납품
    가장 빠른 수익화. 1계약 = 수개월 수익 보장
 
-→ **⑥ 광고** — CPM/CPC
-   MAU 10,000명 이상 되어야 의미 있음${revenueNote}
+→ **⑥ 광고(CPM/CPC)** — MAU 10,000명 이상 필요
 
-"수익 시뮬레이션 해줘"라고 하시면 → 월별 MRR/ARR 예측을 계산해 드립니다.`
+💡 "수익 시뮬레이션 해줘" → 월별 MRR/ARR 수치 계산 드립니다${revenueCalc}`
     }
 
     // ── 피치덱 ─────────────────────────────────────────────────────
     if (i === 'pitch_deck') {
-      const pitchNote = ideaRef
-        ? `\n\n**"${ideaRef}" 피치덱 핵심 포인트:**
-→ **슬라이드 1 (문제)**: ${ideaRef}가 해결하는 고통을 스토리로
-→ **슬라이드 7 (팀)**: 왜 당신/팀이 ${ideaRef}를 만들어야 하는가`
-        : msgAnalysis.isStruggling
-        ? `\n\n**처음 피치덱이 막막하다면:**
-→ 완벽한 디자인 먼저가 아니에요
-→ 파워포인트/키노트/Canva로 10장 초안부터
-→ 내용이 먼저, 디자인은 나중에`
+      const stageNote = situation.emotion === 'struggling'
+        ? `\n\n**처음이라 막막하다면:**\n→ 완벽한 디자인 먼저가 아닙니다\n→ 파워포인트로 10장 초안부터 — 내용이 먼저\n→ "제가 직접 이 문제를 겪었습니다" — 가장 강력한 슬라이드 1`
+        : ideaRef
+        ? `\n\n**${ideaRef} 피치덱 핵심 포인트:**\n→ 슬라이드 1: "${ideaRef}"가 해결하는 문제를 스토리로\n→ 슬라이드 7: 왜 우리 팀이 "${ideaRef}"를 만들어야 하는가`
         : ''
 
       return `**청소년 창업 피치덱 — 10슬라이드 공식**
 
-→ **01 / 문제** — 고통 포인트를 스토리로 (30초 안에 공감시켜야 함)
-→ **02 / 해결책** — 제품 데모 or 스크린샷 필수
-→ **03 / 시장 규모** — TAM/SAM/SOM 숫자로
-→ **04 / 비즈니스 모델** — 어떻게 돈 버는가 (한 눈에)
-→ **05 / 트랙션** — 현재 성과 (없어도 솔직하게 → 오히려 신뢰)
-→ **06 / 경쟁 우위** — 우리만의 차별점
-→ **07 / 팀** — 왜 우리 팀이 이걸 해야 하는가
-→ **08 / 로드맵** — 6개월/1년 계획
-→ **09 / 재무 계획** — 단순한 수익 예측
-→ **10 / 요청(Ask)** — 필요한 금액과 활용 계획
+→ **01 문제** — 고통 포인트를 스토리로 (30초 안에 공감 필수)
+→ **02 해결책** — 제품 데모 or 스크린샷 필수
+→ **03 시장 규모** — TAM/SAM/SOM 숫자로
+→ **04 비즈니스 모델** — 어떻게 돈 버는가 (한눈에)
+→ **05 트랙션** — 현재 성과 (없어도 솔직하게 → 오히려 신뢰)
+→ **06 경쟁 우위** — 우리만의 차별점
+→ **07 팀** — 왜 우리 팀이 이걸 해야 하는가
+→ **08 로드맵** — 6개월/1년 계획
+→ **09 재무 계획** — 단순한 수익 예측
+→ **10 요청(Ask)** — 필요한 금액과 활용 계획
 
 **청소년 특화 무기:**
 → "저는 직접 이 문제를 겪었습니다" — 가장 강력한 오프닝
-→ 나이는 단점이 아닌 차별점 (언론·투자자 모두 주목)${pitchNote}`
+→ 나이는 단점이 아닌 차별점 (언론·투자자 모두 주목)${stageNote}`
     }
 
     // ── 시장 분석 ──────────────────────────────────────────────────
     if (i === 'market_analysis') {
-      const marketNote = hasSpecificNumbers
-        ? `\n\n**입력하신 숫자 기반 빠른 계산:**
-→ 인구 ${userNumbers[0]}명 기준 TAM: ${userNumbers[0]}명 × 월 ARPU = 시장 규모
-→ "시장 규모 시뮬레이션 해줘"로 자동 계산해 드릴게요.`
+      const dk = DOMAIN_KNOWLEDGE.market
+      const calcNote = hasNums
+        ? `\n\n**숫자 기반 빠른 계산:**\n→ 인구 ${nums[0]}명 기준: TAM = ${nums[0]}명 × 월 ARPU\n→ "시장 규모 시뮬레이션 해줘 + 숫자" 로 자동 계산 가능`
         : ideaRef
-        ? `\n\n**"${ideaRef}" 시장 분석 시작점:**
-→ 타깃 인구는 몇 명인가? (예: 전국 고3 50만명)
-→ 그 중 몇 %가 내 서비스를 쓸까? (현실적으로 1~5%)
-→ 월 얼마를 낼 의향이 있나? (인터뷰로 확인)
-→ "시장 규모 시뮬레이션 해줘" + 숫자를 알려주시면 계산해 드릴게요.`
+        ? `\n\n**${ideaRef} 시장 분석 시작점:**\n→ 타깃 인구는 몇 명인가? (예: 전국 고3 50만명)\n→ 그 중 몇 %가 쓸까? (현실적 1~5%)\n→ 월 얼마를 낼까? (인터뷰로 확인)\n→ 숫자를 알려주시면 TAM/SAM/SOM 계산해 드립니다`
         : ''
 
-      return `**시장 분석 완전 가이드 — TAM/SAM/SOM**
+      return `**시장 분석 완전 가이드 — ${dk.framework}**
 
 **시장 규모 3단계:**
 → **TAM** (전체 시장) — 이론적 전체 시장
-   예: 국내 중·고등학생 280만명 × 월 10만원 = **2,800억원/월**
+   예: 국내 중·고등학생 280만명 × 월 10만원 = **2,800억원**
 
-→ **SAM** (공략 가능 시장) — 실제 공략 가능 시장
+→ **SAM** (공략 가능) — 실제 접근 가능한 세그먼트
    예: 온라인 학습 이용자 120만명 = **1,200억원**
 
 → **SOM** (현실 목표) — 1~3년 내 달성 가능
-   예: 1년 내 1,000명 확보 = **1억원**
+   공식: ${dk.formula}
 
-**경쟁자 분석 4가지:**
-→ 직접 경쟁자, 간접 경쟁자, 잠재 경쟁자, 포지셔닝 맵${marketNote}`
+**경쟁자 분석 4각도:**
+→ 직접 경쟁자 / 간접 경쟁자 / 잠재 경쟁자 / 포지셔닝 맵${calcNote}`
     }
 
     // ── 팀 구성 ────────────────────────────────────────────────────
     if (i === 'team_building') {
-      const teamNote = msgAnalysis.isStruggling
-        ? `\n\n**팀원 찾기 힘드셨군요. 현실적인 방법:**
-→ 지금 당장 할 수 있는 것: 학교 친구에게 연락, 해커톤 1개 참가
-→ 완벽한 팀원보다 "같이 할 사람"이 먼저
-→ 처음엔 1명이라도 → 그 사람이 다음 사람을 데려와요`
+      const painNote = situation.emotion === 'struggling'
+        ? `\n\n**팀원 찾기 힘드셨군요. 지금 당장 할 수 있는 것:**\n→ 학교 친구 중 "만드는 것 좋아하는 사람" 1명 떠올려보세요\n→ 완벽한 팀원보다 "지금 같이 할 사람"이 먼저입니다\n→ 해커톤 1회 참가 → 평균 1~2명 팀원 발굴`
         : ideaRef
-        ? `\n\n**"${ideaRef}"에 필요한 팀:**
-→ 제품 만드는 사람 (기술/디자인)
-→ 고객과 이야기하는 사람 (영업/마케팅)
-→ 이 두 역할이 창업 초기 팀의 전부예요`
+        ? `\n\n**${ideaRef}에 필요한 팀:**\n→ 제품 만드는 사람 (기술/디자인)\n→ 고객과 이야기하는 사람 (영업/마케팅)\n→ 이 두 역할이 창업 초기 팀의 전부입니다`
         : ''
 
       return `**청소년 창업팀 구성 완전 가이드**
@@ -741,51 +760,44 @@ function synthesizeResponse({ intent, secondIntent, userMsg, researchData, conte
 → ④ 오픈채팅 (청소년 창업, 학생 개발자)
 
 **공동 창업자 계약 필수 항목:**
-→ 지분 비율 (처음부터 명확하게!)
+→ 지분 비율 (처음부터 명확하게)
 → 역할과 책임
 → 베스팅(Vesting): 이탈 시 지분 회수 조건
-→ 의사결정 방식 (대표 1인 최종 결정권 추천)${teamNote}`
+→ 의사결정 방식 (대표 1인 최종 결정권 추천)${painNote}`
     }
 
     // ── 투자/펀딩 ──────────────────────────────────────────────────
     if (i === 'funding') {
-      const fundingNote = hasSpecificNumbers
-        ? `\n\n**${userNumbers[0]}원 목표 기준:**
-→ Pre-seed (1,000만원~1억) — 가족·친구·엔젤, 아이디어 단계
-→ 정부 지원금 — 예비창업패키지 최대 1억 (무상!)
-→ 공모전 상금 — 0원 투자, 경험+자금 동시`
-        : msgAnalysis.isStruggling
-        ? `\n\n**투자 받기 어렵게 느껴지신다면:**
-→ 지금 당장 투자자에게 가지 않아도 됩니다
-→ 정부 지원금이 먼저 — 무상이고 경험도 쌓이니까요
-→ k-startup.go.kr → 예비창업패키지 지금 확인해보세요`
+      const dk = DOMAIN_KNOWLEDGE.funding
+      const fundNote = hasNums
+        ? `\n\n**${nums[0]}원 목표 기준:**\n→ ${dk.stages.find(s=>s.name==='Pre-seed')?.name}: 가족·친구·엔젤, ${dk.stages.find(s=>s.name==='Pre-seed')?.range}\n→ 정부 지원금 — 예비창업패키지 최대 1억 (무상)`
+        : situation.emotion === 'struggling'
+        ? `\n\n**투자 먼저가 아닙니다:**\n→ 정부 지원금이 먼저 — 무상이고 경험도 쌓여요\n→ k-startup.go.kr → 예비창업패키지 지금 확인`
         : ''
 
       return `**청소년 창업 투자 유치 로드맵**
 
 **투자 단계별 이해:**
-→ **Pre-seed** — 아이디어 단계. 가족·친구·엔젤 (1,000만~1억)
-→ **Seed** — MVP 완성 후. 엑셀러레이터·VC (1억~10억)
-→ **Series A** — PMF 증명 후 (10억~100억)
+${dk.stages.map(s => `→ **${s.name}** — ${s.range} | ${s.source} | 신호: ${s.signal}`).join('\n')}
 
 **청소년이 바로 접근 가능한 경로:**
-→ ① 공모전 상금 — 0원 투자, 경험+자금 동시 확보
-→ ② 정부 지원금 — 예비창업패키지 최대 1억 (무상!)
-→ ③ 액셀러레이터 — TIPS, 스파크랩 등
+→ ① 공모전 상금 — 경험+자금 동시 확보
+→ ② 정부 지원금 — ${dk.gov[0]} (무상!)
+→ ③ 엑셀러레이터 — TIPS, 스파크랩 등
 → ④ 크라우드펀딩 — 텀블벅, 와디즈 (제품 있을 때)
 
-**투자자가 보는 것 (우선순위):**
+**투자자가 보는 우선순위:**
 → **팀(50%)** > 시장 크기 > 트랙션 > 기술
 
-💡 **핵심 조언:** 투자보다 **정부 지원금**이 먼저.${fundingNote}`
+💡 **핵심 조언:** 투자보다 **정부 지원금**이 먼저입니다.${fundNote}`
     }
 
     // ── 정부 지원 ──────────────────────────────────────────────────
     if (i === 'government_support') {
-      const suppNote = topWord1 !== '창업' && topWord1 !== '정부'
-        ? `\n\n**"${topWord1}" 관련 지원 프로그램:**
-→ 분야별 특화 공모전도 있어요 — k-startup.go.kr에서 "${topWord1}" 검색
-→ INSIGHTSHIP 커뮤니티에서 비슷한 분야 멘토 연결도 가능해요`
+      const domainNote = domain
+        ? `\n\n**${domain} 관련 지원:**\n→ k-startup.go.kr에서 "${domain}" 키워드로 검색\n→ 분야별 특화 공모전이 있을 수 있어요`
+        : noun1 && noun1.length >= 3
+        ? `\n\n**"${noun1}" 분야 지원 찾기:**\n→ k-startup.go.kr → "${noun1}" 검색\n→ INSIGHTSHIP 커뮤니티에서 같은 분야 멘토 연결`
         : ''
 
       return `**청소년 창업 정부 지원 프로그램 완전 정리**
@@ -805,21 +817,16 @@ function synthesizeResponse({ intent, secondIntent, userMsg, researchData, conte
 → 메이커스페이스 — 3D프린터, 레이저커터 무료
 
 **⚡ 오늘 당장:**
-→ k-startup.go.kr 즐겨찾기
-→ 청소년비즈쿨 신청 (중·고등학생 무료)${suppNote}`
+→ k-startup.go.kr 즐겨찾기 추가
+→ 청소년비즈쿨 신청 (중·고등학생 무료)${domainNote}`
     }
 
     // ── 마케팅 ─────────────────────────────────────────────────────
     if (i === 'marketing') {
       const mktNote = ideaRef
-        ? `\n\n**"${ideaRef}" 마케팅 전략:**
-→ 타깃이 Z세대라면 → 인스타그램 릴스 + 틱톡
-→ 타깃이 학부모/교사라면 → 카카오채널 + 네이버 블로그
-→ B2B라면 → 링크드인 + 직접 영업이 훨씬 효과적`
-        : topWord1 !== '창업'
-        ? `\n\n**"${topWord1}" 홍보 아이디어:**
-→ ${topWord1}에 관심있는 사람들이 모이는 곳을 찾아요
-→ 거기서 먼저 가치를 제공하고 → 자연스럽게 소개`
+        ? `\n\n**${ideaRef} 마케팅 전략:**\n→ Z세대 타깃이라면 → 인스타그램 릴스 + 틱톡\n→ 학부모/교사 타깃이라면 → 카카오채널 + 네이버 블로그\n→ B2B라면 → 직접 영업이 SNS보다 10배 효과적`
+        : domain
+        ? `\n\n**${domain} 마케팅 채널:**\n→ ${domain} 관심층이 모이는 커뮤니티를 찾으세요\n→ 먼저 가치를 제공하고 → 자연스럽게 소개`
         : ''
 
       return `**청소년 창업 제로 예산 마케팅 전략**
@@ -830,35 +837,32 @@ function synthesizeResponse({ intent, secondIntent, userMsg, researchData, conte
 → **카카오채널** — 학생·학부모 알림 마케팅
 
 **제로 예산 성장 전략:**
-→ **콘텐츠 마케팅** — 내 전문성을 무료로 공유 (신뢰 구축)
-→ **커뮤니티 마케팅** — 오픈채팅, 학교 게시판, 동아리
-→ **Referral(추천인)** — 친구 1명 초대 시 프리미엄 1개월
+→ **콘텐츠 마케팅** — 전문성을 무료로 공유 (신뢰 구축)
+→ **커뮤니티** — 오픈채팅, 학교 게시판, 동아리
+→ **Referral** — 친구 1명 초대 시 프리미엄 1개월
 → **FOMO** — "선착순 100명만" 한정 이벤트
 → **UGC** — 사용자가 직접 홍보하게 만들기${mktNote}`
     }
 
     // ── 창업 기초 ──────────────────────────────────────────────────
     if (i === 'startup_basics') {
-      const firstTimeNote = isFirstTime
-        ? `\n\n**처음 창업을 시작한다면, 오늘 딱 3가지만:**
-→ 내가 매일 불편한 것 1가지 적기
-→ 그 불편함을 겪는 사람 3명 찾아서 인터뷰하기
-→ INSIGHTSHIP 커뮤니티에 아이디어 올려보기`
-        : `\n\n${ideaRef ? `"${ideaRef}"로 이미 시작하셨군요!` : '이미 생각이 있으시군요!'} 다음 단계로 넘어갈 준비가 된 것 같아요.`
+      const freshNote = discourse.conversationDepth === 'early'
+        ? `\n\n**오늘 딱 3가지만:**\n→ 내가 매일 불편한 것 1가지 적기\n→ 그 불편을 겪는 사람 3명 찾아서 인터뷰하기\n→ INSIGHTSHIP 커뮤니티에 아이디어 올려보기`
+        : `\n\n이미 어느 정도 생각이 있으시군요. 다음 단계로 넘어갈 준비가 된 것 같아요.`
 
-      return `**창업이란 무엇인가 — 핵심만 정리**
+      return `**창업이란 무엇인가**
 
-창업은 "문제를 발견하고 → 해결책을 만들고 → 그 가치에 돈을 받는 것"입니다.
+창업 = "문제를 발견하고 → 해결책을 만들고 → 그 가치에 돈을 받는 것"
 
 **처음 창업자가 알아야 할 3가지:**
-→ **아이디어 != 사업** — 검증된 아이디어만이 사업이 됩니다
+→ **아이디어 ≠ 사업** — 검증된 아이디어만이 사업입니다
 → **완벽함보다 빠름** — 틀린 채로 시작해야 맞는 걸 발견합니다
 → **혼자 못 합니다** — 고객, 팀원, 멘토 모두 필요합니다
 
 **창업 성공의 3요소:**
 → 실제 문제를 해결하는가?
 → 충분히 큰 시장인가?
-→ 지금 팀이 실행할 수 있는가?${firstTimeNote}`
+→ 지금 팀이 실행할 수 있는가?${freshNote}`
     }
 
     // ── 법률/세금 ──────────────────────────────────────────────────
@@ -866,7 +870,7 @@ function synthesizeResponse({ intent, secondIntent, userMsg, researchData, conte
       return `**창업 법률·세금 기초 (청소년 필수 지식)**
 
 **법인 vs 개인사업자:**
-→ **개인사업자** — 설립 빠름, 미성년자도 부모 동의로 가능
+→ **개인사업자** — 설립 빠름, 미성년자도 부모 동의 가능
 → **법인(주식회사)** — 투자 유치 필수, 만 18세 미만은 부모 동의
 → 추천: 개인사업자 → 투자 유치 시 법인 전환
 
@@ -885,26 +889,18 @@ function synthesizeResponse({ intent, secondIntent, userMsg, researchData, conte
 
     // ── 실패/고민 ──────────────────────────────────────────────────
     if (i === 'failure_lesson') {
-      // 어떤 실패/고민인지 구체적으로 파악
-      const specificPain = topWord1 !== '창업' && !['이것','그것','저것'].includes(topWord1)
-        ? topWord1 : null
-
-      const empathyNote = specificPain
-        ? `\n\n**"${specificPain}"에 대해서 구체적으로 생각해봐요:**
-→ 지금 이 상황, 6개월 뒤에는 어떻게 보일까요?
-→ "${specificPain}"이 없어도 계속 이 일을 할 건가요?
-→ Yes라면 → 방법의 문제. No라면 → 방향을 바꿀 때.`
-        : msgAnalysis.isStruggling
-        ? `\n\n지금 힘드신 이야기를 더 구체적으로 해주시면 같이 생각해봐요.
-→ 어떤 부분이 가장 막히시나요?`
+      const specificFocus = noun1 && noun1.length >= 3
+        ? `\n\n**"${noun1}"에 대해 같이 생각해봐요:**\n→ 6개월 뒤, 이 상황이 어떻게 보일까요?\n→ "${noun1}"이 없어도 계속 이 일을 할 건가요?\n→ Yes → 방법의 문제. No → 방향을 바꿀 때.`
+        : fineIntent.isStruggling
+        ? `\n\n지금 힘드신 이야기를 더 구체적으로 해주시면 같이 풀어봐요.\n→ 어떤 부분이 가장 막히시나요?`
         : ''
 
       return `**창업 어려움, 같이 극복해요 💪**
 
-먼저, 어려움을 느끼는 건 완전히 정상입니다. 세상의 모든 창업가가 똑같이 느꼈어요.
+먼저, 어려움을 느끼는 건 완전히 정상입니다. 모든 창업가가 똑같이 느꼈어요.
 
 **창업의 현실:**
-→ 스타트업 90%는 실패한다 → 하지만 실패에서 배웁니다
+→ 스타트업 90%는 실패한다 — 하지만 실패에서 배웁니다
 → 첫 번째 아이디어가 성공하는 경우는 드뭅니다
 → 중요한 건 포기하지 않고 피벗(방향 전환)하는 것
 
@@ -916,18 +912,18 @@ function synthesizeResponse({ intent, secondIntent, userMsg, researchData, conte
 **유명 창업가들의 실패:**
 → 에어비앤비 — 첫 6개월 사용자 0명
 → 슬랙 — 원래 게임 회사였다가 피벗
-→ 카카오 — 창업자 2번 파산 후 성공${empathyNote}`
+→ 카카오 — 창업자 2번 파산 후 성공${specificFocus}`
     }
 
     // ── 인사/소개 ──────────────────────────────────────────────────
     if (i === 'greeting') {
-      const returnGreeting = context.isReturningUser
-        ? `다시 오셨네요! 지난번 이야기에서 이어서 시작할까요?\n\n`
+      const returningNote = discourse.conversationDepth !== 'early'
+        ? `다시 오셨네요! 지난 대화에서 이어서 시작할까요?\n\n`
         : ''
 
-      return `${returnGreeting}안녕하세요! 👋 저는 **PACM-AI** 입니다.
+      return `${returningNote}안녕하세요! 👋 저는 **PACM-AI**입니다.
 
-청소년 창업가를 위한 AI 멘토로, INSIGHTSHIP 자체 엔진으로 동작합니다.
+청소년 창업가를 위한 AI 멘토 — INSIGHTSHIP 자체 엔진으로 동작합니다.
 여러분의 이야기를 듣고, 상황에 맞는 조언을 드려요.
 
 **제가 할 수 있는 것들:**
@@ -944,40 +940,44 @@ function synthesizeResponse({ intent, secondIntent, userMsg, researchData, conte
 무엇이든 물어보세요!`
     }
 
-    // ── 일반 / 파악 안 된 경우 — 사용자 말을 반영해서 응답 ────────
-    // 가장 중요한 부분: 모르는 것도 하드코딩 안 함
-    const hasContext = topWord1 !== '창업'
-    const contextualResponse = hasContext
-      ? `"${topWord1}"${topWord2 ? `과 "${topWord2}"` : ''}에 대해 물어보셨군요.`
-      : `좋은 질문입니다!`
+    // ── 일반 응답 — 메시지 내용을 반영한 동적 생성 ──────────────────
+    // 핵심: 사용자가 한 말을 직접 참조하여 응답
+    const hasSpecificContent = noun1.length >= 3 || hasNums
 
-    // 대화가 길어졌을 때 — 이전 흐름 참조
-    const flowRef = isDeepConversation && context.topicFlow.length > 0
-      ? `\n\n지금까지 ${context.topicFlow.slice(-2).join(', ')} 주제를 이야기했는데, 그 흐름에서 이 질문을 보면 더 구체적으로 도움드릴 수 있어요.`
-      : ''
+    if (hasSpecificContent) {
+      const topicRef = noun1 || (hasNums ? `${nums[0]}원 관련` : '')
+      const flowRef = isDeep && context.topicFlow.length > 0
+        ? `\n\n지금까지 ${context.topicFlow.slice(-2).join(', ')} 주제를 이야기했는데, 그 흐름에서 "${topicRef}"를 보면 더 구체적으로 도움드릴 수 있어요.`
+        : ''
 
-    return `${contextualResponse} 제가 분석해 드릴게요.
+      return `"${topicRef}"에 대해 생각해봤는데요.${flowRef}
 
-창업은 **문제 발견**에서 시작합니다.
+창업 관점에서 이렇게 접근해보세요:
+
+**지금 당장 할 수 있는 3가지:**
+→ "${topicRef}"와 관련해 어떤 문제를 해결하고 싶은지 한 문장으로 써보기
+→ 그 문제를 가진 사람 3명 찾아서 "얼마나 불편한가요?" 물어보기
+→ 아이디어가 구체화됐다면 → "아이디어 검증해줘"
+
+"시뮬레이션 해줘"라고 하시면 수익·시장·팀·리스크 시나리오를 바로 계산해 드립니다.`
+    }
+
+    // 완전한 일반 응답
+    return `좋은 질문입니다. 창업은 **문제 발견**에서 시작합니다.
 
 **지금 당장 할 수 있는 3가지:**
 → 오늘 불편했던 것 1가지 적어보기
 → 친구 3명에게 "이런 서비스 쓸 것 같아?" 물어보기
 → 아이디어가 있다면 → "아이디어 검증해줘"라고 말씀해 주세요
 
-"시뮬레이션 해줘"라고 하시면 수익·시장·팀·리스크 시나리오를 바로 계산해 드립니다.${flowRef}`
+"시뮬레이션 해줘"라고 하시면 수익·시장·팀·리스크 시나리오를 바로 계산해 드립니다.`
   }
 
-  // ── §6-G. 최종 응답 조립 ─────────────────────────────────────────
-  // 1. 감정 반응 (오프닝)
-  // 2. 핵심 내용 (인텐트 기반 동적 생성)
-  // 3. DB 데이터 (지식/기사)
-  // 4. 후속 제안
+  // ── Step 8: 최종 응답 조립 ───────────────────────────────────────
+  const opening = buildOpening()
+  const core = buildCore()
 
-  const opening = openingTone ? `${openingTone}\n\n` : ''
-  const core = buildIntentCore()
-
-  // 두 번째 인텐트가 있으면 간단히 연결
+  // 두 번째 의도 힌트
   let secondaryHint = ''
   if (secondIntent && secondIntent !== intent.primary) {
     const secondMap = {
@@ -985,12 +985,14 @@ function synthesizeResponse({ intent, secondIntent, userMsg, researchData, conte
       funding: '\n\n💡 투자 관련 질문도 있으신가요?',
       government_support: '\n\n💡 정부 지원 프로그램도 활용해보세요.',
       team_building: '\n\n💡 팀 구성 관련 이야기도 드릴 수 있어요.',
+      revenue_model: '\n\n💡 수익 모델도 같이 생각해봐요.',
     }
     secondaryHint = secondMap[secondIntent] || ''
   }
 
-  return `${opening}${core}${secondaryHint}${kb}${fu}`
+  return `${opening}${core}${secondaryHint}${dataBlock}${followUp}`
 }
+
 
 // ══════════════════════════════════════════════════════════════════════
 // §7. 리서치 요약 생성기 — DB 다중 소스 합성

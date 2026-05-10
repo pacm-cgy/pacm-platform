@@ -1077,17 +1077,175 @@ function TeamMemberDetail({ teamId }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// AI 멘토 분석 패널 — 대시보드 인라인 위젯
+// ══════════════════════════════════════════════════════════════════════
+
+function MentorAnalysisPanel({ onTabChange }) {
+  const [mentorStats, setMentorStats] = useState(null)
+  const [loading, setLoading]         = useState(true)
+  const [recentSessions, setRecent]   = useState([])
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      try {
+        // 멘토링 work_logs 집계
+        const { data: wl } = await supabase.from('work_logs')
+          .select('member_username,member_name,team,task_type,created_at,status')
+          .eq('team', 'mentoring')
+          .order('created_at', { ascending: false })
+          .limit(200)
+
+        // ai_mentor_sessions 테이블 (없을 수도 있음 — graceful)
+        const { data: sessions } = await supabase.from('mentor_sessions')
+          .select('id,user_id,created_at,mentor_persona,feedback_score')
+          .order('created_at', { ascending: false })
+          .limit(10)
+
+        // 집계 계산
+        const today = new Date().toDateString()
+        const todayMentor   = (wl||[]).filter(l => new Date(l.created_at).toDateString() === today).length
+        const weekAgo       = new Date(Date.now() - 7*24*60*60*1000)
+        const weeklyMentor  = (wl||[]).filter(l => new Date(l.created_at) >= weekAgo).length
+        const mentorMembers = [...new Set((wl||[]).map(l => l.member_username))].length
+
+        // 유형별 카운트 (task_type)
+        const typeCount = {}
+        for (const l of (wl||[])) {
+          const t = l.task_type || 'other'
+          typeCount[t] = (typeCount[t] || 0) + 1
+        }
+
+        setMentorStats({ todayMentor, weeklyMentor, mentorMembers, typeCount, total: (wl||[]).length })
+        setRecent(sessions || [])
+      } catch { /* DB 없을 시 무시 */ }
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  if (loading) {
+    return (
+      <div style={{ marginBottom:32, padding:'20px 0', textAlign:'center', color:'var(--t4)', fontSize:12 }}>
+        <Loader size={14} style={{ animation:'spin 1s linear infinite', display:'inline-block', marginRight:6 }}/>
+        멘토링 데이터 로딩 중...
+      </div>
+    )
+  }
+
+  if (!mentorStats) return null
+
+  const TOP_TYPES = Object.entries(mentorStats.typeCount).sort(([,a],[,b])=>b-a).slice(0,5)
+
+  return (
+    <div style={{ marginBottom:32 }}>
+      {/* 헤더 */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{ width:28, height:28, borderRadius:7, background:'rgba(52,211,153,.12)', border:'1px solid rgba(52,211,153,.25)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <Award size={14} color="#34D399"/>
+          </div>
+          <div>
+            <div style={{ fontFamily:'var(--f-mono)', fontSize:9, color:'#34D399', letterSpacing:'2px' }}>AI MENTOR ANALYSIS</div>
+            <div style={{ fontSize:12, fontWeight:600, color:'var(--t1)' }}>멘토링팀 활동 분석</div>
+          </div>
+        </div>
+        <button onClick={() => onTabChange('workers')}
+          className="btn btn-ghost btn-sm" style={{ fontSize:11, gap:4 }}>
+          <ChevronRight size={11}/> 워커 탭에서 보기
+        </button>
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))', gap:12 }}>
+        {/* 멘토링 지표 카드 */}
+        <div style={{ background:'var(--bg2)', border:'1px solid rgba(52,211,153,.2)', borderRadius:11, padding:'16px 18px' }}>
+          <div style={{ fontFamily:'var(--f-mono)', fontSize:9, color:'var(--t4)', letterSpacing:'1px', marginBottom:12 }}>MENTORING KPIs</div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10 }}>
+            {[
+              { label:'오늘', value: mentorStats.todayMentor, color:'#34D399' },
+              { label:'이번 주', value: mentorStats.weeklyMentor, color:'#F59E0B' },
+              { label:'멘토 수', value: mentorStats.mentorMembers, color:'#818CF8' },
+            ].map((s,i) => (
+              <div key={i} style={{ textAlign:'center' }}>
+                <div style={{ fontFamily:'var(--f-display)', fontSize:22, fontWeight:700, color:s.color }}>{s.value}</div>
+                <div style={{ fontSize:10, color:'var(--t4)', marginTop:2 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 작업 유형 분포 */}
+        <div style={{ background:'var(--bg2)', border:'1px solid var(--b1)', borderRadius:11, padding:'16px 18px' }}>
+          <div style={{ fontFamily:'var(--f-mono)', fontSize:9, color:'var(--t4)', letterSpacing:'1px', marginBottom:12 }}>TASK TYPE DISTRIBUTION</div>
+          {TOP_TYPES.length === 0 ? (
+            <div style={{ color:'var(--t4)', fontSize:12, textAlign:'center', padding:'10px 0' }}>데이터 없음</div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
+              {TOP_TYPES.map(([type, count]) => {
+                const pct = Math.round((count / mentorStats.total) * 100)
+                return (
+                  <div key={type}>
+                    <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
+                      <span style={{ fontSize:11, color:'var(--t2)', fontFamily:'var(--f-mono)' }}>{type}</span>
+                      <span style={{ fontSize:10, color:'var(--t4)', fontFamily:'var(--f-mono)' }}>{count} ({pct}%)</span>
+                    </div>
+                    <div style={{ height:3, background:'var(--bg4)', borderRadius:2 }}>
+                      <div style={{ height:'100%', width:`${pct}%`, background:'#34D399', borderRadius:2, transition:'width .5s' }}/>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* 최근 멘토링 세션 (mentor_sessions 테이블) */}
+        {recentSessions.length > 0 && (
+          <div style={{ background:'var(--bg2)', border:'1px solid var(--b1)', borderRadius:11, padding:'16px 18px' }}>
+            <div style={{ fontFamily:'var(--f-mono)', fontSize:9, color:'var(--t4)', letterSpacing:'1px', marginBottom:12 }}>RECENT SESSIONS</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              {recentSessions.slice(0,5).map(s => (
+                <div key={s.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 0', borderBottom:'1px solid var(--b0)' }}>
+                  <div style={{ fontSize:16, flexShrink:0 }}>💡</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:11, fontWeight:600, color:'var(--t1)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                      {s.mentor_persona || 'LUMI'}
+                    </div>
+                    <div style={{ fontFamily:'var(--f-mono)', fontSize:9, color:'var(--t4)' }}>
+                      {new Date(s.created_at).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}
+                    </div>
+                  </div>
+                  {s.feedback_score != null && (
+                    <div style={{ fontSize:10, padding:'2px 7px', borderRadius:4, background:'rgba(245,158,11,.1)', color:'#F59E0B', fontFamily:'var(--f-mono)', flexShrink:0 }}>
+                      ★ {s.feedback_score}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // AI 워커 제어 탭 (신규)
 // ══════════════════════════════════════════════════════════════════════
 
 function WorkersTab() {
-  const [workerStatus, setWorkerStatus] = useState(null)
-  const [running, setRunning] = useState(false)
-  const [result, setResult] = useState(null)
-  const [logs, setLogs] = useState([])
-  const [loadingLogs, setLoadingLogs] = useState(false)
-  const [targetWorker, setTargetWorker] = useState('')
+  const [workerStatus, setWorkerStatus]   = useState(null)
+  const [running, setRunning]             = useState(false)
+  const [result, setResult]               = useState(null)
+  const [logs, setLogs]                   = useState([])
+  const [loadingLogs, setLoadingLogs]     = useState(false)
+  const [targetWorker, setTargetWorker]   = useState('')
+  const [liveStats, setLiveStats]         = useState(null)   // 팀별 작업 통계
+  const [autoRefresh, setAutoRefresh]     = useState(false)  // 자동 새로고침
+  const [logFilter, setLogFilter]         = useState('all')  // 팀 필터
   const logsEndRef = useRef(null)
+  const autoRefreshRef = useRef(null)
 
   const loadStatus = useCallback(async () => {
     try {
@@ -1101,10 +1259,33 @@ function WorkersTab() {
     setLoadingLogs(true)
     try {
       const { data } = await supabase.from('work_logs')
-        .select('member_name,team,title,task_type,task,created_at')
+        .select('member_username,member_name,team,title,task_type,task,status,created_at')
         .order('created_at', { ascending:false })
-        .limit(50)
+        .limit(100)
       setLogs(data || [])
+      // ── 라이브 팀별 통계 계산 ──────────────────────────────────
+      if (data?.length) {
+        const teamMap = {}
+        const typeMap = {}
+        for (const log of data) {
+          // 팀별 카운트
+          const t = log.team || 'unknown'
+          teamMap[t] = (teamMap[t] || 0) + 1
+          // 작업 유형별 카운트
+          const ty = log.task_type || 'unknown'
+          typeMap[ty] = (typeMap[ty] || 0) + 1
+        }
+        // 오늘 작업 수
+        const todayStr = new Date().toDateString()
+        const todayCount = data.filter(l =>
+          new Date(l.created_at).toDateString() === todayStr
+        ).length
+        // 성공/실패율
+        const doneCount  = data.filter(l => l.status === 'done'   || !l.status).length
+        const failCount  = data.filter(l => l.status === 'failed').length
+        const skipCount  = data.filter(l => l.status === 'skipped').length
+        setLiveStats({ teamMap, typeMap, todayCount, doneCount, failCount, skipCount, total: data.length })
+      }
     } catch { /* ignore */ }
     setLoadingLogs(false)
   }, [])
@@ -1113,6 +1294,38 @@ function WorkersTab() {
     loadStatus()
     loadLogs()
   }, [loadStatus, loadLogs])
+
+  // ── 자동 새로고침 (30초 간격) ──────────────────────────────────
+  useEffect(() => {
+    if (autoRefresh) {
+      autoRefreshRef.current = setInterval(() => {
+        loadStatus()
+        loadLogs()
+      }, 30_000)
+    } else {
+      clearInterval(autoRefreshRef.current)
+    }
+    return () => clearInterval(autoRefreshRef.current)
+  }, [autoRefresh, loadStatus, loadLogs])
+
+  // ── 실시간 work_logs 구독 ──────────────────────────────────────
+  useEffect(() => {
+    const sub = supabase
+      .channel('work_logs_live')
+      .on('postgres_changes', { event:'INSERT', schema:'public', table:'work_logs' }, payload => {
+        setLogs(prev => [payload.new, ...prev].slice(0, 100))
+        setLiveStats(prev => prev ? {
+          ...prev,
+          total: prev.total + 1,
+          todayCount: prev.todayCount + 1,
+          teamMap: { ...prev.teamMap, [payload.new.team||'unknown']: (prev.teamMap[payload.new.team||'unknown']||0)+1 },
+          doneCount: (payload.new.status === 'failed' ? prev.doneCount : prev.doneCount + 1),
+          failCount: (payload.new.status === 'failed' ? prev.failCount + 1 : prev.failCount),
+        } : prev)
+      })
+      .subscribe()
+    return () => sub.unsubscribe()
+  }, [])
 
   const runWorkers = async (opts = {}) => {
     setRunning(true)
@@ -1152,17 +1365,93 @@ function WorkersTab() {
 
   const ACTIVITY_COLOR = { night:'#60A5FA', morning:'#34D399', peak:'#F59E0B', evening:'#A855F7', late:'#F87171' }
   const ACTIVITY_LABEL = { night:'야간 조용', morning:'아침 준비', peak:'활발한 업무', evening:'저녁 활동', late:'늦은 밤' }
+  const TEAM_COLOR_MAP = {
+    operations:'#818CF8', content:'#C084FC', mentoring:'#34D399',
+    news:'#38BDF8', management:'#F87171', unknown:'#60A5FA',
+  }
+  const TEAM_LABEL_MAP = {
+    operations:'운영팀', content:'콘텐츠팀', mentoring:'멘토링팀',
+    news:'뉴스팀', management:'경영팀', unknown:'기타',
+  }
+  const filteredLogs = logFilter === 'all' ? logs : logs.filter(l => l.team === logFilter)
 
   return (
     <div>
+      {/* ── 실시간 상태 헤더 ── */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14, flexWrap:'wrap', gap:8 }}>
+        <div style={{ fontFamily:'var(--f-mono)', fontSize:10, color:'#818CF8', letterSpacing:'2px' }}>AI WORKER ENGINE — LIVE DASHBOARD</div>
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <button onClick={() => { loadStatus(); loadLogs() }}
+            className="btn btn-ghost btn-sm" style={{ gap:4, fontSize:11 }}>
+            <RefreshCw size={10}/> 새로고침
+          </button>
+          <button onClick={() => setAutoRefresh(v => !v)}
+            className="btn btn-ghost btn-sm"
+            style={{ gap:4, fontSize:11, color: autoRefresh ? '#22C55E' : 'var(--t3)', borderColor: autoRefresh ? 'rgba(34,197,94,.3)' : undefined }}>
+            {autoRefresh ? <><Wifi size={10}/> 자동 ON</> : <><WifiOff size={10}/> 자동 OFF</>}
+          </button>
+        </div>
+      </div>
+
       {/* 상태 표시 */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:10, marginBottom:20 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:10, marginBottom:16 }}>
         <StatCard label="총 워커" value={workerStatus?.total_workers || 100} icon={Bot} color="#818CF8"/>
         <StatCard label="이번 실행" value={workerStatus?.workers_this_run || '—'} icon={Activity} color="#22C55E"/>
         <StatCard label="활동 레벨" value={ACTIVITY_LABEL[workerStatus?.current_activity_level] || '—'}
           icon={Radio} color={ACTIVITY_COLOR[workerStatus?.current_activity_level] || '#60A5FA'}/>
-        <StatCard label="최근 로그" value={logs.length} icon={Clock} color="#F59E0B"/>
+        <StatCard label="오늘 작업" value={liveStats?.todayCount ?? '—'} icon={Clock} color="#F59E0B"/>
+        <StatCard label="성공" value={liveStats?.doneCount ?? '—'} icon={CheckCircle} color="#22C55E"
+          sub={liveStats ? `${Math.round((liveStats.doneCount/Math.max(1,liveStats.total))*100)}%` : undefined}/>
+        <StatCard label="실패" value={liveStats?.failCount ?? 0} icon={XCircle} color="#F43F5E"/>
       </div>
+
+      {/* ── 팀별 작업 분포 ── */}
+      {liveStats?.teamMap && (
+        <Panel style={{ marginBottom:16 }}>
+          <SectionHeader icon={Bot} label="팀별 작업 분포 (최근 100건)" color="#818CF8">
+            <select value={logFilter} onChange={e=>setLogFilter(e.target.value)}
+              style={{ fontSize:11, padding:'3px 8px', background:'var(--bg3)', border:'1px solid var(--b1)', borderRadius:6, color:'var(--t2)', cursor:'pointer' }}>
+              <option value="all">전체</option>
+              {Object.keys(TEAM_LABEL_MAP).map(k => (
+                <option key={k} value={k}>{TEAM_LABEL_MAP[k]}</option>
+              ))}
+            </select>
+          </SectionHeader>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            {Object.entries(liveStats.teamMap)
+              .sort(([,a],[,b]) => b-a)
+              .map(([team, count]) => {
+                const pct = Math.round((count / liveStats.total) * 100)
+                const color = TEAM_COLOR_MAP[team] || '#60A5FA'
+                return (
+                  <div key={team} style={{ flex:1, minWidth:120, background:`${color}10`, border:`1px solid ${color}25`, borderRadius:9, padding:'10px 14px' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                      <span style={{ fontSize:11, fontWeight:600, color }}>{TEAM_LABEL_MAP[team]||team}</span>
+                      <span style={{ fontFamily:'var(--f-mono)', fontSize:11, color:'var(--t3)' }}>{count}건</span>
+                    </div>
+                    <div style={{ height:4, background:'var(--bg4)', borderRadius:2, overflow:'hidden' }}>
+                      <div style={{ height:'100%', width:`${pct}%`, background:color, borderRadius:2, transition:'width .5s' }}/>
+                    </div>
+                    <div style={{ fontFamily:'var(--f-mono)', fontSize:9, color:'var(--t4)', marginTop:4 }}>{pct}%</div>
+                  </div>
+                )
+              })}
+          </div>
+        </Panel>
+      )}
+      {/* ── 작업 유형 태그 클라우드 ── */}
+      {liveStats?.typeMap && (
+        <div style={{ marginBottom:16, display:'flex', gap:6, flexWrap:'wrap' }}>
+          {Object.entries(liveStats.typeMap)
+            .sort(([,a],[,b]) => b-a).slice(0, 12)
+            .map(([type, count]) => (
+              <span key={type} style={{ fontSize:11, padding:'3px 10px', borderRadius:20, background:'var(--bg3)',
+                border:'1px solid var(--b1)', color:'var(--t2)', fontFamily:'var(--f-mono)' }}>
+                {type} <span style={{ color:'#818CF8', fontWeight:700 }}>{count}</span>
+              </span>
+            ))}
+        </div>
+      )}
 
       {/* 제어 버튼 */}
       <Panel style={{ marginBottom:16 }}>
@@ -3507,6 +3796,9 @@ export default function AdminPage() {
                 </>
               )}
             </div>
+
+            {/* ── AI 멘토 분석 패널 ── */}
+            <MentorAnalysisPanel onTabChange={setTab}/>
 
             {/* AI 분석 */}
             <div style={{ marginBottom:32 }}>

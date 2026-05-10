@@ -54,7 +54,7 @@ async function getNewsContext(type) {
 }
 
 // ── 자체 AI 엔진 콘텐츠 생성 ─────────────────────────────────────
-import { generateReport, getAllPersonas } from './ai-engine.js'
+import { generateReport, getAllPersonas } from './_ai-engine.js'
 
 function buildInternalResult(type, prompt, ragContext, newsContext) {
   // 타입에 따른 대표 페르소나 매핑

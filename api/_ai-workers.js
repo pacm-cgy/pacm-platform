@@ -83,7 +83,7 @@ function getWorkersCount(level) {
 // 자체 AI 엔진 — 외부 API 없음
 // ══════════════════════════════════════════════════════════════════════
 
-import { generateCommunityPost, generateReport, generateChat } from './ai-engine.js'
+import { generateCommunityPost, generateReport, generateChat } from './_ai-engine.js'
 import {
   getActivityLevel    as brainGetActivityLevel,
   getActiveWorkerCount,
@@ -96,7 +96,72 @@ import {
   generateWeeklyDiscussion,
   generateMentoringTip,
   generateInsightArticle,
+  generatePostContent,
+  generateComment,
+  generateStrategyReport,
 } from './_staff-brain.js'
+import {
+  getMood,
+  triggerMoodShift,
+  storeEpisode,
+  recallEpisodes,
+  generateMemoryReference,
+  getLangHabits,
+  applyDisfluency,
+  applySignatureEnding,
+  generateWorkReport,
+  generateSpontaneousOpinion,
+  generateDisagreement,
+  shouldInitiateConversation,
+  generateAutonomousStarter,
+  getDailyRoutineAction,
+  detectColleagueMood,
+  generateEmpathyResponse,
+  decideNextAction,
+  getCurrentGoal,
+} from './_staff-persona-engine.js'
+
+// ══════════════════════════════════════════════════════════════════════
+// 로컬 헬퍼 — thinkBeforeAct / 토픽 중복 방지
+// ══════════════════════════════════════════════════════════════════════
+
+// 트렌드 키워드 캐시 (10분 TTL)
+let _trendCache = { data: null, ts: 0 }
+async function _getTrendKeywords() {
+  if (_trendCache.data && Date.now() - _trendCache.ts < 600_000) return _trendCache.data
+  try {
+    const rows = await sbGet(
+      `news_trend_keywords?select=keyword,score&order=score.desc&limit=10`
+    )
+    const kws = Array.isArray(rows) && rows.length > 0
+      ? rows.map(r => r.keyword).filter(Boolean)
+      : ['AI', '스타트업', '창업', '투자', '기술']
+    _trendCache = { data: kws, ts: Date.now() }
+    return kws
+  } catch {
+    return ['AI', '스타트업', '창업', '투자', '기술']
+  }
+}
+
+async function thinkBeforeAct(member, actionType) {
+  const keywords = await _getTrendKeywords()
+  const hotKeyword    = keywords[0] || '창업'
+  const trendKeywords = keywords.slice(0, 5)
+  return { hotKeyword, trendKeywords }
+}
+
+// 토픽 중복 방지 (직원별 최근 10개 기억)
+const _topicMemory = new Map()  // key → string[]
+function _isDuplicateTopic(key, topic) {
+  const seen = _topicMemory.get(key) || []
+  return seen.some(t => t === topic || (t.length > 10 && topic.includes(t.slice(0, 10))))
+}
+function _rememberTopic(key, topic) {
+  const seen = _topicMemory.get(key) || []
+  seen.unshift(topic)
+  if (seen.length > 10) seen.length = 10
+  _topicMemory.set(key, seen)
+}
 
 
 // ══════════════════════════════════════════════════════════════════════
@@ -143,7 +208,7 @@ let _cachedTeam = null
 async function getAITeam() {
   if (_cachedTeam) return _cachedTeam
   try {
-    const { AI_TEAM } = await import('./ai-team.js')
+    const { AI_TEAM } = await import('./_ai-team.js')
     _cachedTeam = AI_TEAM
     return AI_TEAM
   } catch { return {} }
@@ -677,8 +742,9 @@ async function actionWeeklyDiscussion(member) {
   const topic = allDiscussions[Math.floor(Math.random() * allDiscussions.length)]
   _rememberTopic(member.key, topic)
 
-  // 자체 AI 엔진으로 주간 토론 게시글 생성
-  const body = generateReport(member.username, {}, 'event')
+  // 자체 AI 엔진으로 주간 토론 게시글 생성 (generateWeeklyDiscussion 활용)
+  const discussionContent = generateWeeklyDiscussion()
+  const body = discussionContent || generateReport(member.username, {}, 'event')
   if (!body) return { skip: 'ai_failed' }
 
   const res = await sbPost('community_posts', {

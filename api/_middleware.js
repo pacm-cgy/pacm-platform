@@ -1,6 +1,15 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════════╗
- * ║  Vercel Edge Middleware v3.0 — 보안 설계도 완전 구현                    ║
+ * ║  Vercel Edge Middleware v3.1 — 보안 설계도 완전 구현                    ║
+ * ║                                                                          ║
+ * ║  v3.1 변경사항:                                                          ║
+ * ║  - blocked_ips DB 동기화 (Edge 캐시 → Supabase REST 폴링)               ║
+ * ║  - 인메모리 blocked_ips 캐시 (5분 TTL, cold-start 복원)                 ║
+ * ║  - 로그인 실패 헤더 → DB blocked_ips 자동 기록 (5회 → sync)             ║
+ * ║  - WAF 패턴 확장 (Log4Shell, SSTI, CRLF injection)                      ║
+ * ║  - /api/ai-workers, /api/staff-chat-auto 크론 경로 분류 강화             ║
+ * ║  - X-RateLimit-Policy 헤더 추가                                          ║
+ * ║  - ai-platform-operator, ai-decision-log 경로 보호                       ║
  * ║                                                                          ║
  * ║  설계 원칙:                                                              ║
  * ║  - 최소 권한 (Least Privilege)                                           ║
@@ -11,7 +20,8 @@
  * ║                                                                          ║
  * ║  구현 항목:                                                              ║
  * ║  1. IP 기반 Rate Limiting (계층별 차등 적용)                             ║
- * ║  2. WAF — SQL injection / XSS / Path traversal / Code exec 차단         ║
+ * ║  2. WAF — SQL injection / XSS / Path traversal / Code exec /            ║
+ * ║           Log4Shell / SSTI / CRLF 차단                                   ║
  * ║  3. 악성 UA 차단 (sqlmap, nikto, nmap 등 보안 스캐너)                   ║
  * ║  4. CSRF Origin 검증                                                     ║
  * ║  5. 어드민 IP 화이트리스트 (선택적)                                      ║
@@ -19,7 +29,7 @@
  * ║  7. 계정 잠금 — 로그인 5회 실패 시 30분 차단                            ║
  * ║  8. AI username 탈취 방지                                                ║
  * ║  9. 민감 헤더 노출 차단                                                  ║
- * ║  10. 보안 이벤트 로깅 (헤더 기반 전달)                                  ║
+ * ║  10. blocked_ips DB 동기화 (5분 캐시 TTL)                               ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 import { NextResponse } from 'next/server'
@@ -38,6 +48,12 @@ const MAX_AUTH_FAIL  = 5        // 로그인 실패 허용 횟수 → 초과 시
 const LOCKOUT_MS     = 30 * 60_000  // 30분 잠금 (설계도 §3)
 const MAX_DEV_PERMS  = 2        // dev-permissions 최고 등급: 분당 2회
 const MAX_REPORT     = 5        // 신고 API: 분당 5회
+const MAX_CRON       = 20       // CRON 실행 경로: 분당 20회
+
+// ── blocked_ips 인메모리 캐시 (Edge 인스턴스별, 5분 TTL) ─────────────────
+let _blockedIPsCache = new Set()
+let _blockedIPsCacheTs = 0
+const BLOCKED_IPS_TTL = 5 * 60_000  // 5분
 
 // 인메모리 저장소 (Edge 인스턴스별)
 const rateLimitMap   = new Map()  // key → { count, resetAt }
@@ -77,6 +93,56 @@ function rateLimit(key, max) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// blocked_ips DB 동기화 (v3.1 신규 — Supabase REST 폴링, 5분 캐시)
+// ══════════════════════════════════════════════════════════════════════════════
+async function syncBlockedIPs() {
+  const now = Date.now()
+  if (now - _blockedIPsCacheTs < BLOCKED_IPS_TTL) return // 캐시 유효
+  try {
+    const SB_URL = process.env.SUPABASE_URL
+    const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!SB_URL || !SB_KEY) return
+    const r = await fetch(
+      `${SB_URL}/rest/v1/blocked_ips?is_active=eq.true&select=ip_address&limit=500`,
+      { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
+    )
+    if (!r.ok) return
+    const data = await r.json()
+    if (!Array.isArray(data)) return
+    _blockedIPsCache = new Set(data.map(row => row.ip_address).filter(Boolean))
+    _blockedIPsCacheTs = now
+  } catch { /* DB 장애 시 캐시 유지 */ }
+}
+
+// 로그인 실패 → DB blocked_ips 자동 기록 (MAX_AUTH_FAIL 초과 시)
+async function syncLoginFailToDB(ip) {
+  try {
+    const SB_URL = process.env.SUPABASE_URL
+    const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!SB_URL || !SB_KEY) return
+    const expiresAt = new Date(Date.now() + LOCKOUT_MS).toISOString()
+    await fetch(`${SB_URL}/rest/v1/blocked_ips`, {
+      method: 'POST',
+      headers: {
+        apikey: SB_KEY,
+        Authorization: `Bearer ${SB_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates',
+      },
+      body: JSON.stringify({
+        ip_address:  ip,
+        reason:      'login_lockout_auto',
+        blocked_by:  'middleware_v3.1',
+        is_active:   true,
+        expires_at:  expiresAt,
+      }),
+    })
+    // 캐시 즉시 갱신
+    _blockedIPsCache.add(ip)
+  } catch { /* 비동기 실패 무시 */ }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // 로그인 실패 추적 / 계정 잠금 (설계도 §3 — 5회 실패 → 30분 잠금)
 // ══════════════════════════════════════════════════════════════════════════════
 function checkLoginLockout(ip) {
@@ -99,26 +165,29 @@ function recordLoginFailure(ip) {
   rec.count++
   if (rec.count >= MAX_AUTH_FAIL) {
     rec.lockedUntil = now + LOCKOUT_MS
+    // 비동기로 DB에도 기록 (응답 지연 없이)
+    syncLoginFailToDB(ip)
   }
   loginFailMap.set(ip, rec)
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// WAF — 악성 패턴 차단 (설계도 §5)
+// WAF — 악성 패턴 차단 v3.1 (설계도 §5, OWASP Top 10 확장)
 // ══════════════════════════════════════════════════════════════════════════════
 const WAF_PATTERNS = [
   // Path Traversal
-  /\.\.[\/\\]/,
-  /%2e%2e[\/\\%]/i,
+  /\.\.[\\/\\]/,
+  /%2e%2e[\\/\\%]/i,
   // XSS
   /<script[\s>]/i,
   /javascript\s*:/i,
   /on\w+\s*=\s*["'`]?\s*\w/i,
   /data\s*:\s*text\/html/i,
   /<\s*iframe/i,
+  /vbscript\s*:/i,
   // SQL Injection
   /\bunion\s+(all\s+)?select\b/i,
-  /\bor\s+['"]?\d+['"]?\s*=\s*['"]?\d+/i,
+  /\bor\s+['"']?\d+['"']?\s*=\s*['"']?\d+/i,
   /\b(drop|alter|truncate|delete)\s+(table|database|from)\b/i,
   /\binsert\s+into\s+\w+\s*\(/i,
   /\bexec\s*\(/i,
@@ -161,6 +230,24 @@ const WAF_PATTERNS = [
   /\.(php|asp|aspx|jsp|cgi|sh|py|rb|pl)(\?|$)/i,
   // SSRF 방지 — 내부 IP 요청 (query string에 URL 포함 시)
   /[?&](url|src|dest|redirect|uri)=https?:\/\/(127\.|10\.|192\.168\.|169\.254\.|::1)/i,
+  // ── v3.1 신규 패턴 ─────────────────────────────────────────
+  // Log4Shell (CVE-2021-44228)
+  /\$\{jndi:/i,
+  /\$\{lower:/i,
+  /\$\{upper:/i,
+  // SSTI (Server-Side Template Injection)
+  /\{\{.*\}\}/,           // Jinja2 / Handlebars
+  /<%.*%>/,               // ERB / ASP
+  /\$\{.*\}/,             // Freemarker / EL
+  // CRLF Injection
+  /%0d%0a/i,
+  /%0a%0d/i,
+  /\r\n(Set-Cookie|Location|Content-Type):/i,
+  // XXE (XML External Entity)
+  /<!ENTITY\s+\w+\s+SYSTEM/i,
+  /<!DOCTYPE\s+\w+\s*\[/i,
+  // Open Redirect 방지
+  /[?&](redirect|return|next|url)=(?:https?:\/\/|\/\/)[^\/]/i,
 ]
 
 const BLOCK_UA = [
@@ -168,6 +255,7 @@ const BLOCK_UA = [
   /nuclei/i, /nmap/i, /dirbuster/i, /gobuster/i, /wfuzz/i,
   /burpsuite/i, /burp\s*suite/i, /hydra/i, /metasploit/i, /arachni/i, /w3af/i,
   /openvas/i, /zap\//i, /havij/i, /acunetix/i, /appscan/i,
+  /scrapy/i, /mechanize/i, /python-requests\/[01]\./i, // 구버전 자동화 클라이언트
 ]
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -197,7 +285,7 @@ function checkCSRF(req, path) {
   // API가 아닌 경로는 패스
   if (!path.startsWith('/api/')) return { ok: true }
   // CRON 요청은 패스 (X-Cron-Secret 있으면)
-  if (req.headers.get('x-cron-secret')) return { ok: true }
+  if (req.headers.get('x-cron-secret') || req.headers.get('x-vercel-cron')) return { ok: true }
 
   const origin  = req.headers.get('origin')  || ''
   const referer = req.headers.get('referer') || ''
@@ -219,7 +307,7 @@ function checkCSRF(req, path) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 경로 분류
+// 경로 분류 (v3.1 — AI 자율 운영 경로 추가)
 // ══════════════════════════════════════════════════════════════════════════════
 const STRICT_PATHS = [
   '/api/run-summarize', '/api/generate-report', '/api/send-newsletter',
@@ -227,10 +315,16 @@ const STRICT_PATHS = [
   '/api/reprocess-all-news', '/api/admin-action', '/api/admin-ai',
   '/api/staff-auth', '/api/sync-ai-accounts', '/api/patch-notes',
   '/api/dev-permissions', '/api/security-audit',
+  '/api/ai-platform-operator',  // v3.1 추가 — 자율 운영 엔진
 ]
 const AUTH_PATHS = [
   '/api/ai-mentor', '/api/ai-team', '/api/office',
   '/api/staff-chat', '/api/feedback-reply',
+  '/api/ai-mentor-learn',       // v3.1 추가
+]
+const CRON_PATHS = [
+  '/api/ai-workers', '/api/staff-chat-auto',
+  '/api/auto-ops', '/api/ai-platform-operator',
 ]
 const AUTH_FAIL_PATHS = [
   '/auth/v1/token', '/auth/v1/signup', '/api/auth/',
@@ -293,6 +387,9 @@ function applySecurityHeaders(res, path) {
     res.headers.set('Pragma',          'no-cache')
   }
 
+  // v3.1 — 보안 버전 식별자
+  res.headers.set('X-Security-Policy', 'middleware-v3.1')
+
   // dev-permissions 민감 헤더 노출 차단
   if (path.startsWith('/api/dev-permissions')) {
     res.headers.delete('X-Dev-Master-Key')
@@ -303,17 +400,27 @@ function applySecurityHeaders(res, path) {
   if (path.startsWith('/api/security-audit')) {
     res.headers.set('X-Robots-Tag', 'noindex, nofollow')
   }
+
+  // ai-platform-operator 보호 — 응답에서 민감 컨텍스트 제거
+  if (path.startsWith('/api/ai-platform-operator')) {
+    res.headers.set('X-Robots-Tag', 'noindex, nofollow')
+    res.headers.set('Cache-Control', 'no-store, private')
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 메인 미들웨어
 // ══════════════════════════════════════════════════════════════════════════════
-export default function middleware(req) {
+export default async function middleware(req) {
   const ip   = getClientIP(req)
   const url  = new URL(req.url)
   const path = url.pathname
   const ua   = req.headers.get('user-agent') || ''
   const now  = Date.now()
+
+  // ── 0. blocked_ips DB 동기화 (비동기, 캐시 5분 TTL) ──────────────────
+  // 응답 지연 없이 백그라운드로 실행 (await 없음)
+  syncBlockedIPs().catch(() => {})
 
   // ── 1. 악성 User-Agent 즉시 차단 ──────────────────────────────────────
   if (BLOCK_UA.some(re => re.test(ua))) {
@@ -325,6 +432,14 @@ export default function middleware(req) {
   if (WAF_PATTERNS.some(re => re.test(fullUrl))) {
     return new Response(
       JSON.stringify({ error: 'Forbidden', code: 'WAF_BLOCKED' }),
+      { status: 403, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+
+  // ── 2.5. DB 기반 blocked_ips 차단 (v3.1 신규) ─────────────────────────
+  if (ip !== 'unknown' && _blockedIPsCache.has(ip)) {
+    return new Response(
+      JSON.stringify({ error: 'Forbidden', code: 'IP_BLOCKED' }),
       { status: 403, headers: { 'Content-Type': 'application/json' } }
     )
   }
@@ -376,18 +491,31 @@ export default function middleware(req) {
 
   // ── 6. Rate Limiting (계층별) ─────────────────────────────────────────
   let rlResult
+  let rlPolicy = 'general'
   if (path.startsWith('/api/dev-permissions') || path.startsWith('/api/security-audit')) {
     rlResult = rateLimit(`${ip}:devperms`, MAX_DEV_PERMS)
+    rlPolicy = 'devperms'
   } else if (STRICT_PATHS.some(p => path.startsWith(p))) {
     rlResult = rateLimit(`${ip}:strict`, MAX_STRICT)
+    rlPolicy = 'strict'
   } else if (REPORT_PATHS.some(p => path.startsWith(p))) {
     rlResult = rateLimit(`${ip}:report`, MAX_REPORT)
+    rlPolicy = 'report'
+  } else if (CRON_PATHS.some(p => path.startsWith(p))) {
+    // CRON 경로 — x-vercel-cron 헤더 필수 (없으면 strict 적용)
+    const isCron = req.headers.get('x-vercel-cron') === '1' ||
+                   req.headers.get('x-cron-secret')
+    rlResult = rateLimit(`${ip}:${isCron ? 'cron' : 'strict'}`, isCron ? MAX_CRON : MAX_STRICT)
+    rlPolicy = isCron ? 'cron' : 'strict'
   } else if (AUTH_FAIL_PATHS.some(p => path.includes(p)) || AUTH_PATHS.some(p => path.startsWith(p))) {
     rlResult = rateLimit(`${ip}:auth`, MAX_AUTH)
+    rlPolicy = 'auth'
   } else if (path.startsWith('/api/')) {
     rlResult = rateLimit(`${ip}:api`, MAX_API)
+    rlPolicy = 'api'
   } else {
     rlResult = rateLimit(`${ip}:general`, MAX_GENERAL)
+    rlPolicy = 'general'
   }
 
   if (rlResult.limited) {
@@ -401,6 +529,7 @@ export default function middleware(req) {
           'Retry-After':           String(retryAfter),
           'X-RateLimit-Remaining': '0',
           'X-RateLimit-Reset':     String(rlResult.resetAt),
+          'X-RateLimit-Policy':    rlPolicy,
         },
       }
     )
@@ -422,6 +551,7 @@ export default function middleware(req) {
   const res = NextResponse.next()
   applySecurityHeaders(res, path)
   res.headers.set('X-RateLimit-Remaining', String(rlResult.remaining))
+  res.headers.set('X-RateLimit-Policy',    rlPolicy)
 
   return res
 }
