@@ -148,7 +148,28 @@ function makeSlug() {
 
 function stripHtml(s) {
   if (!s) return ''
-  return s.replace(/<[^>]+>/g, '').replace(/&[a-z#0-9]+;/g, ' ').replace(/\s+/g, ' ').trim()
+  return s
+    // 1) entity 복원 먼저 (네이버 API는 &lt;b&gt; 형태로 HTML 태그를 인코딩해서 전달)
+    .replace(/&amp;/g, '\x00AMP\x00')   // &amp; 보호 (이중 치환 방지)
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&middot;/g, '·')
+    .replace(/&hellip;/g, '...')
+    .replace(/&mdash;/g, '—')
+    .replace(/&ndash;/g, '–')
+    .replace(/&#x[0-9a-fA-F]+;/gi, ' ')
+    .replace(/&#[0-9]+;/g, ' ')
+    .replace(/&[a-z][a-z0-9]*;/gi, ' ')
+    .replace(/\x00AMP\x00/g, '&')       // &amp; 복원
+    // 2) HTML 태그 제거 (entity 복원 후 실제 태그 제거)
+    .replace(/<(script|style)[^>]*>[\s\S]*?<\/(script|style)>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function estimateReadTime(text) {
@@ -350,15 +371,31 @@ function extractByDensity(html) {
   return merged.slice(0, 3000)
 }
 
-// HTML 본문 정제 공통 함수
+// HTML 본문 정제 공통 함수 — v2 (entity 복원 순서 수정)
 function cleanBodyHtml(raw) {
   return raw
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<style[\s\S]*?<\/style>/gi, '')
     .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
-    .replace(/&[a-z#0-9]+;/g, ' ')
+    // entity 복원: &amp; 보호 후 나머지 named entity 처리
+    .replace(/&amp;/g, '\x00AMP\x00')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&middot;/g, '·')
+    .replace(/&hellip;/g, '...')
+    .replace(/&mdash;/g, '—')
+    .replace(/&ndash;/g, '–')
+    // 남은 numeric/hex entity → 공백 (삭제 X)
+    .replace(/&#x[0-9a-fA-F]+;/gi, ' ')
+    .replace(/&#[0-9]+;/g, ' ')
+    .replace(/&[a-z][a-z0-9]*;/gi, ' ')
+    .replace(/\x00AMP\x00/g, '&')
+    // 뉴스 잡음 제거
     .replace(/공유하기[^가-힣]{0,30}/g, '')
     .replace(/페이스북|트위터|카카오톡?|네이버\s*밴드|URL\s*복사|라인|링크복사/g, '')
     .replace(/입력\s*\d{4}[.\-]\d{2}[.\-]\d{2}/g, '')
@@ -854,9 +891,20 @@ function cleanText(t) {
   return (t || '')
     .replace(/<(script|style)[^>]*>[\s\S]*?<\/(script|style)>/gi, '')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-    .replace(/&#x?[0-9a-fA-F]+;/g, '')
+    // entity 복원 순서 보장
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&middot;/g, '·')
+    .replace(/&hellip;/g, '...')
+    // numeric/hex entity → 공백 (삭제 X)
+    .replace(/&#x[0-9a-fA-F]+;/gi, ' ')
+    .replace(/&#[0-9]+;/g, ' ')
+    .replace(/&[a-z][a-z0-9]*;/gi, ' ')
     .replace(/https?:\/\/\S+/g, '')
     .replace(/공유하기|페이스북|트위터|카카오톡\s*공유|인스타그램|네이버\s*밴드|URL\s*복사/g, '')
     .replace(/기자\s*[가-힣]{2,4}\s*기자|^\s*[가-힣]{2,3}\s*기자/gm, '')
@@ -1700,9 +1748,20 @@ function cleanText(text) {
   return (text || '')
     .replace(/<(script|style)[^>]*>[\s\S]*?<\/(script|style)>/gi, '')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-    .replace(/&#x?[0-9a-fA-F]+;/g, '')
+    // entity 복원 순서 보장
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&middot;/g, '·')
+    .replace(/&hellip;/g, '...')
+    // numeric/hex entity → 공백 (삭제 X)
+    .replace(/&#x[0-9a-fA-F]+;/gi, ' ')
+    .replace(/&#[0-9]+;/g, ' ')
+    .replace(/&[a-z][a-z0-9]*;/gi, ' ')
     .replace(/https?:\/\/\S+/g, '')
     .replace(/공유하기|페이스북|트위터|카카오|인스타그램|네이버 밴드|URL 복사/g, '')
     .replace(/기자\s*[가-힣]{2,4}\s*기자|^\s*[가-힣]{2,3}\s*기자/gm, '')
@@ -2919,8 +2978,23 @@ const TERMS = {
 
 function cleanText(t) {
   if (!t) return ''
-  return t.replace(/<[^>]+>/g,' ').replace(/&[a-z]+;/g,' ')
-    .replace(/https?:\/\/\S+/g,'').replace(/\s+/g,' ').trim()
+  return t
+    .replace(/<(script|style)[^>]*>[\s\S]*?<\/(script|style)>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    // entity 복원
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#x[0-9a-fA-F]+;/gi, ' ')
+    .replace(/&#[0-9]+;/g, ' ')
+    .replace(/&[a-z][a-z0-9]*;/gi, ' ')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function splitSentences(text) {
