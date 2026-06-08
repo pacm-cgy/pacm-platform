@@ -101,6 +101,25 @@ const RSS_SOURCES = [
     cat:  'tech',
     tag:  'AI스타트업',
   },
+  // v3 신규 소스
+  {
+    name: 'IT조선 스타트업',
+    url:  'https://it.chosun.com/rss/rss.html?type=category&category=019',
+    cat:  'startup',
+    tag:  '스타트업',
+  },
+  {
+    name: '디스콰이엇',
+    url:  'https://disquiet.io/rss.xml',
+    cat:  'startup',
+    tag:  '창업',
+  },
+  {
+    name: 'TheVC 스타트업',
+    url:  'https://thevc.kr/media/rss',
+    cat:  'investment',
+    tag:  '스타트업투자',
+  },
 ]
 
 // ══════════════════════════════════════════════════════════════════════
@@ -130,10 +149,16 @@ function cosineSim(a, b) {
 
 // 배치 중복 감지용 세션 캐시
 const sessionTitles = []
-function isSessionDuplicate(title) {
+const sessionBodySnippets = []  // v3: 본문 첫 100자 캐시
+
+function isSessionDuplicate(title, bodySnippet) {
   const toks = tokenizeTitle(title)
-  for (const existing of sessionTitles) {
-    if (cosineSim(toks, tokenizeTitle(existing)) >= 0.72) return true
+  for (let i = 0; i < sessionTitles.length; i++) {
+    // 제목 코사인 유사도 (임계값 v3: 0.70)
+    if (cosineSim(toks, tokenizeTitle(sessionTitles[i])) >= 0.70) return true
+    // v3: 본문 첫 100자 일치 (본문이 있을 때만)
+    if (bodySnippet && sessionBodySnippets[i] &&
+        bodySnippet.slice(0, 60) === sessionBodySnippets[i].slice(0, 60)) return true
   }
   return false
 }
@@ -798,6 +823,7 @@ async function _handleFetchNews_impl(req) {
           if (saved.ok) {
             results.inserted++
             sessionTitles.push(title)
+            sessionBodySnippets.push((bodyText || description).slice(0, 100))  // v3
             results.sources['네이버'] = (results.sources['네이버'] || 0) + 1
           } else {
             if (!saved.err?.includes('23505')) results.errors.push(`네이버[${title.slice(0,30)}]: ${saved.err}`)
@@ -826,7 +852,8 @@ async function _handleFetchNews_impl(req) {
       try {
         const title = item.title.slice(0, 200)
         if (!title || !item.link) continue
-        if (isSessionDuplicate(title)) { results.skipped++; continue }
+        const bodySnippet = (item.description || '').slice(0, 100)  // v3
+        if (isSessionDuplicate(title, bodySnippet)) { results.skipped++; continue }
         if (await articleExistsInDB(item.link, title, H)) { results.skipped++; continue }
 
         let image = null, bodyText = ''
@@ -848,6 +875,7 @@ async function _handleFetchNews_impl(req) {
         if (saved.ok) {
           results.inserted++
           sessionTitles.push(title)
+          sessionBodySnippets.push((bodyText || bodySnippet).slice(0, 100))  // v3
           results.sources[src.name] = (results.sources[src.name] || 0) + 1
         } else {
           if (!saved.err?.includes('23505')) results.errors.push(`RSS[${src.name}]: ${saved.err}`)
@@ -1555,7 +1583,7 @@ function buildLongformStory(title, body) {
 
   // ── 푸터 ──────────────────────────────────────────────────────────
   lines.push('---', '')
-  lines.push(`*Insightship · ${domKo} · ${evtInfo.emoji} ${evtInfo.label} · insightship-longform-v15*`)
+  lines.push(`*Insightship · ${domKo} · ${evtInfo.emoji} ${evtInfo.label} · insightship-longform-v16*`)
 
   return lines.join('\n')
 }
@@ -1567,12 +1595,15 @@ function buildLongformStory(title, body) {
 async function _handleSummarizeNews_impl(req) {
   if (req.method === 'GET') {
     return new Response(JSON.stringify({
-      engine:       'insightship-longform-v15',
-      version:      '15.0.0',
-      style:        '완전 동적 / 본문 있으면 BM25, 없으면 NER 기반 / 고정 템플릿 0개',
+      engine:       'insightship-longform-v16',
+      version:      '16.0.0',
+      style:        '완전 동적 / BM25+NER / 중복감지 v3 / RSS 9개 소스 / 고정 템플릿 0개',
       features:     ['BM25Scoring','NER-FullAnalysis','TitleOnlyFallback','QuoteDetect','CausalDetect',
                      'GoalDetect','EventContextSections','OpportunityLines','TermDictionary',
-                     'DynamicQuestions','NoFixedTemplate','ilike-filter'],
+                     'DynamicQuestions','NoFixedTemplate','ilike-filter',
+                     'DuplicateDetect-v3','LongformQuality-v2','RSS-9sources','BodySnippetCache'],
+      rss_sources:  9,
+      duplicate_threshold: 0.70,
       avg_length:   '1200-4000 chars',
       cost:         0,
       external_api: false,
@@ -1621,7 +1652,7 @@ async function _handleSummarizeNews_impl(req) {
       // v15 마커 없는 기사 전체 대상 (ilike)
       const url = `${SB_URL}/rest/v1/articles`
         + `?select=id,title,body,excerpt,ai_summary`
-        + `&ai_summary=not.ilike.*insightship-longform-v15*`
+        + `&ai_summary=not.ilike.*insightship-longform-v16*`
         + `&order=published_at.desc`
         + `&limit=${batchLimit}&offset=${offset}`
       const res = await fetch(url, { headers: H })
@@ -1646,7 +1677,7 @@ async function _handleSummarizeNews_impl(req) {
       const res = await fetch(url, { headers: H })
       const all = await res.json()
       const unprocessed = Array.isArray(all)
-        ? all.filter(a => !a.ai_summary || !a.ai_summary.includes('insightship-longform-v15'))
+        ? all.filter(a => !a.ai_summary || !a.ai_summary.includes('insightship-longform-v16'))
         : []
       articles = unprocessed.length > 0 ? unprocessed : (Array.isArray(all) ? all.slice(0, Math.ceil(batchLimit / 2)) : [])
     }
@@ -1658,7 +1689,7 @@ async function _handleSummarizeNews_impl(req) {
     return new Response(JSON.stringify({
       message:   '처리할 기사 없음 (모두 v15 처리 완료)',
       processed: 0, skipped: 0, errors: [],
-      engine:    'insightship-longform-v15',
+      engine:    'insightship-longform-v16',
       timestamp: new Date().toISOString(),
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })
   }
@@ -1711,7 +1742,7 @@ async function _handleSummarizeNews_impl(req) {
   return new Response(JSON.stringify({
     ...results,
     total:     articles.length,
-    engine:    'insightship-longform-v15',
+    engine:    'insightship-longform-v16',
     timestamp: new Date().toISOString(),
   }), {
     status:  200,
@@ -2262,7 +2293,7 @@ async function _handleRunSummarize_impl(req) {
   if (req.method === 'GET') {
     return new Response(JSON.stringify({
       status: 'ok',
-      engine: 'insightship-longform-v8',
+      engine: 'insightship-longform-v9',
       style: 'LongBlack-inspired longform storytelling',
       avg_length: '2000+ chars',
       cost: 0,
@@ -2317,7 +2348,7 @@ async function _handleRunSummarize_impl(req) {
     return new Response(JSON.stringify({
       message: '처리할 뉴스 없음 — 모두 처리 완료',
       done: 0, remaining: 0,
-      engine: 'insightship-longform-v8',
+      engine: 'insightship-longform-v9',
       timestamp: new Date().toISOString(),
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })
   }
@@ -2362,7 +2393,7 @@ async function _handleRunSummarize_impl(req) {
 
   return new Response(JSON.stringify({
     done, failed, processed: articles.length, remaining,
-    engine: 'insightship-longform-v8',
+    engine: 'insightship-longform-v9',
     cost: 0, external_api: false,
     timestamp: new Date().toISOString(),
   }), { status: 200, headers: { 'Content-Type': 'application/json' } })
@@ -2772,34 +2803,39 @@ const H = () => ({
   'Content-Type': 'application/json',
 })
 
-// ── 롱폼 품질 점수 계산 ──────────────────────────────────────────
+// ── 롱폼 품질 점수 계산 v2 ────────────────────────────────────────
 function calcLongformScore(text) {
   if (!text || text.length < 100) return 0
   let score = 0
 
-  // 1. 길이 점수 (최대 40점)
-  if (text.length >= 3000) score += 40
-  else if (text.length >= 2000) score += 30
+  // 1. 길이 점수 (최대 35점)
+  if (text.length >= 3000) score += 35
+  else if (text.length >= 2000) score += 28
   else if (text.length >= 1500) score += 20
-  else if (text.length >= 800) score += 10
+  else if (text.length >= 800)  score += 10
 
   // 2. 섹션 헤더 존재 (최대 20점)
   const headers = (text.match(/^\s*#{1,3}\s+.+/gm) || []).length
     + (text.match(/^\s*\*\*.+\*\*\s*$/gm) || []).length
-  score += Math.min(headers * 5, 20)
+  score += Math.min(headers * 4, 20)
 
-  // 3. 심층 질문 포함 (최대 20점)
-  const hasDeepQ = /[^?]*\?/.test(text)
-  if (hasDeepQ) score += 20
+  // 3. 심층 질문 포함 (최대 15점)
+  const deepQCount = (text.match(/\?/g) || []).length
+  if (deepQCount >= 3) score += 15
+  else if (deepQCount >= 1) score += 8
 
   // 4. 용어 설명 (최대 10점)
-  const hasTerm = /\([^)]{5,40}\)/.test(text) // 괄호 안 설명
+  const hasTerm = /\([^)]{5,40}\)/.test(text)
   if (hasTerm) score += 10
 
   // 5. 한국어 풍부도 (최대 10점)
   const koChars = (text.match(/[가-힣]/g) || []).length
   if (koChars > 1000) score += 10
   else if (koChars > 500) score += 5
+
+  // 6. 창업가 인사이트 섹션 보너스 (v2 신규, 최대 10점)
+  const hasInsight = /창업가|시각|기회|인사이트|왜 주목/.test(text)
+  if (hasInsight) score += 10
 
   return score
 }
