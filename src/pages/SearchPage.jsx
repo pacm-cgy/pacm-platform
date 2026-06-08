@@ -299,6 +299,10 @@ export default function SearchPage() {
       <Helmet>
         <title>{query ? `"${query}" 검색 결과` : '통합 검색'} | Insightship</title>
         <meta name="description" content="뉴스, 아티클, 커뮤니티를 한 번에 검색하세요"/>
+        <meta name="robots" content="noindex"/>
+        <meta property="og:title" content={query ? `"${query}" 검색 결과 | Insightship` : '통합 검색 | Insightship'}/>
+        <meta property="og:type" content="website"/>
+        <meta name="twitter:card" content="summary"/>
       </Helmet>
 
       {/* 검색 헤더 */}

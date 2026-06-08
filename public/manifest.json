@@ -23,13 +23,13 @@
     { "src": "/icons/icon-384.png", "sizes": "384x384", "type": "image/png" },
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "/icons/icon-192.svg", "sizes": "any",     "type": "image/svg+xml", "purpose": "maskable" },
-    { "src": "/icons/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+    { "src": "/icons/apple-touch-icon.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable any" }
   ],
   "shortcuts": [
     {
       "name": "AI 멘토",
       "short_name": "멘토",
-      "description": "PACM-AI 창업 멘토와 대화하기",
+      "description": "LUMI AI 창업 멘토와 대화하기",
       "url": "/mentor?source=pwa-shortcut",
       "icons": [{ "src": "/icons/icon-96.png", "sizes": "96x96", "type": "image/png" }]
     },
@@ -57,18 +57,16 @@
   ],
   "screenshots": [
     {
-      "src": "/screenshots/home.png",
-      "sizes": "1280x720",
+      "src": "/screenshots/mobile-home.png",
       "type": "image/png",
-      "form_factor": "wide",
+      "form_factor": "narrow",
       "label": "Insightship 홈 화면"
     },
     {
-      "src": "/screenshots/mentor.png",
-      "sizes": "390x844",
+      "src": "/screenshots/mobile-insight.png",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "AI 멘토 채팅"
+      "label": "인사이트 피드"
     }
   ],
   "prefer_related_applications": false,

@@ -258,6 +258,10 @@ export default function PostDetailPage() {
         <title>{post.title ? `${post.title.slice(0,50)} | Insightship 커뮤니티` : '게시글 | Insightship'}</title>
         <meta name="description" content={post.content?.slice(0,120) || '커뮤니티 게시글'}/>
         <meta name="robots" content="noindex"/>
+        <meta property="og:title" content={post.title ? `${post.title.slice(0,50)} | Insightship` : 'Insightship 커뮤니티'}/>
+        <meta property="og:description" content={post.content?.slice(0,120) || '커뮤니티 게시글'}/>
+        <meta property="og:type" content="article"/>
+        <meta name="twitter:card" content="summary"/>
       </Helmet>
       {/* 신고 모달 */}
       {showReport && (

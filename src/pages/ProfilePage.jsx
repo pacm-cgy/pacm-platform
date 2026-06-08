@@ -223,8 +223,13 @@ export default function ProfilePage() {
   const [bookmarks, setBookmarks]     = useState([])
   const [likedArts, setLikedArts]     = useState([])
   const [postsLoading, setPostsLoading] = useState(false)
-  const [isFollowing, setIsFollowing]   = useState(false)
-  const [followLoading, setFollowLoading] = useState(false)
+  const [isFollowing, setIsFollowing]     = useState(false)
+  const [followLoading, setFollowLoading]   = useState(false)
+  const [followerCount, setFollowerCount]   = useState(0)
+  const [followingCount, setFollowingCount] = useState(0)
+  const [followers, setFollowers]           = useState([])  // 팔로워 목록
+  const [following, setFollowing]           = useState([])  // 팔로잉 목록
+  const [followListLoading, setFollowListLoading] = useState(false)
   const [badges, setBadges]               = useState([])
   const [badgesLoading, setBadgesLoading] = useState(false)
   const fileRef = useRef(null)
@@ -260,17 +265,71 @@ export default function ProfilePage() {
       .catch(() => setLoading(false))
   }, [uid])
 
-  /* load follow state — 타인 프로필 조회 시 팔로우 여부 확인 */
+  /* load follow state + 팔로워/팔로잉 카운트 */
   useEffect(() => {
-    if (!user || isOwn || !uid) { setIsFollowing(false); return }
-    supabase.from('follows')
-      .select('id')
+    if (!uid) return
+    // 팔로워 수
+    supabase.from('user_follows').select('follower_id', { count:'exact', head:true })
+      .eq('following_id', uid)
+      .then(({ count }) => setFollowerCount(count || 0))
+      .catch(()=>{})
+    // 팔로잉 수
+    supabase.from('user_follows').select('following_id', { count:'exact', head:true })
+      .eq('follower_id', uid)
+      .then(({ count }) => setFollowingCount(count || 0))
+      .catch(()=>{})
+    // 내가 이 유저를 팔로우하는지 확인 (타인 프로필)
+    if (!user || isOwn) { setIsFollowing(false); return }
+    supabase.from('user_follows')
+      .select('follower_id')
       .eq('follower_id', user.id)
       .eq('following_id', uid)
       .maybeSingle()
       .then(({ data }) => setIsFollowing(!!data))
-      .catch(() => {})
+      .catch(()=>{})
   }, [user, uid, isOwn])
+
+  /* load 팔로워/팔로잉 목록 (탭 클릭 시) */
+  useEffect(() => {
+    if (!uid) return
+    if (tab === 'followers') {
+      setFollowListLoading(true)
+      // follower_id → 나를 팔로우하는 사람의 id → profiles 조회
+      supabase.from('user_follows')
+        .select('follower_id')
+        .eq('following_id', uid)
+        .order('created_at', { ascending:false }).limit(100)
+        .then(async ({ data }) => {
+          if (!data?.length) { setFollowers([]); setFollowListLoading(false); return }
+          const ids = data.map(r=>r.follower_id)
+          const { data: profiles } = await supabase.from('profiles')
+            .select('id,username,display_name,avatar_url,school,startup_name')
+            .in('id', ids)
+          // 팔로우 시간 순서 유지
+          const profileMap = Object.fromEntries((profiles||[]).map(p=>[p.id,p]))
+          setFollowers(ids.map(id=>profileMap[id]).filter(Boolean))
+          setFollowListLoading(false)
+        }).catch(()=>setFollowListLoading(false))
+    }
+    if (tab === 'following') {
+      setFollowListLoading(true)
+      // following_id → 내가 팔로우하는 사람의 id → profiles 조회
+      supabase.from('user_follows')
+        .select('following_id')
+        .eq('follower_id', uid)
+        .order('created_at', { ascending:false }).limit(100)
+        .then(async ({ data }) => {
+          if (!data?.length) { setFollowing([]); setFollowListLoading(false); return }
+          const ids = data.map(r=>r.following_id)
+          const { data: profiles } = await supabase.from('profiles')
+            .select('id,username,display_name,avatar_url,school,startup_name')
+            .in('id', ids)
+          const profileMap = Object.fromEntries((profiles||[]).map(p=>[p.id,p]))
+          setFollowing(ids.map(id=>profileMap[id]).filter(Boolean))
+          setFollowListLoading(false)
+        }).catch(()=>setFollowListLoading(false))
+    }
+  }, [uid, tab])
 
   /* load posts — community_posts 테이블 사용 (posts가 아님) */
   useEffect(() => {
@@ -406,14 +465,16 @@ export default function ProfilePage() {
   const joinDate     = user?.created_at ? format(new Date(user.created_at), 'yyyy년 M월', { locale: ko }) : null
 
   const TABS = [
-    { id: 'info',      label: '프로필',   icon: User },
-    { id: 'posts',     label: '게시글',   icon: FileText },
+    { id: 'info',       label: '프로필',   icon: User },
+    { id: 'posts',      label: '게시글',   icon: FileText },
+    { id: 'followers',  label: `팔로워 ${followerCount > 0 ? followerCount : ''}`, icon: Users },
+    { id: 'following',  label: `팔로잉 ${followingCount > 0 ? followingCount : ''}`, icon: Users },
     ...(isOwn ? [
       { id: 'bookmarks', label: '북마크', icon: Bookmark },
       { id: 'likes',     label: '좋아요',  icon: Heart },
       { id: 'activity',  label: '활동',    icon: Activity },
     ] : []),
-    { id: 'badges',    label: '배지',     icon: Award },
+    { id: 'badges',     label: '배지',     icon: Award },
   ]
 
   const earnedBadges = badges.filter(b => b.earned)
@@ -588,10 +649,11 @@ export default function ProfilePage() {
                   </div>
 
                   {/* Stats */}
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-                    <StatBadge icon={FileText} label="게시글"    value={myPosts.length || 0}         color="#3B82F6" />
-                    <StatBadge icon={Heart}    label="좋아요"    value={display?.like_count || 0}     color="#F43F5E" />
-                    <StatBadge icon={Trophy}   label="배지"      value={earnedBadges.length} color="#F59E0B" />
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap:'wrap' }}>
+                    <StatBadge icon={FileText} label="게시글"  value={myPosts.length || 0}     color="#3B82F6" />
+                    <StatBadge icon={Users}    label="팔로워"  value={followerCount}            color="#22C55E" />
+                    <StatBadge icon={Users}    label="팔로잉"  value={followingCount}           color="#A855F7" />
+                    <StatBadge icon={Trophy}   label="배지"    value={earnedBadges.length}     color="#F59E0B" />
                   </div>
 
                   {/* Action buttons */}
@@ -644,16 +706,15 @@ export default function ProfilePage() {
                         setFollowLoading(true)
                         try {
                           if (isFollowing) {
-                            await supabase.from('follows').delete()
+                            await supabase.from('user_follows').delete()
                               .eq('follower_id', user.id).eq('following_id', uid)
                             setIsFollowing(false)
+                            setFollowerCount(v => Math.max(0, v - 1))
                           } else {
-                            await supabase.from('follows').insert({ follower_id: user.id, following_id: uid })
+                            await supabase.from('user_follows').insert({ follower_id: user.id, following_id: uid })
                             setIsFollowing(true)
+                            setFollowerCount(v => v + 1)
                           }
-                          // 팔로워 카운트 반영을 위해 프로필 리프레시
-                          const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle()
-                          if (refreshed) setProfileData(refreshed)
                         } catch {}
                         setFollowLoading(false)
                       }}
@@ -982,6 +1043,57 @@ export default function ProfilePage() {
                     }
                   </div>
                 )}
+
+                {/* ── FOLLOWERS / FOLLOWING ── */}
+                {(tab === 'followers' || tab === 'following') && (() => {
+                  const list = tab === 'followers' ? followers : following
+                  const title = tab === 'followers' ? `팔로워 ${followerCount}명` : `팔로잉 ${followingCount}명`
+                  return (
+                    <div>
+                      <div style={{ fontFamily:'var(--f-mono)', fontSize:9.5, color:'var(--t4)', letterSpacing:'.1em', textTransform:'uppercase', marginBottom:16 }}>
+                        {title}
+                      </div>
+                      {followListLoading ? (
+                        Array(5).fill(0).map((_,i) => (
+                          <div key={i} style={{ padding:'12px 0', borderBottom:'1px solid var(--b0)', display:'flex', gap:12, alignItems:'center' }}>
+                            <div style={{ width:40, height:40, borderRadius:'50%', background:'var(--bg4)', animation:'pulse 1.5s infinite', flexShrink:0 }}/>
+                            <div style={{ flex:1 }}><Sk h={13} mb={6}/><Sk h={10} w="50%"/></div>
+                          </div>
+                        ))
+                      ) : list.length === 0 ? (
+                        <div style={{ textAlign:'center', padding:'40px 0', color:'var(--t4)', fontSize:13 }}>
+                          {tab === 'followers' ? '아직 팔로워가 없습니다' : '아직 팔로잉이 없습니다'}
+                        </div>
+                      ) : list.map(p => (
+                        <div key={p.id}
+                          onClick={()=>navigate(`/profile/${p.id}`)}
+                          style={{ padding:'11px 0', borderBottom:'1px solid var(--b0)', display:'flex', gap:12, alignItems:'center', cursor:'pointer' }}
+                          onMouseEnter={e=>e.currentTarget.style.opacity='.75'}
+                          onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
+                          <div style={{ width:40, height:40, borderRadius:'50%', background:'var(--bg3)', border:'1px solid var(--b1)', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden', flexShrink:0 }}>
+                            {p.avatar_url
+                              ? <img src={p.avatar_url} style={{ width:40, height:40, objectFit:'cover' }} alt=""/>
+                              : <User size={18} color="var(--t4)"/>}
+                          </div>
+                          <div style={{ flex:1, minWidth:0 }}>
+                            <div style={{ fontSize:13.5, fontWeight:600, color:'var(--t1)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                              {p.display_name || p.username}
+                            </div>
+                            <div style={{ fontSize:11, color:'var(--t3)', fontFamily:'var(--f-mono)', marginTop:1 }}>
+                              @{p.username}{p.school ? ` · ${p.school}` : ''}
+                            </div>
+                            {p.startup_name && (
+                              <div style={{ fontSize:11, color:'var(--t4)', marginTop:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                                🚀 {p.startup_name}
+                              </div>
+                            )}
+                          </div>
+                          <ChevronRight size={14} color="var(--t4)"/>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
 
                 {/* ── BOOKMARKS ── */}
                 {tab === 'bookmarks' && (
