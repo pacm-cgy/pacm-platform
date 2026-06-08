@@ -1162,6 +1162,95 @@ create policy if not exists "adl_insert_svc" on public.ai_decision_log for inser
 
 
 -- ══════════════════════════════════════════════════════════════════════
+-- edu_courses 테이블 — 학습센터 강의 DB (EduPage P2-3)
+-- ══════════════════════════════════════════════════════════════════════
+create table if not exists public.edu_courses (
+  id           uuid primary key default uuid_generate_v4(),
+  category     text not null default 'startup_basics',
+  level        text not null default 'beginner'
+                 check (level in ('beginner', 'intermediate', 'advanced')),
+  title        text not null,
+  subtitle     text,
+  summary      text,
+  content      jsonb not null default '[]',   -- ["강의 내용 1", "강의 내용 2", ...]
+  quiz         jsonb not null default '[]',   -- [{q,options,answer}, ...]
+  tags         text[] default '{}',
+  icon         text default '📚',
+  color        text default '#3B82F6',
+  read_time    integer not null default 10,   -- 분
+  is_featured  boolean default false,
+  is_published boolean default true,
+  sort_order   integer default 0,
+  view_count   integer not null default 0,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  constraint edu_title_len check (char_length(title) between 5 and 200)
+);
+create index if not exists edu_cat_idx   on public.edu_courses(category, sort_order);
+create index if not exists edu_pub_idx   on public.edu_courses(is_published, sort_order);
+
+-- ── 강의 완료 기록 (로컬스토리지 → DB 영구 저장) ─────────────────
+create table if not exists public.edu_completions (
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  course_id  text not null,   -- uuid (edu_courses.id) 또는 integer (SAMPLE_COURSES 폴백 id)
+  score      integer default 0,     -- 퀴즈 점수
+  total      integer default 0,     -- 전체 문항 수
+  created_at timestamptz not null default now(),
+  primary key (user_id, course_id)
+);
+create index if not exists ec_user_idx   on public.edu_completions(user_id);
+create index if not exists ec_course_idx on public.edu_completions(course_id);
+
+-- RLS
+alter table if exists public.edu_courses     enable row level security;
+alter table if exists public.edu_completions enable row level security;
+
+create policy if not exists "edu_courses_read"   on public.edu_courses
+  for select using (is_published = true);
+create policy if not exists "edu_courses_write"  on public.edu_courses
+  for all using (true) with check (true);   -- 서비스 롤 관리
+
+create policy if not exists "edu_comp_read"   on public.edu_completions
+  for select using (auth.uid() = user_id);
+create policy if not exists "edu_comp_insert" on public.edu_completions
+  for insert with check (auth.uid() = user_id);
+create policy if not exists "edu_comp_upsert" on public.edu_completions
+  for update using (auth.uid() = user_id);
+
+-- ══════════════════════════════════════════════════════════════════════
+-- project_applications 보완 migration — P2-2
+-- motivation 길이 확장, 본인 신청 취소 정책, 신청자 수 트리거
+-- ══════════════════════════════════════════════════════════════════════
+
+-- motivation 컬럼 길이 제약 없음 (text 타입이라 기본 무제한이지만 명시)
+-- status enum 보완: pending/accepted/rejected/withdrawn
+alter table if exists public.project_applications
+  add column if not exists withdrawn_at timestamptz;
+
+-- 본인 신청 취소(soft: status='withdrawn') 허용 정책
+create policy if not exists "applications_update_own" on public.project_applications
+  for update using (auth.uid() = user_id);
+
+-- projects.applicant_count 자동 집계 트리거
+create or replace function public.update_project_applicant_count()
+returns trigger language plpgsql security definer as $$
+begin
+  if TG_OP = 'INSERT' then
+    update public.projects set applicant_count = applicant_count + 1 where id = NEW.project_id;
+  elsif TG_OP = 'UPDATE'
+    and NEW.status = 'withdrawn' and OLD.status != 'withdrawn' then
+    update public.projects set applicant_count = greatest(0, applicant_count - 1) where id = NEW.project_id;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists project_applicant_count_trigger on public.project_applications;
+create trigger project_applicant_count_trigger
+  after insert or update on public.project_applications
+  for each row execute function public.update_project_applicant_count();
+
+-- ══════════════════════════════════════════════════════════════════════
 -- rate_limit_log 테이블 — DB 기반 Rate Limiter v2 (ai.js §11)
 -- Edge 재시작과 무관하게 영구 제한 적용
 -- ══════════════════════════════════════════════════════════════════════
@@ -1178,3 +1267,44 @@ create index if not exists rll_created_at_idx   on public.rate_limit_log(created
 alter table if exists public.rate_limit_log enable row level security;
 create policy if not exists "rll_svc_all" on public.rate_limit_log
   for all using (true) with check (true);
+
+-- ══════════════════════════════════════════════════════════════════════
+-- ideas 테이블 보완 migration — P1-4
+-- seeking_roles, comment_count 컬럼 추가 (기존 테이블에 누락된 컬럼)
+-- ══════════════════════════════════════════════════════════════════════
+alter table if exists public.ideas
+  add column if not exists seeking_roles text[]    default '{}',
+  add column if not exists comment_count integer   not null default 0,
+  add column if not exists is_featured   boolean   default false;
+
+-- idea_comments INSERT/DELETE 시 comment_count 자동 업데이트 트리거
+create or replace function public.update_idea_comment_count()
+returns trigger language plpgsql security definer as $$
+begin
+  if TG_OP = 'INSERT' then
+    update public.ideas set comment_count = comment_count + 1 where id = NEW.idea_id;
+  elsif TG_OP = 'UPDATE' and NEW.is_deleted = true and OLD.is_deleted = false then
+    update public.ideas set comment_count = greatest(0, comment_count - 1) where id = NEW.idea_id;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists idea_comment_count_trigger on public.idea_comments;
+create trigger idea_comment_count_trigger
+  after insert or update on public.idea_comments
+  for each row execute function public.update_idea_comment_count();
+
+-- ideas RLS 정책 (수정/삭제는 작성자만)
+create policy if not exists "ideas_update_own" on public.ideas
+  for update using (auth.uid() = author_id);
+create policy if not exists "ideas_delete_own" on public.ideas
+  for update using (auth.uid() = author_id);  -- soft delete: is_deleted=true
+
+-- idea_comments 업데이트(소프트 삭제) 정책 보완
+-- 댓글 작성자 + 해당 아이디어 작성자가 삭제 가능
+create policy if not exists "idea_comments_update_own" on public.idea_comments
+  for update using (
+    auth.uid() = author_id
+    or auth.uid() = (select author_id from public.ideas where id = idea_id limit 1)
+  );

@@ -273,17 +273,74 @@ export function useApplyProject() {
   const qc = useQueryClient()
   const { user } = useAuthStore()
   return useMutation({
-    mutationFn: async ({ projectId, motivation }) => {
+    mutationFn: async ({ projectId, message, motivation }) => {
       if (!user) throw new Error('로그인이 필요합니다')
       checkRateLimit('apply', 5, 60000)
+      // message(ConnectPage) 또는 motivation(하위호환) 모두 수용
+      const motivationText = (message || motivation || '').trim().slice(0, 2000)
+      // 중복 신청 체크
+      const { data: existing } = await supabase
+        .from('project_applications')
+        .select('id, status')
+        .eq('project_id', projectId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (existing) throw new Error('ALREADY_APPLIED')
       const { error } = await supabase.from('project_applications').insert({
         project_id: projectId,
         user_id: user.id,
-        motivation: (motivation || '').trim().slice(0, 1000),
+        motivation: motivationText,
       })
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+    onSuccess: (_, { projectId }) => {
+      qc.invalidateQueries({ queryKey: ['projects'] })
+      qc.invalidateQueries({ queryKey: ['my_applications'] })
+      qc.invalidateQueries({ queryKey: ['project_application_status', projectId] })
+    },
+  })
+}
+
+// 내 신청 현황 조회
+export function useMyApplications() {
+  const { user } = useAuthStore()
+  return useQuery({
+    queryKey: ['my_applications', user?.id],
+    queryFn: async () => {
+      if (!user) return []
+      const { data, error } = await supabase
+        .from('project_applications')
+        .select(`
+          id, status, motivation, created_at,
+          projects (id, title, company_name, description, status, deadline, tags, location, is_remote)
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data || []
+    },
+    enabled: !!user,
+    staleTime: 60 * 1000,
+  })
+}
+
+// 특정 프로젝트에 대한 내 신청 상태 조회
+export function useProjectApplicationStatus(projectId) {
+  const { user } = useAuthStore()
+  return useQuery({
+    queryKey: ['project_application_status', projectId, user?.id],
+    queryFn: async () => {
+      if (!user || !projectId) return null
+      const { data } = await supabase
+        .from('project_applications')
+        .select('id, status, created_at')
+        .eq('project_id', projectId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+      return data || null
+    },
+    enabled: !!user && !!projectId,
+    staleTime: 30 * 1000,
   })
 }
 
@@ -760,5 +817,45 @@ export function useSendNotification() {
       })
       if (error) throw error
     },
+  })
+}
+
+// ── EDU (학습센터) ─────────────────────────────────────────────────
+
+// 내 강의 완료 목록 조회
+export function useEduCompletions() {
+  const { user } = useAuthStore()
+  return useQuery({
+    queryKey: ['edu_completions', user?.id],
+    queryFn: async () => {
+      if (!user) return []
+      const { data, error } = await supabase
+        .from('edu_completions')
+        .select('course_id, score, total, created_at')
+        .eq('user_id', user.id)
+      if (error) return []  // 테이블 미존재 등 오류 시 빈 배열
+      return data || []
+    },
+    enabled: !!user,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+// 강의 완료 기록 (upsert)
+export function useMarkCourseComplete() {
+  const qc = useQueryClient()
+  const { user } = useAuthStore()
+  return useMutation({
+    mutationFn: async ({ courseId, score, total }) => {
+      if (!user) return  // 비로그인 시 조용히 무시 (localStorage만 활용)
+      const { error } = await supabase
+        .from('edu_completions')
+        .upsert(
+          { user_id: user.id, course_id: String(courseId), score: score || 0, total: total || 0 },
+          { onConflict: 'user_id,course_id' }
+        )
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['edu_completions'] }),
   })
 }

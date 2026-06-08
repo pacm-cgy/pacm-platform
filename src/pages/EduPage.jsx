@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../store'
+import { useEduCompletions, useMarkCourseComplete } from '../hooks/useData'
 
 const CATEGORIES = [
   { key:'all',            label:'전체',         emoji:'📋' },
@@ -103,7 +104,7 @@ function CourseModal({ course, onClose, onComplete }) {
     setQuizScore(score)
     setQuizDone(true)
     setStep('done')
-    if (score === course.quiz?.length) onComplete(course.id)
+    if (score === course.quiz?.length) onComplete(course.id, score, course.quiz?.length)
   }
 
   const lv = LEVEL_BADGE[course.level] || LEVEL_BADGE.beginner
@@ -287,6 +288,11 @@ export default function EduPage() {
   const [completed, setCompleted] = useState(new Set())
   const [dbCourses, setDbCourses] = useState(null)  // null = not yet fetched
 
+  // DB 완료 기록 훅
+  const { data: dbCompletions = [] } = useEduCompletions()
+  const markComplete = useMarkCourseComplete()
+
+  // localStorage 기반 완료 상태 초기화
   useEffect(() => {
     if (user) {
       try {
@@ -295,6 +301,25 @@ export default function EduPage() {
       } catch {}
     }
   }, [user])
+
+  // DB 완료 기록이 로드되면 localStorage와 병합
+  useEffect(() => {
+    if (dbCompletions.length > 0) {
+      setCompleted(prev => {
+        const merged = new Set(prev)
+        dbCompletions.forEach(c => {
+          // course_id가 숫자 문자열인 경우 number로도 추가 (SAMPLE_COURSES 호환)
+          const numId = Number(c.course_id)
+          if (!isNaN(numId)) merged.add(numId)
+          merged.add(c.course_id)
+        })
+        if (user) {
+          try { localStorage.setItem(`edu_completed_${user.id}`, JSON.stringify([...merged])) } catch {}
+        }
+        return merged
+      })
+    }
+  }, [dbCompletions, user])
 
   // DB-first: try loading courses from `edu_courses` table
   useEffect(() => {
@@ -311,10 +336,14 @@ export default function EduPage() {
       .catch(() => setDbCourses([]))
   }, [])
 
-  const handleComplete = courseId => {
+  const handleComplete = (courseId, score, total) => {
     const newSet = new Set([...completed, courseId])
     setCompleted(newSet)
-    if (user) localStorage.setItem(`edu_completed_${user.id}`, JSON.stringify([...newSet]))
+    if (user) {
+      try { localStorage.setItem(`edu_completed_${user.id}`, JSON.stringify([...newSet])) } catch {}
+      // DB에도 기록 (fire & forget — 실패해도 UX에 영향 없음)
+      markComplete.mutate({ courseId, score, total })
+    }
   }
 
   // Use DB courses if available, else fall back to SAMPLE_COURSES

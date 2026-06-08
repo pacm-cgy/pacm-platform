@@ -5,24 +5,175 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>오프라인 | Insightship</title>
   <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{min-height:100vh;display:flex;align-items:center;justify-content:center;
-      flex-direction:column;gap:20px;background:#050505;color:#F0F0F0;
-      font-family:'Pretendard',-apple-system,sans-serif;text-align:center;padding:40px}
-    .icon{font-size:64px;margin-bottom:8px}
-    h1{font-size:22px;font-weight:700;letter-spacing:-0.03em}
-    p{font-size:14px;color:#666;max-width:360px;line-height:1.7}
-    button{margin-top:8px;padding:12px 28px;background:#3B82F6;border:none;
-      color:#fff;font-size:14px;font-weight:600;border-radius:8px;cursor:pointer}
-    .mono{font-family:'JetBrains Mono',monospace;font-size:10px;
-      letter-spacing:.15em;color:#3B82F6;margin-bottom:4px}
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+    :root {
+      --bg: #080807;
+      --bg2: #111110;
+      --b1: rgba(255,255,255,0.07);
+      --t1: #F0EEE8;
+      --t2: #A8A49C;
+      --t3: #6B675F;
+      --accent: #3B82F6;
+    }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 0;
+      background: var(--bg);
+      color: var(--t1);
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      text-align: center;
+      padding: 40px 24px;
+    }
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--b1);
+      border-radius: 16px;
+      padding: 40px 36px;
+      max-width: 420px;
+      width: 100%;
+    }
+    .icon-wrap {
+      width: 72px;
+      height: 72px;
+      border-radius: 20px;
+      background: rgba(59,130,246,0.1);
+      border: 1px solid rgba(59,130,246,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 36px;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      color: var(--accent);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 12px;
+      color: var(--t1);
+    }
+    p {
+      font-size: 13.5px;
+      color: var(--t2);
+      line-height: 1.75;
+      margin-bottom: 28px;
+    }
+    .btn-group { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      padding: 11px 24px;
+      border-radius: 9px;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      font-family: inherit;
+    }
+    .btn:hover { opacity: 0.85; transform: translateY(-1px); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--b1);
+      color: var(--t2);
+    }
+    .links {
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid var(--b1);
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .link-pill {
+      padding: 6px 14px;
+      background: var(--bg);
+      border: 1px solid var(--b1);
+      border-radius: 20px;
+      font-size: 12px;
+      color: var(--t2);
+      text-decoration: none;
+      transition: all 0.15s;
+    }
+    .link-pill:hover { border-color: var(--accent); color: var(--accent); }
+    .status-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #F43F5E;
+      margin-right: 6px;
+      animation: blink 1.5s ease-in-out infinite;
+      vertical-align: middle;
+    }
+    .status-online { background: #22C55E !important; animation: none !important; }
+    .status-bar {
+      margin-top: 20px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--t3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
   </style>
 </head>
 <body>
-  <div class="icon">📡</div>
-  <div class="mono">OFFLINE MODE</div>
-  <h1>인터넷 연결이 없습니다</h1>
-  <p>네트워크 연결을 확인한 후 다시 시도해주세요.<br>캐시된 페이지는 오프라인에서도 확인할 수 있습니다.</p>
-  <button onclick="window.location.reload()">다시 시도</button>
+  <div class="card">
+    <div class="icon-wrap">📡</div>
+    <div class="mono">OFFLINE MODE</div>
+    <h1>인터넷 연결이 없습니다</h1>
+    <p>
+      네트워크 연결을 확인한 후 다시 시도해주세요.<br>
+      캐시된 페이지는 오프라인에서도 확인할 수 있습니다.
+    </p>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="window.location.reload()">다시 시도</button>
+      <button class="btn btn-ghost" onclick="window.history.back()">뒤로 가기</button>
+    </div>
+
+    <div class="links">
+      <a class="link-pill" href="/">홈</a>
+      <a class="link-pill" href="/news">뉴스</a>
+      <a class="link-pill" href="/mentor">AI 멘토</a>
+      <a class="link-pill" href="/community">커뮤니티</a>
+      <a class="link-pill" href="/ideas">아이디어랩</a>
+    </div>
+
+    <div class="status-bar">
+      <span class="status-dot" id="dot"></span>
+      <span id="status-text">오프라인</span>
+    </div>
+  </div>
+
+  <script>
+    function updateStatus() {
+      const dot = document.getElementById('dot')
+      const text = document.getElementById('status-text')
+      if (navigator.onLine) {
+        dot.classList.add('status-online')
+        text.textContent = '연결됨 — 페이지를 새로고침할 수 있습니다'
+      } else {
+        dot.classList.remove('status-online')
+        text.textContent = '오프라인'
+      }
+    }
+    window.addEventListener('online',  () => { updateStatus(); setTimeout(() => window.location.reload(), 1000) })
+    window.addEventListener('offline', updateStatus)
+    updateStatus()
+  </script>
 </body>
 </html>
