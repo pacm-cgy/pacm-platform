@@ -11,7 +11,7 @@ import {
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { supabase } from '../lib/supabase'
-import { useToggleBookmark, useIsBookmarked } from '../hooks/useData'
+import { useToggleBookmark, useIsBookmarked, useLogBehavior } from '../hooks/useData'
 import { useAuthStore } from '../store'
 
 /* ─── ACCENT COLOR MAP ───────────────────────────────────────────── */
@@ -708,6 +708,20 @@ export default function NewsDetailPage() {
   const navigate   = useNavigate()
   const [progress, setProgress] = useState(0)
   const { data: article, isLoading, isError } = useNewsArticle(slug)
+  const logBehavior = useLogBehavior()
+
+  // 기사 조회 시 행동 로그 기록
+  useEffect(() => {
+    if (!article?.id) return
+    logBehavior.mutate({
+      eventType:  'view_article',
+      targetId:   article.id,
+      targetType: 'article',
+      category:   article.ai_category || article.category || null,
+      keywords:   article.tag ? [article.tag] : [],
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [article?.id])
 
   // 스크롤 진행률
   useEffect(() => {

@@ -1352,3 +1352,29 @@ create policy if not exists "ur_select_own" on public.user_recommendations
   for select using (auth.uid() = user_id);
 create policy if not exists "ur_upsert_own" on public.user_recommendations
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ══════════════════════════════════════════════════════════════════════
+-- P4-1: notifications 테이블 보완 migration
+-- actor_id, metadata, read_at, notification_type 컬럼 추가
+-- ══════════════════════════════════════════════════════════════════════
+alter table if exists public.notifications
+  add column if not exists actor_id    uuid references public.profiles(id) on delete set null,
+  add column if not exists metadata    jsonb default '{}',
+  add column if not exists read_at     timestamptz;
+
+-- actor_id 인덱스 (팔로우 알림 중복 방지용 조회)
+create index if not exists notif_actor_type_idx on public.notifications(user_id, actor_id, type, created_at desc);
+
+-- 알림 서비스롤 INSERT 정책 (백엔드에서 생성)
+create policy if not exists "notif_svc_insert" on public.notifications
+  for insert with check (true);
+
+-- 7일 지난 읽음 알림 자동 정리 함수
+create or replace function public.cleanup_old_notifications()
+returns void language plpgsql security definer as $$
+begin
+  delete from public.notifications
+  where is_read = true
+    and created_at < now() - interval '7 days';
+end;
+$$;
