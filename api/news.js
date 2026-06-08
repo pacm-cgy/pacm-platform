@@ -268,7 +268,7 @@ async function resolveGoogleNewsUrl(gnUrl, rawDescription) {
           'Referer': 'https://news.google.com/',
         },
         redirect: 'follow',
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(12000),
       })
       const finalUrl = r.url || gnUrl
       // 리다이렉트 후 실제 기사 도메인이면 즉시 반환
@@ -499,7 +499,7 @@ async function fetchArticleContent(url, rawDescription) {
         'Cache-Control': 'no-cache',
       },
       redirect: 'follow',
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(12000),
     })
     if (!res.ok) return {}
     const html = await res.text()
@@ -603,17 +603,36 @@ async function articleExistsInDB(url, title, H) {
 // ══════════════════════════════════════════════════════════════════════
 
 async function fetchRSS(source) {
-  try {
-    const res = await fetch(source.url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; InsightshipBot/2.0)',
-        'Accept': 'application/rss+xml, application/atom+xml, text/xml, */*',
-      },
-      signal: AbortSignal.timeout(8000),
-    })
-    if (!res.ok) return []
-    const xml = await res.text()
+  // 12초 타임아웃 + 1회 재시도
+  const TIMEOUT_MS = 12_000
+  const RSS_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (compatible; InsightshipBot/2.0)',
+    'Accept': 'application/rss+xml, application/atom+xml, text/xml, */*',
+  }
 
+  async function attemptFetch() {
+    const res = await fetch(source.url, {
+      headers: RSS_HEADERS,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return res.text()
+  }
+
+  let xml
+  try {
+    xml = await attemptFetch()
+  } catch (firstErr) {
+    // 1회 재시도 (네트워크 순간 오류 대응)
+    try {
+      await new Promise(r => setTimeout(r, 800))
+      xml = await attemptFetch()
+    } catch {
+      return [] // 재시도도 실패 → 빈 배열 반환
+    }
+  }
+
+  try {
     // RSS item 추출
     const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi
     const entryRegex = /<entry[^>]*>([\s\S]*?)<\/entry>/gi

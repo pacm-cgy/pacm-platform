@@ -2116,26 +2116,65 @@ function ethicsCheck(msg) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// §11. Rate Limiter
+// §11. Rate Limiter v2 — DB 기반 (Edge 재시작 무관 영구 제한)
 // ══════════════════════════════════════════════════════════════════════
 
-const ipMap = new Map()
-function rateCheck(ip) {
-  const now = Date.now()
+const _ipMapFallback = new Map()
+
+async function rateCheck(ip) {
   const win = 60_000
   const max = 40
-  const arr = (ipMap.get(ip) || []).filter(t => t > now - win)
-  if (arr.length >= max) return false
-  arr.push(now)
-  ipMap.set(ip, arr)
-  // 오래된 IP 정리 (메모리 관리)
-  if (ipMap.size > 5000) {
-    const cutoff = now - win
-    for (const [k, v] of ipMap) {
-      if (v.every(t => t < cutoff)) ipMap.delete(k)
+  const now = Date.now()
+  const windowStart = new Date(now - win).toISOString()
+
+  try {
+    if (!SB_URL || !SB_KEY) throw new Error('no_supabase')
+    const H = {
+      apikey: SB_KEY,
+      Authorization: `Bearer ${SB_KEY}`,
+      'Content-Type': 'application/json',
     }
+    // 현재 윈도우 내 요청 수 조회
+    const countRes = await fetch(
+      `${SB_URL}/rest/v1/rate_limit_log?ip=eq.${encodeURIComponent(ip)}&endpoint=eq.ai_mentor&created_at=gte.${encodeURIComponent(windowStart)}&select=id`,
+      { headers: H, signal: AbortSignal.timeout(2000) }
+    )
+    if (!countRes.ok) throw new Error('db_error')
+    const rows = await countRes.json()
+    if (!Array.isArray(rows)) throw new Error('db_error')
+    if (rows.length >= max) return false
+
+    // 새 요청 기록 (비동기 — 응답 대기 불필요)
+    fetch(`${SB_URL}/rest/v1/rate_limit_log`, {
+      method: 'POST',
+      headers: { ...H, Prefer: 'return=minimal' },
+      body: JSON.stringify({ ip, endpoint: 'ai_mentor', created_at: new Date().toISOString() }),
+    }).catch(() => {})
+
+    // 오래된 레코드 주기적 정리 (1% 확률로 실행)
+    if (Math.random() < 0.01) {
+      const cutoff = new Date(now - win * 60).toISOString()
+      fetch(`${SB_URL}/rest/v1/rate_limit_log?created_at=lt.${encodeURIComponent(cutoff)}`, {
+        method: 'DELETE',
+        headers: H,
+      }).catch(() => {})
+    }
+    return true
+  } catch {
+    // DB 장애 시 메모리 Map 폴백
+    const arr = (_ipMapFallback.get(ip) || []).filter(t => t > now - win)
+    if (arr.length >= max) return false
+    arr.push(now)
+    _ipMapFallback.set(ip, arr)
+    // 메모리 크기 제한 (폴백 Map)
+    if (_ipMapFallback.size > 3000) {
+      const cutoff = now - win
+      for (const [k, v] of _ipMapFallback) {
+        if (v.every(t => t < cutoff)) _ipMapFallback.delete(k)
+      }
+    }
+    return true
   }
-  return true
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -2153,18 +2192,19 @@ async function _handleAiMentor_impl(req) {
   if (req.method === 'GET') {
     return new Response(JSON.stringify({
       status: 'ok',
-      engine: 'LUMI-v5',
+      engine: 'LUMI-v5.2',
       agent: 'LUMI (루미) — 멘토링 매니저',
-      features: ['dynamic-synthesis', 'self-research-v2', 'simulation', 'continuous-learning-v2', 'knowledge-graph-v2', 'community-bm25', 'ideas-search', 'quality-evaluator'],
+      features: ['dynamic-synthesis', 'self-research-v2', 'simulation', 'continuous-learning-v2', 'knowledge-graph-v2', 'community-bm25', 'ideas-search', 'quality-evaluator', 'cognitive-synthesis-v2', 'db-rate-limiter'],
       external_api: false,
       cost: 0,
     }), { headers: { 'Content-Type': 'application/json', ...CORS } })
   }
   if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 })
 
-  // Rate limit
+  // Rate limit (DB 기반 v2 — await 필수)
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-  if (!rateCheck(ip)) {
+  const allowed = await rateCheck(ip)
+  if (!allowed) {
     return new Response(JSON.stringify({ error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' }), {
       status: 429, headers: { 'Content-Type': 'application/json', ...CORS },
     })
@@ -2195,7 +2235,7 @@ async function _handleAiMentor_impl(req) {
       reply: ethicsResult.response,
       intent: 'ethics_blocked',
       intent_confidence: '10.00',
-      engine: 'LUMI-v5.1',
+      engine: 'LUMI-v5.2',
       agent: 'LUMI',
       knowledge_used: 0,
       articles_used: 0,
@@ -2278,7 +2318,7 @@ async function _handleAiMentor_impl(req) {
           community_used: researchData.community?.length || 0,
           ideas_used: researchData.ideas?.length || 0,
           simulation: simResult?.type || null,
-          engine: 'LUMI-v5',
+          engine: 'LUMI-v5.2',
           agent: 'LUMI',
           external_api: false,
         }
@@ -2320,7 +2360,7 @@ async function _handleAiMentor_impl(req) {
     reply,
     intent: intent.primary,
     intent_confidence: intent.confidence.toFixed(2),
-    engine: 'LUMI-v5',
+    engine: 'LUMI-v5.2',
     agent: 'LUMI',
     knowledge_used: researchData.knowledge.length,
     articles_used: researchData.articles.length,

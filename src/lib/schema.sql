@@ -1160,3 +1160,21 @@ alter table if exists public.ai_decision_log enable row level security;
 create policy if not exists "adl_read_all"   on public.ai_decision_log for select using (true);
 create policy if not exists "adl_insert_svc" on public.ai_decision_log for insert with check (true);
 
+
+-- ══════════════════════════════════════════════════════════════════════
+-- rate_limit_log 테이블 — DB 기반 Rate Limiter v2 (ai.js §11)
+-- Edge 재시작과 무관하게 영구 제한 적용
+-- ══════════════════════════════════════════════════════════════════════
+create table if not exists public.rate_limit_log (
+  id           bigserial primary key,
+  ip           text not null,
+  endpoint     text not null default 'ai_mentor',
+  created_at   timestamptz not null default now()
+);
+create index if not exists rll_ip_endpoint_idx  on public.rate_limit_log(ip, endpoint, created_at desc);
+create index if not exists rll_created_at_idx   on public.rate_limit_log(created_at desc);
+
+-- RLS: 서비스 롤만 접근 허용 (일반 사용자 직접 접근 차단)
+alter table if exists public.rate_limit_log enable row level security;
+create policy if not exists "rll_svc_all" on public.rate_limit_log
+  for all using (true) with check (true);

@@ -188,6 +188,33 @@ export default function MessagesPage() {
 
   useEffect(() => { loadConvs() }, [loadConvs])
 
+  // ── 대화 목록 실시간 구독 — 새 메시지 시 last_msg_at 반영 ──────────
+  useEffect(() => {
+    if (!user) return
+
+    // messages_conversations last_msg_at UPDATE 구독
+    const convSub = supabase
+      .channel(`convs-${user.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'messages_conversations',
+      }, () => {
+        // last_msg_at 변경 → 대화 목록 새로고침
+        loadConvs()
+      })
+      // 새 대화방 생성(INSERT) 구독 — 상대방이 먼저 대화 시작하는 경우
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'messages_conversations',
+      }, payload => {
+        const { participant_a, participant_b } = payload.new || {}
+        if (participant_a === user.id || participant_b === user.id) {
+          loadConvs()
+        }
+      })
+      .subscribe()
+
+    return () => convSub.unsubscribe()
+  }, [user, loadConvs])
+
   // ── 활성 대화방 실시간 구독 (메시지 INSERT) ────────────────────────
   useEffect(() => {
     if (!activeConv) return
@@ -204,10 +231,13 @@ export default function MessagesPage() {
           return [...prev, payload.new]
         })
         setTimeout(() => msgEndRef.current?.scrollIntoView({ behavior:'smooth' }), 50)
-        // 상대방 메시지 → 즉시 읽음 처리
+        // 상대방 메시지 → 즉시 읽음 처리 + 대화 목록 미읽음 카운트 갱신
         if (payload.new.sender_id !== user?.id) {
           supabase.from('messages').update({ is_read:true }).eq('id', payload.new.id).then(()=>{})
           setUnreadCounts(prev => ({ ...prev, [activeConv.id]: 0 }))
+        } else {
+          // 내가 다른 탭/기기에서 보낸 메시지가 실시간으로 들어온 경우 목록 갱신
+          loadConvs()
         }
       })
       // ── 내 메시지의 is_read 업데이트 실시간 반영 ──
