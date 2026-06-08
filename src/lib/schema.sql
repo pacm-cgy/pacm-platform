@@ -1308,3 +1308,47 @@ create policy if not exists "idea_comments_update_own" on public.idea_comments
     auth.uid() = author_id
     or auth.uid() = (select author_id from public.ideas where id = idea_id limit 1)
   );
+
+-- ══════════════════════════════════════════════════════════════════════
+-- P3-3: user_behavior_log 테이블 — 개인화 AI 추천 엔진용
+-- ══════════════════════════════════════════════════════════════════════
+create table if not exists public.user_behavior_log (
+  id           uuid         primary key default gen_random_uuid(),
+  user_id      uuid         not null references auth.users(id) on delete cascade,
+  event_type   text         not null, -- 'view_article','like_article','search','lumi_chat','view_idea','apply_project','complete_course'
+  target_id    text,                  -- article.id, idea.id, course.id, project.id 등
+  target_type  text,                  -- 'article','idea','project','course','keyword'
+  category     text,                  -- ai_category / tag
+  keywords     text[],                -- 검색어 또는 기사 키워드 배열
+  metadata     jsonb        default '{}',  -- 추가 컨텍스트 (dwell_time, scroll_pct 등)
+  created_at   timestamptz  not null default now()
+);
+
+-- 인덱스
+create index if not exists ubl_user_created_idx on public.user_behavior_log(user_id, created_at desc);
+create index if not exists ubl_event_type_idx   on public.user_behavior_log(event_type, created_at desc);
+create index if not exists ubl_target_idx       on public.user_behavior_log(target_id, target_type);
+
+-- RLS
+alter table if exists public.user_behavior_log enable row level security;
+create policy if not exists "ubl_insert_own" on public.user_behavior_log
+  for insert with check (auth.uid() = user_id);
+create policy if not exists "ubl_select_own" on public.user_behavior_log
+  for select using (auth.uid() = user_id);
+
+-- 개인화 추천 캐시 테이블 (추천 결과 TTL 캐싱)
+create table if not exists public.user_recommendations (
+  id           uuid         primary key default gen_random_uuid(),
+  user_id      uuid         not null references auth.users(id) on delete cascade,
+  rec_type     text         not null, -- 'articles','ideas','projects','courses'
+  items        jsonb        not null default '[]', -- [{id, score, reason}, ...]
+  generated_at timestamptz  not null default now(),
+  expires_at   timestamptz  not null default (now() + interval '6 hours')
+);
+
+create unique index if not exists ur_user_type_idx on public.user_recommendations(user_id, rec_type);
+alter table if exists public.user_recommendations enable row level security;
+create policy if not exists "ur_select_own" on public.user_recommendations
+  for select using (auth.uid() = user_id);
+create policy if not exists "ur_upsert_own" on public.user_recommendations
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
