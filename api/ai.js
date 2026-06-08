@@ -8229,6 +8229,234 @@ async function _handleBadgeSystem_impl(req) {
 })();
 
 // ════════════════════════════════════════════════════════════
+// §P3-3. 개인화 AI 추천 엔진 v1.0
+// POST /api/personal-recommend  → 개인 맞춤 추천 생성 + 캐시
+// GET  /api/personal-recommend  → 엔진 상태
+// ════════════════════════════════════════════════════════════
+const handlePersonalRecommend = (() => {
+
+const SB_URL  = process.env.SUPABASE_URL
+const SB_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY
+const CORS    = {
+  'Access-Control-Allow-Origin':  '*',
+  'Access-Control-Allow-Methods': 'POST,GET,OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+}
+const H = () => ({
+  apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`,
+  'Content-Type': 'application/json',
+})
+
+// ── 행동 가중치 정의 ────────────────────────────────────────
+const EVENT_WEIGHT = {
+  view_article:    1.0,
+  like_article:    3.0,
+  search:          1.5,
+  lumi_chat:       2.0,
+  view_idea:       1.0,
+  apply_project:   4.0,
+  complete_course: 3.5,
+}
+
+// ── 카테고리 한글 매핑 ─────────────────────────────────────
+const CAT_KO = {
+  youth:'청소년창업', startup:'스타트업', investment:'투자', tech:'기술',
+  policy:'정책', health:'헬스케어', fintech:'핀테크', edutech:'에듀테크', esg:'ESG',
+}
+
+// ── 행동 로그 집계 → 카테고리 가중치 맵 ───────────────────
+function buildInterestMap(logs) {
+  const map = {}   // { category: score }
+  for (const log of logs) {
+    const w = EVENT_WEIGHT[log.event_type] || 1.0
+    // 카테고리 기반
+    if (log.category) {
+      map[log.category] = (map[log.category] || 0) + w
+    }
+    // 키워드 기반 (각 키워드를 카테고리 대용으로)
+    if (Array.isArray(log.keywords)) {
+      for (const kw of log.keywords.slice(0, 5)) {
+        const k = kw.toLowerCase()
+        map[k] = (map[k] || 0) + w * 0.5
+      }
+    }
+  }
+  // 정규화 (최대 10점)
+  const maxScore = Math.max(...Object.values(map), 1)
+  for (const k of Object.keys(map)) {
+    map[k] = Math.round((map[k] / maxScore) * 10 * 100) / 100
+  }
+  return map
+}
+
+// ── 단순 BM25 유사도 (제목+카테고리 텍스트 vs 관심 키워드) ─
+function scoreItem(item, interestMap) {
+  const text = ((item.title || '') + ' ' + (item.ai_category || item.category || item.tag || '')).toLowerCase()
+  let score = 0
+  for (const [key, weight] of Object.entries(interestMap)) {
+    if (text.includes(key)) score += weight
+  }
+  return Math.round(score * 100) / 100
+}
+
+// ── 추천 이유 생성 ─────────────────────────────────────────
+function buildReason(item, interestMap) {
+  const text = ((item.title || '') + ' ' + (item.ai_category || item.category || '')).toLowerCase()
+  const matched = Object.keys(interestMap).filter(k => text.includes(k) && interestMap[k] >= 2).slice(0, 2)
+  if (matched.length === 0) return '최근 활동 기반 추천'
+  return `'${matched.map(m => CAT_KO[m] || m).join(', ')}' 관심사 기반`
+}
+
+// ── 메인 핸들러 ───────────────────────────────────────────
+async function _handlePersonalRecommend_impl(req) {
+  if (req.method === 'OPTIONS') return new Response(null, { headers: CORS })
+
+  if (req.method === 'GET') {
+    return new Response(JSON.stringify({
+      service:  'personal-recommend-v1',
+      engine:   'behavior-bm25',
+      features: ['behavior-log-30d','category-weight','bm25-scoring','6h-cache','multi-type'],
+      types:    ['articles','ideas','projects','courses'],
+      cache_ttl: '6h',
+      cost: 0, external_api: false, status: 'ready',
+    }), { headers: { 'Content-Type': 'application/json', ...CORS } })
+  }
+
+  if (req.method !== 'POST') {
+    return new Response('Method Not Allowed', { status: 405, headers: CORS })
+  }
+
+  let body
+  try { body = await req.json() } catch {
+    return new Response(JSON.stringify({ error: '잘못된 요청' }), { status: 400, headers: { 'Content-Type': 'application/json', ...CORS } })
+  }
+
+  const { userId, type = 'articles', forceRefresh = false } = body
+  if (!userId) {
+    return new Response(JSON.stringify({ error: 'userId 필요' }), { status: 400, headers: { 'Content-Type': 'application/json', ...CORS } })
+  }
+  if (!SB_URL || !SB_KEY) {
+    return new Response(JSON.stringify({ error: 'Missing env' }), { status: 500, headers: { 'Content-Type': 'application/json', ...CORS } })
+  }
+
+  const validTypes = ['articles','ideas','projects','courses']
+  if (!validTypes.includes(type)) {
+    return new Response(JSON.stringify({ error: `type은 ${validTypes.join('|')} 중 하나` }), { status: 400, headers: { 'Content-Type': 'application/json', ...CORS } })
+  }
+
+  // ── 1. 캐시 확인 (6시간 TTL) ──────────────────────────
+  if (!forceRefresh) {
+    const cacheRes = await fetch(
+      `${SB_URL}/rest/v1/user_recommendations?user_id=eq.${userId}&rec_type=eq.${type}&expires_at=gt.${new Date().toISOString()}&limit=1`,
+      { headers: H() }
+    ).catch(() => null)
+    if (cacheRes?.ok) {
+      const cached = await cacheRes.json().catch(() => [])
+      if (Array.isArray(cached) && cached.length > 0 && cached[0].items?.length > 0) {
+        return new Response(JSON.stringify({
+          items: cached[0].items,
+          type,
+          source: 'cache',
+          generated_at: cached[0].generated_at,
+        }), { headers: { 'Content-Type': 'application/json', ...CORS } })
+      }
+    }
+  }
+
+  // ── 2. 행동 로그 조회 (최근 30일, 최대 200건) ──────────
+  const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  const logsRes = await fetch(
+    `${SB_URL}/rest/v1/user_behavior_log?user_id=eq.${userId}&created_at=gte.${since30d}&order=created_at.desc&limit=200`,
+    { headers: H() }
+  ).catch(() => null)
+
+  const logs = (logsRes?.ok ? await logsRes.json().catch(() => []) : [])
+  const interestMap = buildInterestMap(logs)
+  const hasHistory  = Object.keys(interestMap).length > 0
+
+  // ── 3. 콘텐츠 후보 조회 ───────────────────────────────
+  let candidates = []
+  try {
+    if (type === 'articles') {
+      const r = await fetch(
+        `${SB_URL}/rest/v1/articles?status=eq.published&order=published_at.desc&limit=80&select=id,title,ai_category,category,tag,published_at,excerpt`,
+        { headers: H() }
+      )
+      candidates = r.ok ? await r.json() : []
+    } else if (type === 'ideas') {
+      const r = await fetch(
+        `${SB_URL}/rest/v1/ideas?is_deleted=eq.false&order=created_at.desc&limit=60&select=id,title,category,tags,created_at`,
+        { headers: H() }
+      )
+      candidates = r.ok ? await r.json() : []
+    } else if (type === 'projects') {
+      const r = await fetch(
+        `${SB_URL}/rest/v1/projects?status=eq.active&order=created_at.desc&limit=40&select=id,title,category,tags,created_at`,
+        { headers: H() }
+      )
+      candidates = r.ok ? await r.json() : []
+    } else if (type === 'courses') {
+      const r = await fetch(
+        `${SB_URL}/rest/v1/edu_courses?is_published=eq.true&order=sort_order.asc&limit=40&select=id,title,category,level`,
+        { headers: H() }
+      )
+      candidates = r.ok ? await r.json() : []
+    }
+  } catch { candidates = [] }
+
+  // ── 4. 이미 본/완료한 항목 제외 ──────────────────────
+  const seenIds = new Set(
+    logs.filter(l => l.target_type === type.slice(0, -1) || l.target_type === type)
+        .map(l => l.target_id).filter(Boolean)
+  )
+  const unseen = candidates.filter(c => !seenIds.has(String(c.id)))
+
+  // ── 5. 점수 계산 & 정렬 ──────────────────────────────
+  let scored
+  if (hasHistory) {
+    scored = unseen
+      .map(item => ({ ...item, _score: scoreItem(item, interestMap), _reason: buildReason(item, interestMap) }))
+      .sort((a, b) => b._score - a._score)
+  } else {
+    // 행동 로그 없으면 최신순
+    scored = unseen.map((item, i) => ({ ...item, _score: unseen.length - i, _reason: '최신 콘텐츠' }))
+  }
+
+  const top = scored.slice(0, 12)
+  const items = top.map(({ _score, _reason, ...rest }) => ({
+    id: rest.id, title: rest.title,
+    score: _score, reason: _reason,
+    meta: {
+      category: rest.ai_category || rest.category || null,
+      tag: rest.tag || null,
+      published_at: rest.published_at || rest.created_at || null,
+    },
+  }))
+
+  // ── 6. 캐시 저장 (upsert) ────────────────────────────
+  const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString()
+  fetch(`${SB_URL}/rest/v1/user_recommendations`, {
+    method: 'POST',
+    headers: { ...H(), Prefer: 'resolution=merge-duplicates' },
+    body: JSON.stringify({
+      user_id: userId, rec_type: type,
+      items, generated_at: new Date().toISOString(), expires_at: expiresAt,
+    }),
+  }).catch(() => {})  // fire-and-forget
+
+  return new Response(JSON.stringify({
+    items, type,
+    source: 'generated',
+    generated_at: new Date().toISOString(),
+    interest_map: hasHistory ? interestMap : null,
+    log_count: logs.length,
+  }), { headers: { 'Content-Type': 'application/json', ...CORS } })
+}
+
+  return _handlePersonalRecommend_impl
+})();
+
+// ════════════════════════════════════════════════════════════
 // 통합 라우터
 // ════════════════════════════════════════════════════════════
 export default async function handler(req) {
@@ -8237,32 +8465,35 @@ export default async function handler(req) {
   const action = url.searchParams.get('action')
 
   // cron action 분기
-  if (action === 'platform_operator') return handleAiPlatformOperator(req)
-  if (action === 'content_writer')    return handleAiContentWriter(req)
-  if (action === 'badge')             return handleBadgeSystem(req)
-  if (action === 'mentor_learn')      return handleAiMentorLearn(req)
-  if (action === 'mentor')            return handleAiMentor(req)
-  if (action === 'team')              return handleAiTeam(req)
-  if (action === 'workers')           return handleAiWorkers(req)
-  if (action === 'engine')            return handleAiEngine(req)
-  if (action === 'admin_ai')          return handleAdminAi(req)
+  if (action === 'platform_operator')   return handleAiPlatformOperator(req)
+  if (action === 'content_writer')      return handleAiContentWriter(req)
+  if (action === 'badge')               return handleBadgeSystem(req)
+  if (action === 'mentor_learn')        return handleAiMentorLearn(req)
+  if (action === 'mentor')              return handleAiMentor(req)
+  if (action === 'team')                return handleAiTeam(req)
+  if (action === 'workers')             return handleAiWorkers(req)
+  if (action === 'engine')              return handleAiEngine(req)
+  if (action === 'admin_ai')            return handleAdminAi(req)
+  if (action === 'personal_recommend')  return handlePersonalRecommend(req)
 
   // path 분기 (rewrites 경유)
-  if (path.endsWith('/admin-ai'))             return handleAdminAi(req)
-  if (path.endsWith('/ai-engine'))            return handleAiEngine(req)
-  if (path.endsWith('/ai-mentor-learn'))      return handleAiMentorLearn(req)
-  if (path.endsWith('/ai-mentor'))            return handleAiMentor(req)
-  if (path.endsWith('/ai-team'))              return handleAiTeam(req)
-  if (path.endsWith('/ai-workers'))           return handleAiWorkers(req)
-  if (path.endsWith('/ai-platform-operator')) return handleAiPlatformOperator(req)
-  if (path.endsWith('/ai-content-writer'))    return handleAiContentWriter(req)
-  if (path.endsWith('/badge-system'))         return handleBadgeSystem(req)
+  if (path.endsWith('/admin-ai'))              return handleAdminAi(req)
+  if (path.endsWith('/ai-engine'))             return handleAiEngine(req)
+  if (path.endsWith('/ai-mentor-learn'))       return handleAiMentorLearn(req)
+  if (path.endsWith('/ai-mentor'))             return handleAiMentor(req)
+  if (path.endsWith('/ai-team'))               return handleAiTeam(req)
+  if (path.endsWith('/ai-workers'))            return handleAiWorkers(req)
+  if (path.endsWith('/ai-platform-operator'))  return handleAiPlatformOperator(req)
+  if (path.endsWith('/ai-content-writer'))     return handleAiContentWriter(req)
+  if (path.endsWith('/badge-system'))          return handleBadgeSystem(req)
+  if (path.endsWith('/personal-recommend'))    return handlePersonalRecommend(req)
 
   return new Response(JSON.stringify({
-    service: 'ai-router', version: '1.0',
-    actions: ['platform_operator','content_writer','badge','mentor_learn','mentor','team','workers','engine','admin_ai'],
+    service: 'ai-router', version: '1.1',
+    actions: ['platform_operator','content_writer','badge','mentor_learn','mentor',
+              'team','workers','engine','admin_ai','personal_recommend'],
     routes: ['/api/admin-ai','/api/ai-engine','/api/ai-mentor','/api/ai-mentor-learn',
              '/api/ai-team','/api/ai-workers','/api/ai-platform-operator',
-             '/api/ai-content-writer','/api/badge-system'],
+             '/api/ai-content-writer','/api/badge-system','/api/personal-recommend'],
   }), { headers: { 'Content-Type': 'application/json' } })
 }

@@ -4,7 +4,8 @@ import {
   Home, TrendingUp, Users, GraduationCap, Newspaper, Search,
   Bell, Menu, X, LogOut, BrainCircuit, Lightbulb, CalendarDays,
   Rocket, Zap, Globe, User, ChevronDown, Settings, Bookmark,
-  MessageCircle, Heart, UserPlus, Award, CheckCheck, AlertCircle
+  MessageCircle, Heart, UserPlus, Award, CheckCheck, AlertCircle,
+  Trash2, Reply, Star, Briefcase
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../store'
@@ -22,15 +23,21 @@ const NAV = [
   { id: 'connect',   path: '/connect',   icon: Globe,         label: '파트너십', color: '#818CF8' },
 ]
 
-// 알림 타입별 아이콘/색상 매핑
+// 알림 타입별 아이콘/색상 매핑 (v2 — 확장)
 const NOTIF_CONFIG = {
-  notice:       { icon: AlertCircle,    color: '#3B82F6', label: '공지' },
-  follow_post:  { icon: UserPlus,       color: '#22C55E', label: '팔로우' },
-  like:         { icon: Heart,          color: '#F43F5E', label: '좋아요' },
-  like_milestone:{ icon: Heart,         color: '#F43F5E', label: '마일스톤' },
-  comment:      { icon: MessageCircle,  color: '#A855F7', label: '댓글' },
-  badge:        { icon: Award,          color: '#F59E0B', label: '배지' },
-  default:      { icon: Bell,           color: '#60A5FA', label: '알림' },
+  notice:          { icon: AlertCircle,  color: '#3B82F6', label: '공지' },
+  follow_post:     { icon: UserPlus,     color: '#22C55E', label: '팔로우' },
+  follow:          { icon: UserPlus,     color: '#22C55E', label: '팔로우' },
+  like:            { icon: Heart,        color: '#F43F5E', label: '좋아요' },
+  like_milestone:  { icon: Heart,        color: '#F43F5E', label: '마일스톤' },
+  comment:         { icon: MessageCircle,color: '#A855F7', label: '댓글' },
+  reply:           { icon: Reply,        color: '#8B5CF6', label: '답글' },
+  mention:         { icon: Star,         color: '#F59E0B', label: '멘션' },
+  badge:           { icon: Award,        color: '#F59E0B', label: '배지' },
+  apply:           { icon: Briefcase,    color: '#06B6D4', label: '프로젝트 신청' },
+  accepted:        { icon: CheckCheck,   color: '#22C55E', label: '합격' },
+  system:          { icon: AlertCircle,  color: '#6B7280', label: '시스템' },
+  default:         { icon: Bell,         color: '#60A5FA', label: '알림' },
 }
 
 function getNotifConfig(type) {
@@ -97,13 +104,13 @@ export default function Header() {
     return () => window.removeEventListener('scroll', fn)
   }, [])
 
-  // 알림 조회 함수 (실시간 폴링용)
+  // 알림 조회 함수 (actor join 포함 v2)
   const fetchNotifs = useCallback(async () => {
     if (!user) return
     try {
       const { data } = await supabase
         .from('notifications')
-        .select('*')
+        .select('*, actor:actor_id(id, display_name, avatar_url)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(25)
@@ -130,7 +137,7 @@ export default function Header() {
     return () => clearInterval(pollRef.current)
   }, [user, fetchNotifs])
 
-  // Supabase Realtime 알림 구독
+  // Supabase Realtime 알림 구독 (actor 조회 포함 v2)
   useEffect(() => {
     if (!user) return
     const channel = supabase
@@ -140,11 +147,18 @@ export default function Header() {
         schema: 'public',
         table: 'notifications',
         filter: `user_id=eq.${user.id}`,
-      }, (payload) => {
-        if (payload.new) {
-          setNotifs(prev => [payload.new, ...prev].slice(0, 25))
-          setUnread(prev => prev + 1)
+      }, async (payload) => {
+        if (!payload.new) return
+        // actor 정보 보완 fetch
+        let newNotif = payload.new
+        if (newNotif.actor_id) {
+          const { data: actor } = await supabase
+            .from('profiles').select('id, display_name, avatar_url')
+            .eq('id', newNotif.actor_id).single().catch(() => ({ data: null }))
+          if (actor) newNotif = { ...newNotif, actor }
         }
+        setNotifs(prev => [newNotif, ...prev].slice(0, 25))
+        setUnread(prev => prev + 1)
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
@@ -355,42 +369,88 @@ export default function Header() {
                         const NotifIcon = cfg.icon
                         return (
                           <div key={n.id}
-                            onClick={() => handleNotifClick(n)}
                             style={{
-                              padding: '12px 16px',
+                              padding: '11px 14px',
                               borderBottom: '1px solid var(--b0)',
-                              background: n.is_read ? 'transparent' : `${cfg.color}06`,
+                              background: n.is_read ? 'transparent' : `${cfg.color}07`,
                               cursor: n.link ? 'pointer' : 'default',
                               transition: 'background 0.12s',
                               display: 'flex', gap: 10, alignItems: 'flex-start',
+                              position: 'relative',
                             }}
-                            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg3)'}
-                            onMouseLeave={e => e.currentTarget.style.background = n.is_read ? 'transparent' : `${cfg.color}06`}>
-                            {/* 타입 아이콘 */}
-                            <div style={{
-                              width: 30, height: 30, borderRadius: 8, flexShrink: 0,
-                              background: `${cfg.color}15`, border: `1px solid ${cfg.color}25`,
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            onMouseEnter={e => {
+                              e.currentTarget.style.background = 'var(--bg3)'
+                              e.currentTarget.querySelector('.notif-del')?.style && (e.currentTarget.querySelector('.notif-del').style.opacity = '1')
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.background = n.is_read ? 'transparent' : `${cfg.color}07`
+                              e.currentTarget.querySelector('.notif-del')?.style && (e.currentTarget.querySelector('.notif-del').style.opacity = '0')
                             }}>
-                              <NotifIcon size={13} color={cfg.color} />
+                            {/* actor 아바타 or 타입 아이콘 */}
+                            <div style={{ position: 'relative', flexShrink: 0 }} onClick={() => handleNotifClick(n)}>
+                              {n.actor?.avatar_url ? (
+                                <img src={n.actor.avatar_url} alt=""
+                                  style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover' }}/>
+                              ) : (
+                                <div style={{
+                                  width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                                  background: `${cfg.color}15`, border: `1px solid ${cfg.color}25`,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}>
+                                  <NotifIcon size={13} color={cfg.color} />
+                                </div>
+                              )}
+                              {/* 타입 아이콘 오버레이 (actor 있을 때) */}
+                              {n.actor?.avatar_url && (
+                                <div style={{
+                                  position: 'absolute', bottom: -2, right: -2,
+                                  width: 14, height: 14, borderRadius: '50%',
+                                  background: cfg.color, border: '1.5px solid var(--bg2)',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}>
+                                  <NotifIcon size={7} color="#fff" />
+                                </div>
+                              )}
                             </div>
                             {/* 내용 */}
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 12, fontWeight: n.is_read ? 400 : 600, color: 'var(--t1)', lineHeight: 1.5, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div style={{ flex: 1, minWidth: 0 }} onClick={() => handleNotifClick(n)}>
+                              <div style={{ fontSize: 12, fontWeight: n.is_read ? 400 : 600, color: 'var(--t1)', lineHeight: 1.5, marginBottom: 2 }}>
+                                {n.actor?.display_name && (
+                                  <span style={{ color: cfg.color }}>{n.actor.display_name} </span>
+                                )}
                                 {n.title}
                               </div>
-                              <div style={{ fontSize: 11.5, color: 'var(--t3)', lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                              <div style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.4,
+                                overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box',
+                                WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                                 {n.message}
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
                                 <span style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--t4)' }}>
                                   {timeAgo(n.created_at)}
+                                </span>
+                                <span style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: cfg.color, opacity: 0.7 }}>
+                                  {cfg.label}
                                 </span>
                                 {!n.is_read && (
                                   <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.color, display: 'inline-block' }} />
                                 )}
                               </div>
                             </div>
+                            {/* 삭제 버튼 (hover시 표시) */}
+                            <button className="notif-del"
+                              onClick={async (e) => {
+                                e.stopPropagation()
+                                await supabase.from('notifications').delete().eq('id', n.id).catch(() => {})
+                                setNotifs(prev => prev.filter(x => x.id !== n.id))
+                                if (!n.is_read) setUnread(prev => Math.max(0, prev - 1))
+                              }}
+                              style={{ opacity: 0, transition: 'opacity .15s', background: 'none',
+                                border: 'none', cursor: 'pointer', padding: 4, borderRadius: 4,
+                                color: 'var(--t4)', flexShrink: 0, marginTop: 2 }}
+                              title="삭제">
+                              <Trash2 size={11} />
+                            </button>
                           </div>
                         )
                       })}

@@ -10,7 +10,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { usePosts, useCreatePost, useHotPosts } from '../hooks/useData'
+import { usePosts, useCreatePost, useHotPosts, useFollowFeed } from '../hooks/useData'
 import { useAuthStore } from '../store'
 import { validateInput, checkRateLimit } from '../lib/security'
 
@@ -457,7 +457,9 @@ export default function CommunityPage() {
   const [showWrite, setShowWrite] = useState(false)
   const [writeInitialType, setWriteInitialType] = useState('question')
   const [page, setPage] = useState(0)
-  const [reportTarget, setReportTarget] = useState(null) // { type, id }
+  const [reportTarget, setReportTarget] = useState(null)
+  const [activeTag, setActiveTag] = useState(null)   // 해시태그 필터
+  const [feedMode, setFeedMode] = useState('all')    // 'all' | 'follow'
 
   // URL 파라미터로 글쓰기 모달 열기 (?write=feedback 등)
   useEffect(() => {
@@ -480,16 +482,50 @@ export default function CommunityPage() {
   const { data:posts=[], isLoading } = usePosts({ type:tab==='all'?undefined:tab, page })
   const createPost = useCreatePost()
   const { data:hotPosts=[] } = useHotPosts(5)
+  const { data:followFeed=[], isLoading:followLoading } = useFollowFeed(user?.id, 30)
+
+  // 표시할 게시글 결정 (피드 모드 + 탭 + 정렬)
+  const activePosts = feedMode === 'follow' ? followFeed : posts
+
+  // 해시태그 목록 추출 (최근 게시글에서 빈도순)
+  const allTags = posts.flatMap(p => p.tags || [])
+  const tagFreq = allTags.reduce((acc, t) => { acc[t] = (acc[t] || 0) + 1; return acc }, {})
+  const topTags = Object.entries(tagFreq).sort((a,b) => b[1]-a[1]).slice(0, 12).map(([t]) => t)
 
   const handleWrite = async data => {
     if (!user) { navigate('/login'); return }
     await createPost.mutateAsync(data)
   }
 
-  const filtered = query
-    ? posts.filter(p=>p.title?.toLowerCase().includes(query.toLowerCase())||
-        (p.body||p.content||'').toLowerCase().includes(query.toLowerCase()))
-    : posts
+  const filtered = (() => {
+    let base = activePosts
+    // 텍스트 검색
+    if (query) base = base.filter(p =>
+      p.title?.toLowerCase().includes(query.toLowerCase()) ||
+      (p.body || p.content || '').toLowerCase().includes(query.toLowerCase())
+    )
+    // 해시태그 필터
+    if (activeTag) base = base.filter(p => (p.tags || []).includes(activeTag))
+    // 정렬
+    if (sort === 'popular') {
+      base = [...base].sort((a, b) => {
+        const scoreA = (a.like_count || 0) * 3 + (a.reply_count || a.comment_count || 0) * 2 + (a.view_count || 0) * 0.1
+        const scoreB = (b.like_count || 0) * 3 + (b.reply_count || b.comment_count || 0) * 2 + (b.view_count || 0) * 0.1
+        return scoreB - scoreA
+      })
+    } else if (sort === 'hot') {
+      // 최근 24시간 핫 (시간 감쇠 점수)
+      const now = Date.now()
+      base = [...base].sort((a, b) => {
+        const ageA = (now - new Date(a.created_at).getTime()) / 3600000  // 시간
+        const ageB = (now - new Date(b.created_at).getTime()) / 3600000
+        const scoreA = ((a.like_count || 0) * 3 + (a.reply_count || 0) * 2) / Math.pow(ageA + 2, 1.5)
+        const scoreB = ((b.like_count || 0) * 3 + (b.reply_count || 0) * 2) / Math.pow(ageB + 2, 1.5)
+        return scoreB - scoreA
+      })
+    }
+    return base
+  })()
 
   const typeStats = {
     question: posts.filter(p=>p.post_type==='question').length,
@@ -577,11 +613,29 @@ export default function CommunityPage() {
 
         {/* Main feed */}
         <div>
+          {/* 팔로우 피드 토글 (로그인 유저만) */}
+          {user && (
+            <div style={{ display:'flex', gap:6, marginBottom:12 }}>
+              {[['all','전체 피드'],['follow','팔로우 피드']].map(([id,label])=>(
+                <button key={id} onClick={()=>{ setFeedMode(id); setPage(0) }}
+                  style={{ padding:'5px 12px',
+                    background: feedMode===id ? 'linear-gradient(135deg,#3B82F6,#2563EB)' : 'var(--bg2)',
+                    border: `1px solid ${feedMode===id ? '#3B82F6' : 'var(--b1)'}`,
+                    borderRadius:20, color: feedMode===id ? '#fff' : 'var(--t3)',
+                    fontSize:11, fontFamily:'var(--f-mono)', cursor:'pointer',
+                    fontWeight: feedMode===id ? 700 : 400,
+                    transition:'all .15s', letterSpacing:'.02em' }}>
+                  {id === 'follow' && '👥 '}{label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Tabs */}
-          <div style={{ display:'flex', gap:4, marginBottom:16, overflowX:'auto',
+          <div style={{ display:'flex', gap:4, marginBottom:10, overflowX:'auto',
             scrollbarWidth:'none', paddingBottom:2 }}>
             {POST_TYPES.map(t=>(
-              <button key={t.id} onClick={()=>{ setTab(t.id); setPage(0) }}
+              <button key={t.id} onClick={()=>{ setTab(t.id); setPage(0); setFeedMode('all') }}
                 style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 14px',
                   background:tab===t.id?t.color:'transparent',
                   border:`1px solid ${tab===t.id?t.color:'var(--b1)'}`,
@@ -594,13 +648,41 @@ export default function CommunityPage() {
             ))}
           </div>
 
+          {/* 해시태그 필터 바 */}
+          {topTags.length > 0 && feedMode !== 'follow' && (
+            <div style={{ display:'flex', gap:5, marginBottom:12, overflowX:'auto',
+              scrollbarWidth:'none', paddingBottom:2 }}>
+              <button onClick={() => setActiveTag(null)}
+                style={{ padding:'3px 10px', borderRadius:14,
+                  background: activeTag===null ? 'rgba(168,85,247,0.15)' : 'var(--bg2)',
+                  border: `1px solid ${activeTag===null ? 'rgba(168,85,247,0.4)' : 'var(--b1)'}`,
+                  color: activeTag===null ? '#A855F7' : 'var(--t3)',
+                  fontSize:10, fontFamily:'var(--f-mono)', cursor:'pointer',
+                  whiteSpace:'nowrap', flexShrink:0, transition:'all .15s' }}>
+                # 전체
+              </button>
+              {topTags.map(tag => (
+                <button key={tag} onClick={() => setActiveTag(activeTag===tag ? null : tag)}
+                  style={{ padding:'3px 10px', borderRadius:14,
+                    background: activeTag===tag ? 'rgba(168,85,247,0.15)' : 'var(--bg2)',
+                    border: `1px solid ${activeTag===tag ? 'rgba(168,85,247,0.4)' : 'var(--b1)'}`,
+                    color: activeTag===tag ? '#A855F7' : 'var(--t3)',
+                    fontSize:10, fontFamily:'var(--f-mono)', cursor:'pointer',
+                    whiteSpace:'nowrap', flexShrink:0, transition:'all .15s' }}>
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Sort */}
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
             <div style={{ fontFamily:'var(--f-mono)', fontSize:10, color:'var(--t3)' }}>
-              {isLoading?'로딩 중...':`${filtered.length}개 게시글`}
+              {(isLoading||followLoading)?'로딩 중...':`${filtered.length}개 게시글`}
+              {activeTag && <span style={{ color:'#A855F7', marginLeft:6 }}>#{activeTag}</span>}
             </div>
             <div style={{ display:'flex', gap:4 }}>
-              {[['latest','최신순'],['popular','인기순']].map(([id,label])=>(
+              {[['latest','최신'],['hot','🔥 핫'],['popular','인기']].map(([id,label])=>(
                 <button key={id} onClick={()=>setSort(id)}
                   style={{ padding:'5px 10px', background:sort===id?'var(--bg4)':'none',
                     border:`1px solid ${sort===id?'var(--b2)':'transparent'}`,
@@ -613,7 +695,7 @@ export default function CommunityPage() {
           </div>
 
           {/* Posts */}
-          {isLoading ? (
+          {(isLoading||followLoading) ? (
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
               {Array(6).fill(0).map((_,i)=>(
                 <div key={i} style={{ padding:'16px 20px', background:'var(--bg2)',
@@ -627,13 +709,35 @@ export default function CommunityPage() {
                 </div>
               ))}
             </div>
+          ) : feedMode === 'follow' && followFeed.length === 0 ? (
+            <div style={{ textAlign:'center', padding:'64px 20px', color:'var(--t3)' }}>
+              <Users size={48} style={{ marginBottom:16, opacity:.22 }}/>
+              <div style={{ fontSize:15, fontWeight:600, marginBottom:6, color:'var(--t2)' }}>
+                팔로우 피드가 비어있습니다
+              </div>
+              <div style={{ fontSize:13, marginBottom:16 }}>다른 창업가를 팔로우하면 그들의 게시글을 여기서 볼 수 있어요</div>
+              <button onClick={()=>setFeedMode('all')}
+                style={{ padding:'8px 20px', background:'linear-gradient(135deg,#3B82F6,#2563EB)',
+                  border:'none', borderRadius:9, color:'#fff', fontSize:13, cursor:'pointer',
+                  fontFamily:'var(--f-sans)', fontWeight:600 }}>
+                전체 피드 보기
+              </button>
+            </div>
           ) : filtered.length===0 ? (
             <div style={{ textAlign:'center', padding:'64px 20px', color:'var(--t3)' }}>
               <MessageCircle size={48} style={{ marginBottom:16, opacity:.22 }}/>
               <div style={{ fontSize:15, fontWeight:600, marginBottom:6, color:'var(--t2)' }}>
-                {query?`"${query}" 검색 결과가 없습니다`:'아직 게시글이 없습니다'}
+                {activeTag ? `#${activeTag} 게시글이 없습니다` : query?`"${query}" 검색 결과가 없습니다`:'아직 게시글이 없습니다'}
               </div>
-              <div style={{ fontSize:13 }}>첫 번째 게시글을 작성해보세요!</div>
+              {activeTag && (
+                <button onClick={()=>setActiveTag(null)}
+                  style={{ padding:'6px 16px', background:'rgba(168,85,247,0.1)',
+                    border:'1px solid rgba(168,85,247,0.3)', borderRadius:8,
+                    color:'#A855F7', fontSize:12, cursor:'pointer', marginTop:8 }}>
+                  태그 필터 해제
+                </button>
+              )}
+              {!activeTag && <div style={{ fontSize:13 }}>첫 번째 게시글을 작성해보세요!</div>}
             </div>
           ) : (
             <div style={{ display:'flex', flexDirection:'column', gap:9 }}>

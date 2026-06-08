@@ -637,7 +637,7 @@ export function useNotifications(userId) {
       if (!userId) return []
       const { data, error } = await supabase
         .from('notifications')
-        .select('*')
+        .select('*, actor:actor_id(id, display_name, avatar_url)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(30)
@@ -646,7 +646,7 @@ export function useNotifications(userId) {
     },
     enabled: !!userId,
     staleTime: 2 * 60 * 1000,
-    refetchInterval: 3 * 60 * 1000, // 3분마다 갱신 (Supabase Realtime이 실시간 커버)
+    refetchInterval: 3 * 60 * 1000,
   })
 }
 
@@ -656,12 +656,46 @@ export function useMarkNotifRead() {
   return useMutation({
     mutationFn: async (notifId) => {
       if (!user) return
+      const now = new Date().toISOString()
       const q = notifId
-        ? supabase.from('notifications').update({ is_read: true }).eq('id', notifId)
-        : supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false)
+        ? supabase.from('notifications').update({ is_read: true, read_at: now }).eq('id', notifId)
+        : supabase.from('notifications').update({ is_read: true, read_at: now }).eq('user_id', user.id).eq('is_read', false)
       await q
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  })
+}
+
+// ── 알림 삭제 ─────────────────────────────────────────────────────
+export function useDeleteNotif() {
+  const qc = useQueryClient()
+  const { user } = useAuthStore()
+  return useMutation({
+    mutationFn: async (notifId) => {
+      if (!user) return
+      await supabase.from('notifications').delete().eq('id', notifId).eq('user_id', user.id)
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  })
+}
+
+// ── 읽지 않은 알림 개수만 빠르게 조회 ────────────────────────────
+export function useUnreadNotifCount(userId) {
+  return useQuery({
+    queryKey: ['notif_unread_count', userId],
+    queryFn: async () => {
+      if (!userId) return 0
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('is_read', false)
+      if (error) return 0
+      return count || 0
+    },
+    enabled: !!userId,
+    staleTime: 60 * 1000,
+    refetchInterval: 2 * 60 * 1000,
   })
 }
 
@@ -858,4 +892,63 @@ export function useMarkCourseComplete() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['edu_completions'] }),
   })
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// P3-3: 개인화 AI 추천 엔진 훅
+// ══════════════════════════════════════════════════════════════════════
+
+// ── 행동 로그 기록 (fire-and-forget 뮤테이션) ─────────────────────────
+// 사용법: const logBehavior = useLogBehavior()
+//         logBehavior({ eventType: 'view_article', targetId: id, targetType: 'article', category: 'startup' })
+export function useLogBehavior() {
+  const { user } = useAuthStore()
+  return useMutation({
+    mutationFn: async ({ eventType, targetId, targetType, category, keywords, metadata }) => {
+      if (!user) return  // 비로그인 시 무시
+      const { error } = await supabase.from('user_behavior_log').insert({
+        user_id:    user.id,
+        event_type: eventType,
+        target_id:  targetId  ? String(targetId)  : null,
+        target_type: targetType || null,
+        category:   category   || null,
+        keywords:   Array.isArray(keywords) ? keywords : [],
+        metadata:   metadata   || {},
+      })
+      if (error) throw error
+    },
+    // 로깅 실패는 조용히 무시 — UX에 영향 없어야 함
+    onError: () => {},
+  })
+}
+
+// ── 개인 맞춤 추천 조회 ───────────────────────────────────────────────
+// type: 'articles' | 'ideas' | 'projects' | 'courses'
+// staleTime: 6시간 (서버 캐시와 동기)
+export function usePersonalRecommend(type = 'articles', { forceRefresh = false } = {}) {
+  const { user } = useAuthStore()
+  const qc = useQueryClient()
+
+  const query = useQuery({
+    queryKey: ['personal_recommend', user?.id, type],
+    queryFn: async () => {
+      if (!user) return { items: [], source: 'no_user' }
+      const res = await fetch('/api/ai?action=personal_recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, type, forceRefresh }),
+      })
+      if (!res.ok) throw new Error('추천 API 오류')
+      return res.json()
+    },
+    enabled: !!user,
+    staleTime: 6 * 60 * 60 * 1000,  // 6시간
+    gcTime:   12 * 60 * 60 * 1000,  // 12시간
+  })
+
+  // 강제 새로고침 헬퍼
+  const refresh = () =>
+    qc.invalidateQueries({ queryKey: ['personal_recommend', user?.id, type] })
+
+  return { ...query, refresh }
 }

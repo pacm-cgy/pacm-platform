@@ -10,8 +10,10 @@ import {
 } from 'lucide-react'
 import {
   useArticles, useProjects, useTrends,
-  useSubscribeNewsletter, usePinnedNotices
+  useSubscribeNewsletter, usePinnedNotices,
+  usePersonalRecommend,
 } from '../hooks/useData'
+import { useAuthStore } from '../store'
 import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
@@ -516,6 +518,8 @@ export default function HomePage() {
   const { data: trends=[], isLoading:trendLoading } = useTrends()
   const { data: notices=[] } = usePinnedNotices()
   const subscribe = useSubscribeNewsletter()
+  const { user } = useAuthStore()
+  const { data: recData } = usePersonalRecommend('articles')
 
   useEffect(() => { if (notices?.length) setNotice(notices[0]) }, [notices])
 
@@ -802,6 +806,56 @@ export default function HomePage() {
               }
             </div>
           </div>
+
+          {/* ── 맞춤 추천 섹션 (로그인 사용자만) */}
+          {user && recData?.items?.length > 0 && (
+            <div style={{ marginBottom: 32 }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <div style={{ width:3, height:18, background:'linear-gradient(to bottom,#A855F7,#7C3AED)', borderRadius:2 }}/>
+                  <span style={{ fontFamily:'var(--f-mono)', fontSize:11, color:'#A855F7', letterSpacing:'.1em' }}>
+                    MY PICKS
+                  </span>
+                  <span style={{ fontSize:10, color:'var(--t3)', marginLeft:2 }}>
+                    · AI가 고른 맞춤 뉴스
+                  </span>
+                </div>
+                <button onClick={()=>navigate('/news')}
+                  style={{ display:'flex', alignItems:'center', gap:4, fontFamily:'var(--f-mono)',
+                    fontSize:10, color:'var(--t3)', background:'none', border:'none', cursor:'pointer' }}
+                  onMouseEnter={e=>e.currentTarget.style.color='var(--t1)'}
+                  onMouseLeave={e=>e.currentTarget.style.color='var(--t3)'}>
+                  더 보기 <ChevronRight size={11}/>
+                </button>
+              </div>
+              <div className="home-news-grid">
+                {recData.items.slice(0, 6).map(item => (
+                  <div key={item.id} onClick={() => navigate(`/article/${item.id}`)}
+                    style={{ background:'var(--bg2)', border:'1px solid var(--b1)', borderRadius:11,
+                      padding:'14px 16px', cursor:'pointer', transition:'border-color .18s,transform .15s',
+                      position:'relative' }}
+                    onMouseEnter={e=>{ e.currentTarget.style.borderColor='rgba(168,85,247,0.4)'; e.currentTarget.style.transform='translateY(-2px)' }}
+                    onMouseLeave={e=>{ e.currentTarget.style.borderColor='var(--b1)'; e.currentTarget.style.transform='translateY(0)' }}>
+                    {/* 추천 이유 뱃지 */}
+                    <div style={{ fontSize:9, color:'#A855F7', fontFamily:'var(--f-mono)',
+                      marginBottom:6, letterSpacing:'.05em' }}>
+                      ✦ {item.reason || '관심사 기반'}
+                    </div>
+                    <p style={{ fontSize:13, fontWeight:600, color:'var(--t1)', margin:0,
+                      lineHeight:1.5, display:'-webkit-box', WebkitLineClamp:2,
+                      WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+                      {item.title}
+                    </p>
+                    {item.meta?.category && (
+                      <span style={{ fontSize:10, color:'var(--t3)', marginTop:6, display:'block' }}>
+                        {item.meta.category}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* News */}
           <div>

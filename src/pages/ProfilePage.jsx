@@ -32,6 +32,16 @@ const INTERESTS = [
   { id:'mobility',       label:'모빌리티',           color:'#14B8A6', emoji:'🚗' },
 ]
 
+/* ─── Post type labels / colors (module-level) ──────── */
+const TYPE_LABELS = {
+  question:'질문', feedback:'피드백', recruit:'팀원 모집', free:'자유',
+  notice:'공지', discussion:'토론', showcase:'쇼케이스', idea:'아이디어'
+}
+const TYPE_COLORS_MAP = {
+  question:'#F59E0B', feedback:'#60A5FA', recruit:'#22C55E', free:'var(--t3)',
+  notice:'#F43F5E', discussion:'#3B82F6', showcase:'#A855F7', idea:'#06B6D4'
+}
+
 /* ─── Skeleton ──────────────────────────────────────── */
 function Sk({ h = 16, w = '100%', r = 6, mb = 0 }) {
   return (
@@ -1194,6 +1204,70 @@ export default function ProfilePage() {
                         ))}
                       </div>
                     </div>
+
+                    {/* ── 최근 활동 타임라인 ── */}
+                    {myPosts.length > 0 && (
+                      <div>
+                        <div style={{ fontFamily:'var(--f-mono)', fontSize:9.5, color:'var(--t4)',
+                          letterSpacing:'.1em', textTransform:'uppercase', marginBottom:14 }}>
+                          최근 활동 타임라인
+                        </div>
+                        <div style={{ position:'relative' }}>
+                          {/* 수직 라인 */}
+                          <div style={{ position:'absolute', left:13, top:0, bottom:0,
+                            width:1, background:'var(--b1)', zIndex:0 }}/>
+                          <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
+                            {myPosts.slice(0, 8).map((p, i) => {
+                              const typeColor = TYPE_COLORS_MAP[p.post_type] || 'var(--t3)'
+                              return (
+                                <div key={p.id}
+                                  onClick={() => navigate(`/community/${p.id}`)}
+                                  style={{ display:'flex', gap:14, paddingBottom:16,
+                                    cursor:'pointer', position:'relative', zIndex:1 }}>
+                                  {/* 타임라인 도트 */}
+                                  <div style={{ width:28, height:28, borderRadius:'50%', flexShrink:0,
+                                    background:`${typeColor}15`, border:`2px solid ${typeColor}`,
+                                    display:'flex', alignItems:'center', justifyContent:'center',
+                                    zIndex:2, background:'var(--bg1)' }}>
+                                    <div style={{ width:8, height:8, borderRadius:'50%',
+                                      background:typeColor }} />
+                                  </div>
+                                  {/* 내용 */}
+                                  <div style={{ flex:1, paddingTop:4,
+                                    padding:'8px 12px', background:'var(--bg2)',
+                                    border:'1px solid var(--b1)', borderRadius:9,
+                                    transition:'border-color .15s' }}
+                                    onMouseEnter={e=>e.currentTarget.style.borderColor=typeColor+'60'}
+                                    onMouseLeave={e=>e.currentTarget.style.borderColor='var(--b1)'}>
+                                    <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
+                                      <span style={{ fontSize:9, fontFamily:'var(--f-mono)',
+                                        color:typeColor, letterSpacing:'.06em' }}>
+                                        {TYPE_LABELS[p.post_type] || p.post_type}
+                                      </span>
+                                      <span style={{ fontSize:9, color:'var(--t4)', fontFamily:'var(--f-mono)' }}>
+                                        {p.created_at ? format(new Date(p.created_at), 'M월 d일', { locale: ko }) : ''}
+                                      </span>
+                                    </div>
+                                    <div style={{ fontSize:12.5, fontWeight:600, color:'var(--t1)',
+                                      overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                                      {p.title}
+                                    </div>
+                                    <div style={{ display:'flex', gap:10, marginTop:5 }}>
+                                      <span style={{ fontSize:10, color:'var(--t4)', fontFamily:'var(--f-mono)' }}>
+                                        ♥ {p.like_count||0}
+                                      </span>
+                                      <span style={{ fontSize:10, color:'var(--t4)', fontFamily:'var(--f-mono)' }}>
+                                        💬 {p.reply_count||p.comment_count||0}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Join info */}
                     <div>
